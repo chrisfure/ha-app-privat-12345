@@ -1,0 +1,19 @@
+configuration:
+  baby_navn:
+    name: Babyens navn
+    description: Vises øverst i appen. Kan stå tomt.
+  fodselsdato:
+    name: Fødselsdato
+    description: Format ÅÅÅÅ-MM-DD. Brukes til å vise alder og (senere) aldersbaserte anbefalinger.
+  mating:
+    name: Mating
+    description: Amming, flaske eller begge. Styrer hvilke valg du får når du registrerer mat.
+  standard_flaske_ml:
+    name: Standard flaskemengde (ml)
+    description: Forhåndsvalgt mengde når du registrerer flaske.
+  nattmodus_fra:
+    name: Nattmodus fra
+    description: Klokkeslett (TT:MM) da appen automatisk bytter til dempet, rødtonet nattmodus.
+  nattmodus_til:
+    name: Nattmodus til
+    description: Klokkeslett (TT:MM) da nattmodus slås av igjen.

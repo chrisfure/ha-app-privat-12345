@@ -1,0 +1,6 @@
+__pycache__/
+*.pyc
+babyuret/data/
+*.db
+*.db-wal
+*.db-shm

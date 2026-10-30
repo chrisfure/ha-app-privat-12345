@@ -1,0 +1,28 @@
+name: Babyuret
+version: "0.1.0"
+slug: babyuret
+description: Registrer søvn, mat og bleier for babyen – med ett trykk.
+url: https://github.com/chrisfure/ha-app-privat-12345
+arch:
+  - aarch64
+  - amd64
+init: false
+ingress: true
+ingress_port: 8099
+panel_icon: mdi:baby-face-outline
+panel_title: Babyuret
+homeassistant_api: true
+options:
+  baby_navn: ""
+  fodselsdato: ""
+  mating: begge
+  standard_flaske_ml: 90
+  nattmodus_fra: "21:00"
+  nattmodus_til: "07:00"
+schema:
+  baby_navn: str?
+  fodselsdato: str?
+  mating: list(amming|flaske|begge)
+  standard_flaske_ml: int(10,400)
+  nattmodus_fra: str
+  nattmodus_til: str

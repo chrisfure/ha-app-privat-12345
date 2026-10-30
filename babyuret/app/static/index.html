@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="nb">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+  <meta name="theme-color" content="#FBF6EF">
+  <title>Babyuret</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Nunito:wght@500;600;700;800&display=swap">
+  <link rel="stylesheet" href="static/style.css">
+</head>
+<body>
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <symbol id="i-maane" viewBox="0 0 24 24"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5Z"/></symbol>
+    <symbol id="i-sol" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></symbol>
+    <symbol id="i-flaske" viewBox="0 0 24 24"><path d="M10 2h4M10.5 2v2.5L8.5 7v12.5A2.5 2.5 0 0 0 11 22h2a2.5 2.5 0 0 0 2.5-2.5V7l-2-2.5V2"/><path d="M8.5 11h7M8.5 15h7"/></symbol>
+    <symbol id="i-hjerte" viewBox="0 0 24 24"><path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10Z"/></symbol>
+    <symbol id="i-draape" viewBox="0 0 24 24"><path d="M12 3s6 6.4 6 11a6 6 0 0 1-12 0c0-4.6 6-11 6-11Z"/></symbol>
+    <symbol id="i-baesj" viewBox="0 0 24 24"><path d="M5 20.5h14a2.6 2.6 0 0 0 .6-5.1 2.6 2.6 0 0 0-2.4-3.9h-.4a2.6 2.6 0 0 0-2.3-3.8h-1c.7-1.5.1-3.3-1.9-4.7-.4 2-1.7 3.2-3.2 3.9a2.6 2.6 0 0 0-1.6 4.6h-.3a2.6 2.6 0 0 0-2.4 3.9 2.6 2.6 0 0 0 .9 5.1Z"/><path d="M9 15.5h6"/></symbol>
+    <symbol id="i-pluss" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+    <symbol id="i-venstre" viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></symbol>
+    <symbol id="i-hoyre" viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></symbol>
+    <symbol id="i-bytt" viewBox="0 0 24 24"><path d="M4 8h13l-3-3M20 16H7l3 3"/></symbol>
+    <symbol id="i-stopp" viewBox="0 0 24 24"><rect x="6.5" y="6.5" width="11" height="11" rx="2.5"/></symbol>
+  </svg>
+
+  <div class="app" id="app">
+    <header class="topp">
+      <div>
+        <h1 id="tittel">Babyuret</h1>
+        <p class="alder" id="alder"></p>
+      </div>
+      <button class="ikonknapp" id="natt-knapp" aria-label="Nattmodus">
+        <svg><use href="#i-maane"/></svg>
+      </button>
+    </header>
+
+    <!-- Status -->
+    <section class="helt" id="helt" aria-live="polite">
+      <div class="helt-tekst">
+        <span class="helt-merke" id="helt-merke">Våken</span>
+        <div class="helt-tid" id="helt-tid">–</div>
+        <div class="helt-under" id="helt-under"></div>
+      </div>
+      <div class="helt-knapper" id="helt-knapper"></div>
+    </section>
+
+    <!-- Hovedknapper -->
+    <section class="fliser">
+      <button class="flis flis-sovn" id="flis-sovn">
+        <span class="flis-ikon"><svg><use href="#i-maane"/></svg></span>
+        <span class="flis-navn" id="flis-sovn-navn">Sover</span>
+        <span class="flis-sist" id="sist-sovn"></span>
+      </button>
+      <button class="flis flis-mat" id="flis-mat">
+        <span class="flis-ikon"><svg><use href="#i-flaske"/></svg></span>
+        <span class="flis-navn">Mat</span>
+        <span class="flis-sist" id="sist-mat"></span>
+      </button>
+      <button class="flis flis-tiss" id="flis-tiss">
+        <span class="flis-ikon"><svg><use href="#i-draape"/></svg></span>
+        <span class="flis-navn">Tiss</span>
+        <span class="flis-sist" id="sist-tiss"></span>
+      </button>
+      <button class="flis flis-baesj" id="flis-baesj">
+        <span class="flis-ikon"><svg><use href="#i-baesj"/></svg></span>
+        <span class="flis-navn">Bæsj</span>
+        <span class="flis-sist" id="sist-baesj"></span>
+      </button>
+      <button class="flis-smal" id="flis-begge">
+        <svg><use href="#i-draape"/></svg><svg><use href="#i-baesj"/></svg>
+        <span>Tiss + bæsj</span>
+      </button>
+    </section>
+
+    <!-- Dagen -->
+    <section class="kort dag">
+      <div class="dag-hode">
+        <button class="ikonknapp liten" id="dag-forrige" aria-label="Forrige dag"><svg><use href="#i-venstre"/></svg></button>
+        <h2 id="dag-tittel">I dag</h2>
+        <button class="ikonknapp liten" id="dag-neste" aria-label="Neste dag"><svg><use href="#i-hoyre"/></svg></button>
+      </div>
+
+      <div class="tall">
+        <div class="tall-boks t-sovn"><span class="tall-verdi" id="t-sovn">0 t</span><span class="tall-navn" id="t-sovn-under">søvn</span></div>
+        <div class="tall-boks t-mat"><span class="tall-verdi" id="t-mat">0</span><span class="tall-navn" id="t-mat-under">måltider</span></div>
+        <div class="tall-boks t-tiss"><span class="tall-verdi" id="t-tiss">0</span><span class="tall-navn">tiss</span></div>
+        <div class="tall-boks t-baesj"><span class="tall-verdi" id="t-baesj">0</span><span class="tall-navn">bæsj</span></div>
+      </div>
+
+      <div class="stripe-wrap">
+        <div class="stripe" id="stripe"></div>
+        <div class="stripe-akse"><span>00</span><span>06</span><span>12</span><span>18</span><span>24</span></div>
+      </div>
+
+      <ol class="logg" id="logg"></ol>
+      <p class="tom" id="logg-tom" hidden>Ingen registreringer ennå.</p>
+
+      <button class="legg-til" id="legg-til"><svg><use href="#i-pluss"/></svg> Legg inn noe som skjedde tidligere</button>
+    </section>
+
+    <footer class="bunn">
+      <a href="api/eksport.csv" class="lenke">Last ned alle data (CSV)</a>
+    </footer>
+  </div>
+
+  <!-- Bunnark -->
+  <div class="ark-bakgrunn" id="ark-bakgrunn" hidden></div>
+  <div class="ark" id="ark" role="dialog" aria-modal="true" hidden>
+    <div class="ark-handtak"></div>
+    <div id="ark-innhold"></div>
+  </div>
+
+  <!-- Toast -->
+  <div class="toast" id="toast" hidden>
+    <span id="toast-tekst"></span>
+    <div class="toast-knapper" id="toast-knapper"></div>
+  </div>
+
+  <script src="static/app.js"></script>
+</body>
+</html>

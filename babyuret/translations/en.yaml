@@ -1,0 +1,19 @@
+configuration:
+  baby_navn:
+    name: Baby's name
+    description: Shown at the top of the app. Optional.
+  fodselsdato:
+    name: Date of birth
+    description: Format YYYY-MM-DD. Used to show age and (later) age-based recommendations.
+  mating:
+    name: Feeding
+    description: Breastfeeding (amming), bottle (flaske) or both (begge).
+  standard_flaske_ml:
+    name: Default bottle amount (ml)
+    description: Pre-selected amount when logging a bottle.
+  nattmodus_fra:
+    name: Night mode from
+    description: Time (HH:MM) when the app switches to a dim, red-toned night mode.
+  nattmodus_til:
+    name: Night mode until
+    description: Time (HH:MM) when night mode turns off.
