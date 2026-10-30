@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="nb">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#FBF6EF">
+  <title>Plasterboka</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Nunito:wght@500;600;700;800&display=swap">
+  <link rel="stylesheet" href="static/style.css">
+</head>
+<body>
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <symbol id="i-termometer" viewBox="0 0 24 24"><path d="M14 14.8V5a2 2 0 1 0-4 0v9.8a4 4 0 1 0 4 0Z"/><path d="M12 9v7"/></symbol>
+    <symbol id="i-pille" viewBox="0 0 24 24"><rect x="2.5" y="8" width="19" height="8" rx="4" transform="rotate(-40 12 12)"/><path d="m8.6 8.6 6.8 6.8" transform="rotate(5 12 12)"/></symbol>
+    <symbol id="i-symptom" viewBox="0 0 24 24"><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1"/><circle cx="12" cy="12" r="2.5"/></symbol>
+    <symbol id="i-notat" viewBox="0 0 24 24"><path d="M5 4h10l4 4v12H5Z"/><path d="M15 4v4h4M8.5 12.5h7M8.5 16h5"/></symbol>
+    <symbol id="i-plaster" viewBox="0 0 24 24"><rect x="2" y="8" width="20" height="8" rx="4" transform="rotate(-45 12 12)"/><path d="M10 10h.01M14 14h.01M14 10h.01M10 14h.01"/></symbol>
+    <symbol id="i-pluss" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+    <symbol id="i-venstre" viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></symbol>
+    <symbol id="i-hoyre" viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></symbol>
+    <symbol id="i-hjem" viewBox="0 0 24 24"><path d="M3 11l9-7 9 7"/><path d="M5 10v10h14V10"/></symbol>
+    <symbol id="i-bok" viewBox="0 0 24 24"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v15H6.5A2.5 2.5 0 0 0 4 20.5Z"/><path d="M4 20.5A2.5 2.5 0 0 0 6.5 23H20v-5"/></symbol>
+    <symbol id="i-tannhjul" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z"/></symbol>
+    <symbol id="i-klokke" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></symbol>
+    <symbol id="i-sjekk" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></symbol>
+    <symbol id="i-advarsel" viewBox="0 0 24 24"><path d="M12 3 2 20h20Z"/><path d="M12 10v4M12 17h.01"/></symbol>
+    <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></symbol>
+    <symbol id="i-sol" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></symbol>
+    <symbol id="i-kalender" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M3 10h18M8 3v4M16 3v4"/></symbol>
+    <symbol id="i-last-ned" viewBox="0 0 24 24"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></symbol>
+    <symbol id="i-skriver" viewBox="0 0 24 24"><path d="M7 9V3h10v6M7 17H4v-6a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v6h-3"/><path d="M7 14h10v7H7Z"/></symbol>
+    <symbol id="i-blyant" viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16Z"/><path d="M13.5 6.5l4 4"/></symbol>
+    <symbol id="i-kryss" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></symbol>
+  </svg>
+
+  <main class="app">
+    <header class="topp">
+      <div>
+        <h1>Plasterboka</h1>
+        <p class="undertittel" id="undertittel"></p>
+      </div>
+    </header>
+
+    <!-- ================= Hjem ================= -->
+    <section class="visning" id="v-hjem">
+      <button class="velkommen" id="velkommen" hidden>
+        <svg><use href="#i-plaster"/></svg>
+        <span class="velkommen-tekst"><b>Velkommen!</b><br>Start med å legge inn barna og legemidlene dere bruker under Innstillinger.</span>
+        <svg class="pil"><use href="#i-hoyre"/></svg>
+      </button>
+      <button class="banner" id="gjennomgang-banner" hidden></button>
+      <div class="barnvelger" id="barnvelger" role="tablist"></div>
+
+      <div class="helt" id="helt">
+        <div>
+          <div class="helt-merke" id="helt-merke"></div>
+          <div class="helt-tid" id="helt-tid"></div>
+          <div class="helt-under" id="helt-under"></div>
+        </div>
+        <div class="symptomlinje" id="helt-symptomer"></div>
+        <div class="helt-knapper" id="helt-knapper"></div>
+      </div>
+      <div id="merknad"></div>
+
+      <div class="fliser" id="fliser">
+        <button class="flis flis-temp" data-seksjon="temp"><span class="flis-ikon"><svg><use href="#i-termometer"/></svg></span><span class="flis-navn">Temperatur</span><span class="flis-sist" id="sist-temp"></span></button>
+        <button class="flis flis-med" data-seksjon="med"><span class="flis-ikon"><svg><use href="#i-pille"/></svg></span><span class="flis-navn">Medisin</span><span class="flis-sist" id="sist-med"></span></button>
+        <button class="flis flis-symp" data-seksjon="symp"><span class="flis-ikon"><svg><use href="#i-symptom"/></svg></span><span class="flis-navn">Symptomer</span><span class="flis-sist" id="sist-symp"></span></button>
+        <button class="flis flis-notat" data-seksjon="notat"><span class="flis-ikon"><svg><use href="#i-notat"/></svg></span><span class="flis-navn">Notat</span><span class="flis-sist" id="sist-notat"></span></button>
+      </div>
+
+      <div id="doser"></div>
+
+      <section class="kort">
+        <div class="dag-hode"><h2>Siste døgn</h2></div>
+        <ul class="logg" id="logg"></ul>
+        <button class="legg-til" id="legg-til-tidligere"><svg><use href="#i-klokke"/></svg>Legg inn noe som skjedde tidligere</button>
+      </section>
+    </section>
+
+    <!-- ================= Historikk ================= -->
+    <section class="visning" id="v-historikk" hidden>
+      <div class="filterrad" id="hist-barn"></div>
+      <div class="filterrad" id="hist-aar"></div>
+      <div id="episoder"></div>
+    </section>
+
+    <!-- ================= Episode ================= -->
+    <section class="visning" id="v-episode" hidden></section>
+
+    <!-- ================= Gjennomgang ================= -->
+    <section class="visning" id="v-gjennomgang" hidden></section>
+
+    <!-- ================= Innstillinger ================= -->
+    <section class="visning" id="v-innstillinger" hidden></section>
+  </main>
+
+  <nav class="faner" id="faner">
+    <button data-fane="hjem" class="valgt"><svg><use href="#i-hjem"/></svg>Registrer</button>
+    <button data-fane="historikk"><svg><use href="#i-bok"/></svg>Historikk</button>
+    <button data-fane="innstillinger"><svg><use href="#i-tannhjul"/></svg>Innstillinger<span class="prikk-tall" id="fane-tall" hidden></span></button>
+  </nav>
+
+  <div id="ark-rot"></div>
+  <div id="toast-rot"></div>
+
+  <script src="static/app.js"></script>
+</body>
+</html>
