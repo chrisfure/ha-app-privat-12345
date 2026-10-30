@@ -1,5 +1,9 @@
 # Endringslogg
 
+## 0.1.1
+
+- Retting: appen fant ikke tilgangsnøkkelen til Home Assistant, så sensorer, hendelser og kalenderimport virket ikke.
+
 ## 0.1.0
 
 - Første versjon: barneprofiler, registrering av temperatur, medisin, symptomer og notat.

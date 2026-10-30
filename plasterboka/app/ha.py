@@ -24,10 +24,25 @@ CORE_WS = "ws://supervisor/core/websocket"
 LYTT_PA = "plasterboka_registrer"
 
 
+def _supervisor_token() -> str | None:
+    """Tokenet ligger i miljøet, eller – når s6-overlay starter appen uten miljø – i en fil."""
+    t = os.environ.get("SUPERVISOR_TOKEN")
+    if t:
+        return t
+    for sti in ("/run/s6/container_environment/SUPERVISOR_TOKEN", "/var/run/s6/container_environment/SUPERVISOR_TOKEN"):
+        try:
+            with open(sti, encoding="utf-8") as f:
+                if (t := f.read().strip()):
+                    return t
+        except OSError:
+            continue
+    return None
+
+
 class HAKobling:
     def __init__(self, pb: Plasterboka):
         self.pb = pb
-        self.token = os.environ.get("SUPERVISOR_TOKEN")
+        self.token = _supervisor_token()
         self.aktiv = bool(self.token)
         self._session: aiohttp.ClientSession | None = None
         self._publiser_naa = asyncio.Event()

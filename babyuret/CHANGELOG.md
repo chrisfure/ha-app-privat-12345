@@ -1,5 +1,9 @@
 # Endringslogg
 
+## 0.3.1
+
+- Retting: appen fant ikke tilgangsnøkkelen til Home Assistant, så sensorer og hendelser virket ikke.
+
 ## 0.3.0
 
 * Søvnprognose: når babyen trolig sovner neste gang og hvor lenge, eller når den trolig våkner. Regnes lokalt fra egne data, med Helsenorges beskrivelse av nyfødte som startestimat.
