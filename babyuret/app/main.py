@@ -13,6 +13,8 @@ import innstillinger
 from db import Database
 from ha import HAKobling
 from logikk import Babyuret, Feil
+import maalinger as mal
+import referanser
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 log = logging.getLogger("babyuret")
@@ -46,6 +48,8 @@ def lag_app(bu: Babyuret) -> web.Application:
             "innstillinger": bu.cfg.offentlig(),
             "alder": bu.alder(),
             "status": bu.status(),
+            "prognose": bu.prognose.beregn(),
+            "siste_dogn": bu.prognose.siste_dogn(),
             "oppsummering": bu.oppsummering(dag),
             "i_dag": bu.i_dag().isoformat(),
             "bruker": _bruker(req),
@@ -70,6 +74,48 @@ def lag_app(bu: Babyuret) -> web.Application:
             return web.json_response(bu.lagre_innstillinger(await req.json()))
         except Feil as e:
             return _feil(str(e))
+
+    @routes.get("/api/maalinger")
+    async def maalinger(_req):
+        return web.json_response({
+            "maalinger": bu.db.maalinger(),
+            "vurderinger": mal.vurderinger(bu),
+            "kilder": referanser.KILDER,
+        })
+
+    @routes.post("/api/maalinger")
+    async def ny_maaling(req):
+        d = await req.json()
+        try:
+            verdi, tid = mal.valider(d.get("type"), d.get("verdi"), d.get("tid"))
+        except mal.UgyldigMaaling as e:
+            return _feil(str(e))
+        m = bu.db.ny_maaling(d["type"], verdi, tid, (d.get("notat") or "").strip()[:200] or None, _bruker(req))
+        return web.json_response({"maaling": m, "vurderinger": mal.vurderinger(bu)})
+
+    @routes.patch("/api/maalinger/{mid:\\d+}")
+    async def endre_maaling(req):
+        mid = int(req.match_info["mid"])
+        gammel = bu.db.maaling(mid)
+        if not gammel:
+            return _feil("Fant ikke målingen", 404)
+        d = await req.json()
+        try:
+            verdi, tid = mal.valider(gammel["type"], d.get("verdi", gammel["verdi"]), d.get("tid", gammel["tid"]))
+        except mal.UgyldigMaaling as e:
+            return _feil(str(e))
+        m = bu.db.endre_maaling(mid, verdi, tid, (d.get("notat", gammel["notat"]) or "").strip()[:200] or None)
+        return web.json_response({"maaling": m})
+
+    @routes.delete("/api/maalinger/{mid:\\d+}")
+    async def slett_maaling(req):
+        if not bu.db.slett_maaling(int(req.match_info["mid"])):
+            return _feil("Fant ikke målingen", 404)
+        return web.json_response({"ok": True})
+
+    @routes.get("/api/kilder")
+    async def kilder(_req):
+        return web.json_response(referanser.KILDER)
 
     @routes.post("/api/hendelser")
     async def legg_til(req):

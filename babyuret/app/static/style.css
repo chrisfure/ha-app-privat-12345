@@ -380,3 +380,93 @@ svg { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width:
 .knapp.lagre { --aksent: var(--sovn); flex: none; }
 .knapp.lagre:disabled { opacity: .45; }
 .lenkeknapp { text-decoration: none; --aksent-lys: var(--flate-2); --aksent-blekk: var(--blekk); }
+
+/* ================= prognose, døgn og målinger (v0.3) ================= */
+.prognose {
+  display: flex; align-items: center; gap: 12px; text-align: left;
+  padding: 12px 14px; border-radius: 18px; background: var(--flate-2);
+}
+.prognose-ikon {
+  width: 36px; height: 36px; border-radius: 12px; flex: none; display: grid; place-items: center;
+  background: var(--sovn-lys); color: var(--sovn);
+}
+.prognose-ikon svg { width: 20px; height: 20px; }
+.prognose-tekst { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+.prognose-tittel { font-weight: 800; font-size: 16px; }
+.prognose-under { font-size: 13px; font-weight: 600; color: var(--dempet); }
+.prognose-pil { width: 20px; height: 20px; color: var(--dempet); flex: none; }
+.merke-sikkerhet {
+  display: inline-block; font-size: 11px; font-weight: 800; padding: 1px 7px; border-radius: 99px;
+  background: var(--sovn-lys); color: var(--sovn-blekk); margin-left: 6px; vertical-align: 1px;
+}
+
+.dogn h2, .graf-kort h2 { margin: 0 0 6px; font-size: 18px; font-weight: 800; }
+.dogn-rad { display: flex; align-items: baseline; gap: 8px; }
+.dogn-tall { font-size: 32px; font-weight: 800; letter-spacing: -.02em; color: var(--sovn-blekk); }
+.dogn-navn { color: var(--dempet); font-weight: 700; }
+.maaler { position: relative; height: 16px; border-radius: 8px; background: var(--flate-2); margin: 12px 0 4px; }
+.maaler-normal { position: absolute; top: 0; bottom: 0; background: var(--sovn-lys); border-radius: 8px; }
+.maaler-vanlig { position: absolute; top: 3px; bottom: 3px; background: color-mix(in srgb, var(--sovn) 35%, transparent); border-radius: 6px; }
+.maaler-merke {
+  position: absolute; top: -5px; width: 6px; height: 26px; border-radius: 3px; background: var(--sovn);
+  transform: translateX(-50%); box-shadow: 0 0 0 3px var(--flate);
+}
+.maaler-akse { position: relative; height: 16px; font-size: 11px; font-weight: 700; color: var(--dempet); }
+.maaler-akse span { position: absolute; transform: translateX(-50%); }
+.ref-tekst { margin: 10px 0 0; font-size: 13px; font-weight: 600; color: var(--dempet); line-height: 1.45; }
+.ref-tekst a { color: inherit; }
+
+.maal-knapper { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+.maal-knapper button {
+  min-height: 92px; border-radius: 20px; background: var(--flate); box-shadow: var(--skygge);
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px;
+  font-weight: 800; font-size: 14px;
+}
+.maal-knapper button span {
+  width: 42px; height: 42px; border-radius: 14px; display: grid; place-items: center;
+  background: var(--tiss-lys); color: var(--tiss);
+}
+.maal-knapper button:nth-child(4) span { background: var(--mat-lys); color: var(--mat); }
+.maal-knapper button:active { transform: scale(.96); }
+
+.vurdering {
+  display: flex; gap: 12px; padding: 14px 16px; border-radius: 20px; margin-bottom: 10px;
+  background: var(--tiss-lys); color: var(--tiss-blekk); font-weight: 600; font-size: 14px; line-height: 1.45;
+}
+.vurdering svg { flex: none; width: 22px; height: 22px; margin-top: 1px; }
+.vurdering.obs { background: var(--baesj-lys); color: var(--baesj-blekk); }
+.vurdering.kontakt { background: #FBE3E0; color: #9E2A1F; }
+:root[data-natt="1"] .vurdering.kontakt { background: var(--flate-2); color: var(--blekk); }
+@media (prefers-color-scheme: dark) { :root:not([data-tema="lys"]):not([data-natt="1"]) .vurdering.kontakt { background: #42201C; color: #FFC2B9; } }
+.vurdering a { color: inherit; font-weight: 800; }
+#vurderinger:empty { display: none; }
+
+.segment.fire { grid-template-columns: repeat(4, 1fr); }
+.segment.fire button.valgt { color: var(--tiss-blekk); }
+.graf-siste { margin: 14px 2px 0; }
+.graf-siste .stor { font-size: 30px; font-weight: 800; letter-spacing: -.02em; }
+.graf-siste .liten { color: var(--dempet); font-weight: 700; font-size: 14px; }
+.graf { margin: 8px -4px 0; }
+.graf svg { width: 100%; height: auto; display: block; stroke: none; fill: none; overflow: visible; }
+.graf .rutenett { stroke: var(--linje); stroke-width: 1; }
+.graf .akse-tekst { fill: var(--dempet); font-size: 10px; font-weight: 700; font-family: var(--font); }
+.graf .p-linje { stroke: var(--dempet); stroke-width: 1; opacity: .45; }
+.graf .p-linje.median { opacity: .9; stroke-width: 1.5; }
+.graf .p-band { fill: var(--tiss-lys); }
+.graf .p-tekst { fill: var(--dempet); font-size: 9px; font-weight: 700; font-family: var(--font); }
+.graf .baby-linje { stroke: var(--tiss); stroke-width: 2.5; stroke-linejoin: round; stroke-linecap: round; }
+.graf .baby-punkt { fill: var(--tiss); stroke: var(--flate); stroke-width: 2; }
+.graf .feber-linje { stroke: #D0473B; stroke-width: 1.5; stroke-dasharray: 4 3; }
+.graf .temp-linje { stroke: var(--mat); stroke-width: 2.5; stroke-linejoin: round; }
+.graf .temp-punkt { fill: var(--mat); stroke: var(--flate); stroke-width: 2; }
+.graf-tom { text-align: center; color: var(--dempet); font-weight: 600; padding: 30px 10px; }
+.kilder { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 8px; font-size: 14px; font-weight: 600; }
+.kilder a { color: var(--sovn-blekk); }
+
+.stort-tall-felt input { font-size: 34px !important; text-align: center; letter-spacing: -.02em; }
+.felt .enhet { position: absolute; right: 16px; top: 50%; transform: translateY(-50%); color: var(--dempet); font-weight: 800; font-size: 18px; }
+.felt-wrap { position: relative; }
+.kildeliste { margin: 14px 0 0; font-size: 13px; font-weight: 600; color: var(--dempet); }
+.kildeliste a { color: inherit; }
+.felt-rad > * { min-width: 0; }
+.felt input { min-width: 0; max-width: 100%; }

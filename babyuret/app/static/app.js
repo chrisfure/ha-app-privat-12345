@@ -163,7 +163,90 @@
       $("helt-merke").textContent = "Våken";
       $("helt-under").textContent = st.siden ? `Våknet ${kl(st.siden)}` : "Trykk «Sover» når babyen sovner";
     }
+    tegnPrognose();
     tikk();
+  }
+
+  // ---------------------------------------------------------------- prognose
+  function minTekst(m) {
+    m = Math.round(m);
+    if (m < 60) return `${m} min`;
+    const t = Math.floor(m / 60), r = m % 60;
+    return r ? `${t} t ${r} min` : `${t} t`;
+  }
+  const SIKKERHET = { startestimat: "startestimat", lav: "lite data", middels: "middels sikker", god: "god treff" };
+
+  function tegnPrognose() {
+    const p = data.prognose, knapp = $("prognose");
+    if (!p || data.status.amming) { knapp.hidden = true; return; }
+    knapp.hidden = false;
+    if (!p.klar) {
+      $("prognose-tittel").textContent = p.type === "vaakner" ? "Når våkner babyen?" : "Neste søvn";
+      $("prognose-under").textContent = p.tekst;
+      return;
+    }
+    const merke = el("span", { class: "merke-sikkerhet" }, SIKKERHET[p.sikkerhet] || p.sikkerhet);
+    if (p.type === "vaakner") {
+      $("prognose-tittel").replaceChildren(`Våkner trolig ${kl(p.fra)}–${kl(p.til)}`, merke);
+      $("prognose-under").textContent = "Basert på babyens egne søvnperioder";
+    } else if (p.forbi) {
+      $("prognose-tittel").replaceChildren("Kan bli trøtt når som helst", merke);
+      $("prognose-under").textContent = `Vanligvis sovnet innen ${kl(p.til)}`;
+    } else {
+      $("prognose-tittel").replaceChildren(`Neste søvn ca. ${kl(p.fra)}–${kl(p.til)}`, merke);
+      $("prognose-under").textContent = p.varighet_min
+        ? `Varer ofte ${minTekst(p.varighet_min[0])}–${minTekst(p.varighet_min[1])}`
+        : "Varighet beregnes når det finnes flere søvnperioder";
+    }
+  }
+
+  $("prognose").addEventListener("click", () => {
+    const p = data.prognose;
+    const deler = [
+      el("h3", {}, "Om prognosen"),
+      el("p", { class: "hint" }, p.klar ? p.grunnlag : p.tekst),
+      el("p", { class: "ref-tekst" },
+        "Prognosen regnes ut lokalt i appen fra deres egne registreringer de siste 7 dagene. Nyere dager teller mest, ",
+        "og dag og natt beregnes hver for seg. Tidsvinduet viser hvor babyen vanligvis havner (midterste halvdel), ",
+        "så det vil alltid være dager som avviker."),
+      el("p", { class: "ref-tekst" },
+        "Helsemyndighetene gir ingen anbefalte våkenperioder utover at nyfødte ofte er våkne 30–60 minutter av gangen. ",
+        "Det brukes derfor bare som startestimat de første tre månedene, og babyens eget mønster tar over etter hvert."),
+      el("p", { class: "kildeliste" }, "Kilde: ", el("a", { href: "https://www.helsenorge.no/barn/sovn-hos-barn/", target: "_blank", rel: "noopener" }, "Helsenorge – Søvn hos barn 0–2 år")),
+    ];
+    aapneArk(...deler);
+  });
+
+  // ---------------------------------------------------------------- siste døgn
+  function tegnDogn() {
+    const d = data.siste_dogn;
+    if (!d) return;
+    $("dogn-sovn").textContent = minTekst(d.sovn_timer * 60);
+    const r = d.sovn_referanse;
+    const maaler = $("dogn-maaler"), akse = $("dogn-akse");
+    if (!r) {
+      maaler.hidden = true; akse.hidden = true;
+      $("dogn-ref").textContent = data.alder && data.alder.dager < 0
+        ? "Når babyen er født, sammenlignes søvnen med det som er vanlig for alderen."
+        : "Legg inn fødselsdato i innstillingene for å se hva som er vanlig for alderen.";
+    } else {
+      maaler.hidden = false; akse.hidden = false;
+      const maks = 24, pst = (t) => `${Math.min(100, Math.max(0, (t / maks) * 100))}%`;
+      Object.assign($("dogn-normal").style, { left: pst(r.normal[0]), width: `calc(${pst(r.normal[1])} - ${pst(r.normal[0])})` });
+      Object.assign($("dogn-vanlig").style, { left: pst(r.vanlig[0]), width: `calc(${pst(r.vanlig[1])} - ${pst(r.vanlig[0])})` });
+      $("dogn-merke").style.left = pst(d.sovn_timer);
+      akse.replaceChildren(...[0, r.normal[0], r.vanlig[0], r.vanlig[1], r.normal[1], 24]
+        .filter((v, i, a) => a.indexOf(v) === i)
+        .map((t) => el("span", { style: `left:${pst(t)}` }, `${t}`)));
+      const forTidlig = d.antall_dager_med_data < 1 ? " Det trengs minst ett helt døgn med registreringer før sammenligningen blir riktig." : "";
+      $("dogn-ref").replaceChildren(`${r.tekst}${forTidlig} `,
+        el("a", { href: "https://www.helsenorge.no/barn/sovn-hos-barn/", target: "_blank", rel: "noopener" }, "Kilde: Helsenorge"));
+    }
+    const am = $("dogn-amming");
+    if (d.amming_referanse) {
+      am.hidden = false;
+      am.textContent = `${d.maltider} måltider siste døgn. ${d.amming_referanse.tekst} (Helsenorge)`;
+    } else am.hidden = true;
   }
 
   function tikk() {
@@ -206,6 +289,7 @@
 
     tegnStripe(op);
     tegnLogg(op);
+    tegnDogn();
   }
 
   function dagStart(iso) {
@@ -346,6 +430,7 @@
 
   // ---------------------------------------------------------------- bunnark
   function aapneArk(...innhold) {
+    skjulToast();
     $("ark-innhold").replaceChildren(...innhold);
     $("ark").hidden = false;
     $("ark-bakgrunn").hidden = false;
@@ -605,14 +690,257 @@
     );
   }
 
+  // ---------------------------------------------------------------- målinger
+  const MAAL = {
+    vekt:       { navn: "Vekt",        enhet: "g",  steg: 10,  desimaler: 0, hint: "f.eks. 3540" },
+    lengde:     { navn: "Lengde",      enhet: "cm", steg: 0.5, desimaler: 1, hint: "f.eks. 51,5" },
+    hode:       { navn: "Hodeomkrets", enhet: "cm", steg: 0.5, desimaler: 1, hint: "f.eks. 35" },
+    temperatur: { navn: "Temperatur",  enhet: "°C", steg: 0.1, desimaler: 1, hint: "f.eks. 37,4" },
+  };
+  const P_Z = { 3: -1.8808, 10: -1.2816, 25: -0.6745, 50: 0, 75: 0.6745, 90: 1.2816, 97: 1.8808 };
+  let maalData = null, vekstdata = null, valgtGraf = "vekt";
+
+  const tall = (v, des) => Number(v).toLocaleString("nb-NO", { minimumFractionDigits: des, maximumFractionDigits: des });
+  const visVerdi = (type, v) => type === "vekt" && v >= 1000
+    ? `${tall(v / 1000, 3)} kg`
+    : `${tall(v, MAAL[type].desimaler)} ${MAAL[type].enhet}`;
+  const datoKort = (iso) => new Date(iso).toLocaleDateString("nb-NO", { day: "numeric", month: "short" });
+
+  async function lastMaalinger() {
+    try {
+      const [m, v] = await Promise.all([api("api/maalinger"), vekstdata ? Promise.resolve(vekstdata) : fetch("static/vekstdata.json").then((r) => r.json())]);
+      maalData = m; vekstdata = v;
+      tegnMaalinger();
+    } catch (e) { visToast(e.message, []); }
+  }
+
+  // LMS-hjelpere (WHO): verdi for z, z for verdi, normalfordeling
+  function lms(type, dag) {
+    const tab = vekstdata[data.innstillinger.kjonn][type];
+    if (dag <= tab[0][0]) return tab[0].slice(1);
+    for (let i = 1; i < tab.length; i++) {
+      if (dag <= tab[i][0]) {
+        const [d0, ...a] = tab[i - 1], [d1, ...b] = tab[i];
+        const f = (dag - d0) / (d1 - d0);
+        return a.map((x, k) => x + (b[k] - x) * f);
+      }
+    }
+    return tab[tab.length - 1].slice(1);
+  }
+  const fraZ = ([L, M, S], z) => (L ? M * Math.pow(1 + L * S * z, 1 / L) : M * Math.exp(S * z));
+  const tilZ = ([L, M, S], x) => (L ? (Math.pow(x / M, L) - 1) / (L * S) : Math.log(x / M) / S);
+  function phi(z) { // standard normalfordeling (Abramowitz–Stegun)
+    const t = 1 / (1 + 0.2316419 * Math.abs(z));
+    const d = 0.3989423 * Math.exp(-z * z / 2);
+    const p = d * t * (0.3193815 + t * (-0.3565638 + t * (1.781478 + t * (-1.821256 + t * 1.330274))));
+    return z > 0 ? 1 - p : p;
+  }
+  function alderDager(iso) {
+    const f = data.innstillinger.fodselsdato;
+    if (!f) return null;
+    const [y, m, d] = f.split("-").map(Number);
+    return (new Date(iso).getTime() - new Date(y, m - 1, d).getTime()) / 864e5;
+  }
+  function persentilTekst(type, verdi, tid) {
+    if (type === "temperatur" || !data.innstillinger.kjonn || !vekstdata) return "";
+    const a = alderDager(tid);
+    if (a === null || a < 0 || a > 731) return "";
+    const x = type === "vekt" ? verdi / 1000 : verdi;
+    const p = phi(tilZ(lms(type, a), x)) * 100;
+    if (p < 3) return "under 3. persentil";
+    if (p > 97) return "over 97. persentil";
+    return `ca. ${Math.round(p)}. persentil`;
+  }
+
+  function tegnMaalinger() {
+    if (!maalData) return;
+    // vurderinger
+    const kilder = maalData.kilder;
+    $("vurderinger").replaceChildren(...maalData.vurderinger.map((v) =>
+      el("div", { class: `vurdering ${v.niva}` }, ikon("info"),
+        el("div", {}, v.tekst, " ", kilder[v.kilde] ? el("a", { href: kilder[v.kilde].url, target: "_blank", rel: "noopener" }, `Kilde: ${kilder[v.kilde].navn.split(":")[0]}`) : null))));
+    document.querySelectorAll("#graf-valg button").forEach((b) => b.classList.toggle("valgt", b.dataset.type === valgtGraf));
+
+    const liste = maalData.maalinger.filter((m) => m.type === valgtGraf);
+    const siste = liste[liste.length - 1];
+    $("graf-siste").replaceChildren(...(siste ? [
+      el("div", { class: "stor" }, visVerdi(valgtGraf, siste.verdi)),
+      el("div", { class: "liten" }, [datoKort(siste.tid), persentilTekst(valgtGraf, siste.verdi, siste.tid)].filter(Boolean).join(" · ")),
+    ] : []));
+
+    $("graf").replaceChildren(valgtGraf === "temperatur" ? tempGraf(liste) : vekstGraf(valgtGraf, liste));
+    const note = $("graf-note");
+    if (valgtGraf === "temperatur") {
+      note.replaceChildren("Feber er 38,0 °C eller mer målt i endetarmen. Kontakt lege hvis et barn som er 3 måneder eller yngre har feber. ",
+        el("a", { href: kilder.helsenorge_feber.url, target: "_blank", rel: "noopener" }, "Kilde: Helsenorge"));
+    } else if (!data.innstillinger.kjonn || !data.innstillinger.fodselsdato) {
+      note.textContent = "Velg kjønn og legg inn fødselsdato i innstillingene for å se vekstkurver.";
+    } else {
+      const ekstra = valgtGraf === "hode" ? " Helsestasjonen bruker den norske kurven fra Vekststudien i Bergen for hodeomkrets, så tallene kan avvike litt." : "";
+      note.replaceChildren(`Linjene viser 3., 10., 25., 50., 75., 90. og 97. persentil fra WHOs vekststandard, som Helsedirektoratet anbefaler for helsestasjonene.${ekstra} Kurvene gjelder barn født til termin. Det viktigste er at barnet følger sin egen kurve. `,
+        el("a", { href: kilder.hdir_veiing.url, target: "_blank", rel: "noopener" }, "Kilde: Helsedirektoratet"));
+    }
+
+    $("maal-liste").replaceChildren(...[...liste].reverse().map((m) => el("li", {},
+      el("button", { class: "rad", onclick: () => maalArk(m.type, m) },
+        el("span", { class: "rad-tekst" },
+          el("div", { class: "rad-tittel" }, visVerdi(m.type, m.verdi)),
+          el("div", { class: "rad-under" }, [persentilTekst(m.type, m.verdi, m.tid), m.notat, m.av].filter(Boolean).join(" · "))),
+        el("span", { class: "rad-tid" }, datoKort(m.tid))))));
+  }
+
+  const SVG = (tag, attrs = {}) => {
+    const e = document.createElementNS(SVGNS, tag);
+    for (const [k, v] of Object.entries(attrs)) e.setAttribute(k, v);
+    return e;
+  };
+
+  function vekstGraf(type, liste) {
+    const B = 340, H = 230, pl = 34, pr = 26, pt = 10, pb = 24;
+    const kanKurver = data.innstillinger.kjonn && data.innstillinger.fodselsdato && vekstdata;
+    const punkter = liste.map((m) => ({ x: alderDager(m.tid), y: type === "vekt" ? m.verdi / 1000 : m.verdi }))
+      .filter((p) => p.x !== null && p.x >= -1);
+    if (!kanKurver && !punkter.length) return el("div", { class: "graf-tom" }, "Ingen målinger ennå. Trykk på en av knappene over.");
+    const naaAlder = data.alder ? Math.max(0, data.alder.dager) : 0;
+    const xMaks = Math.min(731, Math.max(91, naaAlder + 30, ...punkter.map((p) => p.x + 14)));
+    const steg = xMaks > 200 ? 14 : 7;
+    const kurver = {};
+    let yMin = Infinity, yMaks = -Infinity;
+    if (kanKurver) {
+      for (const p of Object.keys(P_Z)) {
+        kurver[p] = [];
+        for (let d = 0; d <= xMaks; d += steg) {
+          const v = fraZ(lms(type, d), P_Z[p]);
+          kurver[p].push([d, v]);
+          yMin = Math.min(yMin, v); yMaks = Math.max(yMaks, v);
+        }
+      }
+    }
+    for (const p of punkter) { yMin = Math.min(yMin, p.y); yMaks = Math.max(yMaks, p.y); }
+    const pad = (yMaks - yMin) * 0.06 || 1;
+    yMin -= pad; yMaks += pad;
+    const X = (d) => pl + (d / xMaks) * (B - pl - pr);
+    const Y = (v) => pt + (1 - (v - yMin) / (yMaks - yMin)) * (H - pt - pb);
+    const svg = SVG("svg", { viewBox: `0 0 ${B} ${H}`, role: "img", "aria-label": `${MAAL[type].navn} med vekstkurver` });
+
+    // rutenett og akser
+    const yTrinn = (yMaks - yMin) > 20 ? 5 : (yMaks - yMin) > 6 ? 2 : (yMaks - yMin) > 3 ? 1 : 0.5;
+    for (let v = Math.ceil(yMin / yTrinn) * yTrinn; v <= yMaks; v += yTrinn) {
+      svg.append(SVG("line", { class: "rutenett", x1: pl, x2: B - pr, y1: Y(v), y2: Y(v) }));
+      const t = SVG("text", { class: "akse-tekst", x: pl - 6, y: Y(v) + 3, "text-anchor": "end" });
+      t.textContent = tall(v, yTrinn < 1 ? 1 : 0); svg.append(t);
+    }
+    const iMnd = xMaks > 120;
+    const xTrinn = iMnd ? (xMaks > 400 ? 91.3 : 30.44) : 14;
+    for (let d = 0; d <= xMaks + 0.1; d += xTrinn) {
+      const t = SVG("text", { class: "akse-tekst", x: X(d), y: H - 6, "text-anchor": "middle" });
+      t.textContent = iMnd ? `${Math.round(d / 30.44)} mnd` : `${Math.round(d / 7)} u`;
+      svg.append(t);
+    }
+    const enhet = SVG("text", { class: "akse-tekst", x: pl - 6, y: pt - 1, "text-anchor": "end" });
+    enhet.textContent = type === "vekt" ? "kg" : "cm"; svg.append(enhet);
+
+    if (kanKurver) {
+      const sti = (pts) => pts.map(([d, v], i) => `${i ? "L" : "M"}${X(d).toFixed(1)},${Y(v).toFixed(1)}`).join("");
+      const band = sti(kurver[3]) + [...kurver[97]].reverse().map(([d, v]) => `L${X(d).toFixed(1)},${Y(v).toFixed(1)}`).join("") + "Z";
+      svg.append(SVG("path", { class: "p-band", d: band }));
+      for (const p of Object.keys(P_Z)) {
+        svg.append(SVG("path", { class: `p-linje${p === "50" ? " median" : ""}`, d: sti(kurver[p]) }));
+        const siste = kurver[p][kurver[p].length - 1];
+        const t = SVG("text", { class: "p-tekst", x: B - pr + 3, y: Y(siste[1]) + 3 });
+        t.textContent = p; svg.append(t);
+      }
+    }
+    if (punkter.length > 1) {
+      svg.append(SVG("path", { class: "baby-linje", d: punkter.map((p, i) => `${i ? "L" : "M"}${X(p.x).toFixed(1)},${Y(p.y).toFixed(1)}`).join("") }));
+    }
+    for (const p of punkter) svg.append(SVG("circle", { class: "baby-punkt", cx: X(p.x), cy: Y(p.y), r: 4.5 }));
+    return svg;
+  }
+
+  function tempGraf(liste) {
+    const naa = Date.now(), fra = naa - 7 * 864e5;
+    const pts = liste.filter((m) => new Date(m.tid).getTime() >= fra).map((m) => ({ x: new Date(m.tid).getTime(), y: m.verdi }));
+    if (!pts.length) return el("div", { class: "graf-tom" }, "Ingen temperaturmålinger siste 7 dager.");
+    const B = 340, H = 180, pl = 34, pr = 10, pt = 10, pb = 24;
+    const yMin = Math.min(36, ...pts.map((p) => p.y)) - 0.3, yMaks = Math.max(38.6, ...pts.map((p) => p.y)) + 0.3;
+    const X = (t) => pl + ((t - fra) / (naa - fra)) * (B - pl - pr);
+    const Y = (v) => pt + (1 - (v - yMin) / (yMaks - yMin)) * (H - pt - pb);
+    const svg = SVG("svg", { viewBox: `0 0 ${B} ${H}`, role: "img", "aria-label": "Temperatur siste 7 dager" });
+    for (let v = Math.ceil(yMin); v <= yMaks; v += 1) {
+      svg.append(SVG("line", { class: "rutenett", x1: pl, x2: B - pr, y1: Y(v), y2: Y(v) }));
+      const t = SVG("text", { class: "akse-tekst", x: pl - 6, y: Y(v) + 3, "text-anchor": "end" }); t.textContent = `${v}°`; svg.append(t);
+    }
+    svg.append(SVG("line", { class: "feber-linje", x1: pl, x2: B - pr, y1: Y(38), y2: Y(38) }));
+    for (let i = 0; i <= 7; i += 1) {
+      const d = new Date(fra + i * 864e5);
+      if (i % 2) continue;
+      const t = SVG("text", { class: "akse-tekst", x: X(d.getTime()), y: H - 6, "text-anchor": "middle" });
+      t.textContent = d.toLocaleDateString("nb-NO", { weekday: "short" }); svg.append(t);
+    }
+    if (pts.length > 1) svg.append(SVG("path", { class: "temp-linje", d: pts.map((p, i) => `${i ? "L" : "M"}${X(p.x).toFixed(1)},${Y(p.y).toFixed(1)}`).join("") }));
+    for (const p of pts) svg.append(SVG("circle", { class: "temp-punkt", cx: X(p.x), cy: Y(p.y), r: 4 }));
+    return svg;
+  }
+
+  function maalArk(type, eksisterende = null) {
+    const def = MAAL[type];
+    const listeType = maalData ? maalData.maalinger.filter((m) => m.type === type) : [];
+    const forrige = listeType[listeType.length - 1];
+    const startVerdi = eksisterende ? eksisterende.verdi : (forrige && type !== "temperatur" ? forrige.verdi : "");
+    const input = el("input", { type: "text", inputmode: "decimal", placeholder: def.hint, value: startVerdi === "" ? "" : String(startVerdi).replace(".", ",") });
+    const tidIso = eksisterende ? eksisterende.tid : new Date().toISOString();
+    const lokal = (iso) => { const d = new Date(iso); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0, 16); };
+    const tid = el("input", { type: "datetime-local", value: lokal(tidIso) });
+    const notat = el("input", { type: "text", placeholder: type === "temperatur" ? "f.eks. målt i endetarmen" : "f.eks. helsestasjonen", value: eksisterende && eksisterende.notat ? eksisterende.notat : "", maxlength: "200" });
+    const juster = (n) => {
+      const v = parseFloat((input.value || String(startVerdi || 0)).replace(",", ".")) || 0;
+      input.value = tall(Math.max(0, v + n * def.steg), def.desimaler).replace(/\s/g, "");
+    };
+    const lagre = async () => {
+      const body = { type, verdi: input.value.replace(/\s/g, "").replace(",", "."), tid: new Date(tid.value).toISOString(), notat: notat.value };
+      try {
+        if (eksisterende) await api(`api/maalinger/${eksisterende.id}`, { method: "PATCH", body });
+        else await api("api/maalinger", { method: "POST", body });
+        lukkArk();
+        valgtGraf = type;
+        await lastMaalinger();
+        visToast(`${def.navn} lagret`, [], 2500);
+      } catch (e) { visToast(e.message, []); }
+    };
+    let sikker = false;
+    const slett = eksisterende ? el("button", { class: "knapp fare", onclick: async (e) => {
+      if (!sikker) { sikker = true; e.target.textContent = "Sikker?"; return; }
+      try { await api(`api/maalinger/${eksisterende.id}`, { method: "DELETE" }); lukkArk(); await lastMaalinger(); visToast("Slettet", [], 2000); }
+      catch (err) { visToast(err.message, []); }
+    } }, "Slett") : null;
+    aapneArk(
+      el("h3", {}, eksisterende ? `Endre ${def.navn.toLowerCase()}` : def.navn),
+      el("p", { class: "hint" }, type === "vekt" ? "Skriv inn vekten i gram." : type === "temperatur" ? "Helsenorge anbefaler å måle i endetarmen med digitalt termometer." : `Skriv inn i ${def.enhet}.`),
+      el("div", { class: "felt stort-tall-felt" }, el("div", { class: "felt-wrap" }, input, el("span", { class: "enhet" }, def.enhet))),
+      el("div", { class: "juster" },
+        el("button", { type: "button", onclick: () => juster(-1) }, `−${tall(def.steg, def.desimaler)}`),
+        el("button", { type: "button", onclick: () => juster(1) }, `+${tall(def.steg, def.desimaler)}`)),
+      el("label", { class: "felt", style: "margin-top:14px" }, el("span", {}, "Tidspunkt"), tid),
+      el("label", { class: "felt", style: "margin-top:10px" }, el("span", {}, "Notat (valgfritt)"), notat),
+      el("div", { class: "ark-knapper" }, slett, el("button", { class: "knapp", style: "--aksent: var(--tiss)", onclick: lagre }, "Lagre")),
+    );
+    setTimeout(() => input.focus(), 250);
+  }
+
+  document.querySelectorAll(".maal-knapper button").forEach((b) => b.addEventListener("click", () => { vibrer(); maalArk(b.dataset.type); }));
+  document.querySelectorAll("#graf-valg button").forEach((b) => b.addEventListener("click", () => { valgtGraf = b.dataset.type; tegnMaalinger(); }));
+
   // ---------------------------------------------------------------- faner
-  const FANER = ["registrer", "dagbok", "innstillinger"];
+  const FANER = ["registrer", "dagbok", "maalinger", "innstillinger"];
   function visFane(navn, oppdaterHash = true) {
     if (!FANER.includes(navn)) navn = "registrer";
+    skjulToast();
     for (const f of FANER) $(`v-${f}`).hidden = f !== navn;
     document.querySelectorAll("#faner button").forEach((b) => b.classList.toggle("valgt", b.dataset.fane === navn));
     if (oppdaterHash && location.hash !== `#${navn}`) history.replaceState(null, "", `#${navn}`);
     if (navn === "innstillinger") fyllInnstillinger();
+    if (navn === "maalinger") lastMaalinger();
     if (navn !== "dagbok" && visDag) { visDag = null; last(); }
     window.scrollTo(0, 0);
   }
@@ -620,9 +948,10 @@
   $("velkommen").addEventListener("click", () => visFane("innstillinger"));
 
   // ---------------------------------------------------------------- innstillinger
-  const skjemaState = { mating: "begge", ml: 90 };
+  const skjemaState = { mating: "begge", ml: 90, kjonn: "" };
   function tegnMating() {
     document.querySelectorAll("#inn-mating button").forEach((b) => b.classList.toggle("valgt", b.dataset.verdi === skjemaState.mating));
+    document.querySelectorAll("#inn-kjonn button").forEach((b) => b.classList.toggle("valgt", b.dataset.verdi === skjemaState.kjonn));
     $("inn-ml-felt").hidden = skjemaState.mating === "amming";
     $("inn-ml").replaceChildren(String(skjemaState.ml), el("small", {}, " ml"));
   }
@@ -635,8 +964,15 @@
     $("inn-natt-til").value = inn.nattmodus_til;
     skjemaState.mating = inn.mating;
     skjemaState.ml = inn.standard_flaske_ml;
+    skjemaState.kjonn = inn.kjonn || "";
     tegnMating();
+    if (!$("kilder").children.length) {
+      api("api/kilder").then((k) => $("kilder").replaceChildren(...Object.values(k).map((x) =>
+        el("li", {}, el("a", { href: x.url, target: "_blank", rel: "noopener" }, x.navn))))).catch(() => {});
+    }
   }
+  document.querySelectorAll("#inn-kjonn button").forEach((b) =>
+    b.addEventListener("click", () => { skjemaState.kjonn = b.dataset.verdi; tegnMating(); }));
   document.querySelectorAll("#inn-mating button").forEach((b) =>
     b.addEventListener("click", () => { skjemaState.mating = b.dataset.verdi; tegnMating(); }));
   $("inn-ml-minus").addEventListener("click", () => { skjemaState.ml = Math.max(10, skjemaState.ml - 10); tegnMating(); });
@@ -649,6 +985,7 @@
         baby_navn: $("inn-navn").value.trim(),
         fodselsdato: $("inn-fodsel").value || null,
         mating: skjemaState.mating,
+        kjonn: skjemaState.kjonn,
         standard_flaske_ml: skjemaState.ml,
         nattmodus_fra: $("inn-natt-fra").value || "21:00",
         nattmodus_til: $("inn-natt-til").value || "07:00",

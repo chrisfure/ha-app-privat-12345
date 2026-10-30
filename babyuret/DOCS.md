@@ -7,6 +7,7 @@ Registrer søvn, mat og bleier med ett trykk – fra telefonen, en fysisk knapp,
 Alt stilles inn i selve appen, under fanen **Innstillinger**:
 
 * **Navn** og **fødselsdato eller termin** – før fødselen viser appen hvor lenge det er igjen.
+* **Kjønn** – brukes bare til å velge riktig WHO-vekstkurve.
 * **Mating** – amming, flaske eller begge. Styrer valgene du får når du trykker «Mat».
 * **Standard flaskemengde**.
 * **Nattmodus** – tidsrom for mørk, rødtonet skjerm. Kan overstyres med månen øverst.
@@ -14,8 +15,32 @@ Alt stilles inn i selve appen, under fanen **Innstillinger**:
 ## Faner
 
 * **Registrer** – status og de store knappene. Det eneste du trenger i hverdagen.
-* **Dagbok** – nøkkeltall, døgnstripe og logg per dag. Bla mellom dager med pilene.
-* **Innstillinger**.
+* **Dagbok** – søvn siste 24 timer sammenlignet med det som er vanlig for alderen, nøkkeltall, døgnstripe og logg per dag.
+* **Målinger** – vekt, lengde, hodeomkrets og temperatur, med vekstkurver.
+* **Innstillinger** – inkludert lenker til alle kilder.
+
+## Søvnprognose
+
+Statuskortet viser når babyen trolig sovner neste gang og hvor lenge søvnen pleier å vare – eller, når babyen sover, når den trolig våkner.
+
+* Regnes ut lokalt fra deres egne registreringer de siste 7 dagene. Nyere dager teller mest, og dag og natt beregnes hver for seg (nattmodus-tidsrommet).
+* Vises som et tidsvindu (midterste halvdel av babyens vanlige verdier), merket med hvor sikker den er.
+* Helsemyndighetene gir ingen anbefalte «våkenvinduer». Det eneste offisielle tallet er Helsenorges beskrivelse av at nyfødte ofte er våkne 30–60 minutter av gangen. Det brukes som startestimat de første tre månedene og veies gradvis ned etter hvert som egne data kommer.
+
+## Anbefalinger og kilder
+
+Appen bruker bare tall fra helsemyndigheter og WHO:
+
+| Hva | Kilde |
+|---|---|
+| Søvn per døgn per alder (0–3 mnd: 14–17 t, normalt 11–19 t osv.), våkenperioder hos nyfødte, amming 8–12 ganger i døgnet | [Helsenorge: Søvn hos barn 0–2 år](https://www.helsenorge.no/barn/sovn-hos-barn/) |
+| Vekttap etter fødsel (inntil 10 % normalt, tilbake på fødselsvekt innen 14 dager, tettere oppfølging fra 8 %) | [Helsedirektoratet](https://www.helsedirektoratet.no/forebygging-diagnose-og-behandling/svangerskap-fodsel-og-barsel/amming-og-spedbarnsernaering/oppfolging-av-vekt-hos-friske-ammede-nyfodte-som-er-fodt-til-termin) |
+| Vekstkurver for vekt og lengde (WHO, sju persentiler) | [Helsedirektoratet: Veiing og måling](https://www.helsedirektoratet.no/retningslinjer/helsestasjons-og-skolehelsetjenesten/helsestasjon-05-ar/veiing-og-maling), [WHO Child Growth Standards](https://www.who.int/tools/child-growth-standards) |
+| Feber (38,0 °C i endetarmen, kontakt lege ved feber hos barn ≤ 3 mnd) | [Helsenorge: Feber hos barn](https://www.helsenorge.no/sykdom/barn/feber-hos-barn/) |
+
+For hodeomkrets bruker helsestasjonen den norske kurven fra Vekststudien i Bergen. Den er ikke fritt tilgjengelig som data, så appen viser WHO-kurven – tallene kan avvike litt. Vekstkurvene gjelder barn født til termin.
+
+Appen erstatter ikke helsestasjonen. Merknader i appen er nøytrale og viser til kilden; ved bekymring, kontakt helsestasjonen eller lege.
 
 ## Bruk
 
@@ -35,7 +60,8 @@ Alt stilles inn i selve appen, under fanen **Innstillinger**:
 | `sensor.babyuret_sovn_i_dag` | Timer søvn i dag |
 | `sensor.babyuret_maltider_i_dag` | Antall måltider (attributter `ml`, amming-minutter per side) |
 | `sensor.babyuret_bleier_i_dag` | Antall bleier (attributter `tiss`, `baesj`) |
-| `sensor.babyuret_skjermtekst` | Én linje til veggskjermen |
+| `sensor.babyuret_prognose` | Mest sannsynlige tidspunkt for neste søvn (eller oppvåkning), med `fra`, `til`, `varighet_min` og `sikkerhet` |
+| `sensor.babyuret_skjermtekst` | Én linje til veggskjermen (inkl. «Neste lur ca. …») |
 
 Sensorene oppdateres ved hver registrering og hvert minutt.
 

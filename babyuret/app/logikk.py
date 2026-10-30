@@ -7,6 +7,7 @@ from zoneinfo import ZoneInfo
 
 from db import UTC, Database, fra_iso, naa, til_iso
 from innstillinger import Innstillinger
+from prognose import Prognose
 
 # Amming-økter med mindre pause enn dette regnes som ett måltid.
 MALTID_PAUSE = timedelta(minutes=20)
@@ -43,6 +44,7 @@ class Babyuret:
         self.cfg = cfg
         self.tz = ZoneInfo(tz)
         self._lyttere: list[Callable[[str, dict | None], None]] = []
+        self.prognose = Prognose(self)
         try:
             self.cfg.oppdater(self.db.les_innstillinger())
         except ValueError:
@@ -376,7 +378,19 @@ class Babyuret:
                 mat_attr["ml"] = d.get("ml")
             mat_attr["neste_side"] = st["neste_side"]
 
+        prog = self.prognose.beregn()
+        prog_attr = {"friendly_name": "Babyuret prognose", "icon": "mdi:crystal-ball",
+                     "device_class": "timestamp", "type": prog["type"]}
+        if prog.get("klar"):
+            prog_attr.update({"fra": prog["fra"], "til": prog["til"], "sikkerhet": prog.get("sikkerhet"),
+                              "varighet_min": prog.get("varighet_min")})
+        self._siste_prognose = prog
+
         return {
+            "sensor.babyuret_prognose": {
+                "state": prog["midt"] if prog.get("klar") else "unknown",
+                "attributes": prog_attr,
+            },
             "sensor.babyuret_status": {
                 "state": tilstand,
                 "attributes": {
@@ -430,4 +444,9 @@ class Babyuret:
             d = m["detaljer"]
             ekstra = d.get("side") if d.get("type") == "amming" else f"{d.get('ml')} ml"
             deler.append(f"Sist matet {kl} ({ekstra})")
+        prog = getattr(self, "_siste_prognose", None)
+        if prog and prog.get("klar") and not prog.get("forbi"):
+            f, t = self._kl(fra_iso(prog["fra"])), self._kl(fra_iso(prog["til"]))
+            hva = "Våkner ca." if prog["type"] == "vaakner" else "Neste lur ca."
+            deler.append(f"{hva} {f}–{t}")
         return " · ".join(deler)

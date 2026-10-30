@@ -21,6 +21,16 @@ CREATE TABLE IF NOT EXISTS hendelser (
 );
 CREATE INDEX IF NOT EXISTS idx_hendelser_start ON hendelser(start);
 CREATE INDEX IF NOT EXISTS idx_hendelser_kategori ON hendelser(kategori, start);
+CREATE TABLE IF NOT EXISTS maalinger (
+    id      INTEGER PRIMARY KEY AUTOINCREMENT,
+    type    TEXT NOT NULL,            -- vekt (g) | lengde (cm) | hode (cm) | temperatur (°C)
+    verdi   REAL NOT NULL,
+    tid     TEXT NOT NULL,            -- UTC ISO
+    notat   TEXT,
+    av      TEXT,
+    opprettet TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_maalinger ON maalinger(type, tid);
 CREATE TABLE IF NOT EXISTS innstillinger (
     nokkel TEXT PRIMARY KEY,
     verdi  TEXT
@@ -135,6 +145,33 @@ class Database:
             (til_iso(til), til_iso(fra)),
         ).fetchall()
         return [self._rad(r) for r in rader]
+
+    # ---- målinger -------------------------------------------------------
+    def ny_maaling(self, type_: str, verdi: float, tid: datetime, notat: str | None, av: str | None) -> dict:
+        cur = self.con.execute(
+            "INSERT INTO maalinger (type, verdi, tid, notat, av, opprettet) VALUES (?, ?, ?, ?, ?, ?)",
+            (type_, verdi, til_iso(tid), notat, av, til_iso(naa())),
+        )
+        self.con.commit()
+        return self.maaling(cur.lastrowid)
+
+    def maaling(self, mid: int) -> dict | None:
+        r = self.con.execute("SELECT * FROM maalinger WHERE id = ?", (mid,)).fetchone()
+        return dict(r) if r else None
+
+    def maalinger(self) -> list[dict]:
+        return [dict(r) for r in self.con.execute("SELECT * FROM maalinger ORDER BY tid")]
+
+    def endre_maaling(self, mid: int, verdi: float, tid: datetime, notat: str | None) -> dict | None:
+        self.con.execute("UPDATE maalinger SET verdi = ?, tid = ?, notat = ? WHERE id = ?",
+                         (verdi, til_iso(tid), notat, mid))
+        self.con.commit()
+        return self.maaling(mid)
+
+    def slett_maaling(self, mid: int) -> bool:
+        cur = self.con.execute("DELETE FROM maalinger WHERE id = ?", (mid,))
+        self.con.commit()
+        return cur.rowcount > 0
 
     # ---- innstillinger --------------------------------------------------
     def les_innstillinger(self) -> dict:

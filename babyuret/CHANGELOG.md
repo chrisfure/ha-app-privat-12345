@@ -1,5 +1,14 @@
 # Endringslogg
 
+## 0.3.0
+
+* Søvnprognose: når babyen trolig sovner neste gang og hvor lenge, eller når den trolig våkner. Regnes lokalt fra egne data, med Helsenorges beskrivelse av nyfødte som startestimat.
+* Dagbok: søvn siste 24 timer sammenlignet med Helsenorges normalområde for alderen.
+* Ny fane Målinger: vekt, lengde, hodeomkrets og temperatur, med WHO-vekstkurver og persentil.
+* Nøytrale merknader om vekttap etter fødsel (Helsedirektoratet) og feber hos de minste (Helsenorge).
+* Ny innstilling: kjønn (kun for vekstkurve). Kildeliste i innstillingene.
+* Ny sensor: `sensor.babyuret_prognose`.
+
 ## 0.2.0
 
 * Tre faner: Registrer, Dagbok og Innstillinger.

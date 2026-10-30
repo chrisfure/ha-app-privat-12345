@@ -29,11 +29,13 @@ class Innstillinger:
     standard_flaske_ml: int = 90
     nattmodus_fra: str = "21:00"
     nattmodus_til: str = "07:00"
+    kjonn: str = ""  # gutt | jente | "" – brukes kun til å velge riktig vekstkurve
     port: int = 8099
 
     def offentlig(self) -> dict:
         return {
             "baby_navn": self.baby_navn,
+            "kjonn": self.kjonn,
             "fodselsdato": self.fodselsdato.isoformat() if self.fodselsdato else None,
             "mating": self.mating,
             "standard_flaske_ml": self.standard_flaske_ml,
@@ -58,6 +60,10 @@ class Innstillinger:
                     ny["fodselsdato"] = date.fromisoformat(str(v))
                 except ValueError:
                     raise UgyldigInnstilling("Ugyldig dato")
+        if "kjonn" in d:
+            if d["kjonn"] not in ("gutt", "jente", "", None):
+                raise UgyldigInnstilling("Ugyldig verdi for kjønn")
+            ny["kjonn"] = d["kjonn"] or ""
         if "mating" in d:
             if d["mating"] not in ("amming", "flaske", "begge"):
                 raise UgyldigInnstilling("Mating må være amming, flaske eller begge")
