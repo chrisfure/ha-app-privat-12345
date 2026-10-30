@@ -43,6 +43,19 @@ class Babyuret:
         self.cfg = cfg
         self.tz = ZoneInfo(tz)
         self._lyttere: list[Callable[[str, dict | None], None]] = []
+        try:
+            self.cfg.oppdater(self.db.les_innstillinger())
+        except ValueError:
+            pass
+
+    def lagre_innstillinger(self, d: dict) -> dict:
+        try:
+            self.cfg.oppdater(d)
+        except ValueError as e:
+            raise Feil(str(e))
+        self.db.lagre_innstillinger(self.cfg.til_lagring())
+        self._endret("innstillinger", None)
+        return self.cfg.offentlig()
 
     def sett_tidssone(self, tz: str) -> None:
         try:
@@ -228,7 +241,11 @@ class Babyuret:
         i_dag = datetime.now(self.tz).date()
         dager = (i_dag - f).days
         if dager < 0:
-            return {"dager": dager, "tekst": f"{-dager} dager til termin"}
+            igjen = -dager
+            if igjen <= 14:
+                return {"dager": dager, "tekst": f"{igjen} {'dag' if igjen == 1 else 'dager'} til termin"}
+            u, d = divmod(igjen, 7)
+            return {"dager": dager, "tekst": f"{u} uker{f' og {d} d' if d else ''} til termin"}
         uker, rest = divmod(dager, 7)
         if dager < 7:
             tekst = f"{dager} {'dag' if dager == 1 else 'dager'}"

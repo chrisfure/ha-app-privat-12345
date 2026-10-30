@@ -21,6 +21,9 @@
     <symbol id="i-venstre" viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></symbol>
     <symbol id="i-hoyre" viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></symbol>
     <symbol id="i-bytt" viewBox="0 0 24 24"><path d="M4 8h13l-3-3M20 16H7l3 3"/></symbol>
+    <symbol id="i-hjem" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9 10h.01M15 10h.01M9.5 15a3.5 3.5 0 0 0 5 0"/></symbol>
+    <symbol id="i-bok" viewBox="0 0 24 24"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v15H6.5A2.5 2.5 0 0 0 4 20.5v-15Z"/><path d="M4 20.5A2.5 2.5 0 0 0 6.5 23H20v-5M8 8h8M8 12h5"/></symbol>
+    <symbol id="i-tannhjul" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3h0a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8v0a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z"/></symbol>
     <symbol id="i-stopp" viewBox="0 0 24 24"><rect x="6.5" y="6.5" width="11" height="11" rx="2.5"/></symbol>
   </svg>
 
@@ -35,74 +38,130 @@
       </button>
     </header>
 
-    <!-- Status -->
-    <section class="helt" id="helt" aria-live="polite">
-      <div class="helt-tekst">
-        <span class="helt-merke" id="helt-merke">Våken</span>
-        <div class="helt-tid" id="helt-tid">–</div>
-        <div class="helt-under" id="helt-under"></div>
-      </div>
-      <div class="helt-knapper" id="helt-knapper"></div>
-    </section>
-
-    <!-- Hovedknapper -->
-    <section class="fliser">
-      <button class="flis flis-sovn" id="flis-sovn">
-        <span class="flis-ikon"><svg><use href="#i-maane"/></svg></span>
-        <span class="flis-navn" id="flis-sovn-navn">Sover</span>
-        <span class="flis-sist" id="sist-sovn"></span>
+    <!-- ============ REGISTRER ============ -->
+    <main class="visning" id="v-registrer">
+      <button class="velkommen" id="velkommen" hidden>
+        <span class="velkommen-tekst"><b>Velkommen!</b><br>Legg inn navn og fødselsdato eller termin.</span>
+        <svg><use href="#i-hoyre"/></svg>
       </button>
-      <button class="flis flis-mat" id="flis-mat">
-        <span class="flis-ikon"><svg><use href="#i-flaske"/></svg></span>
-        <span class="flis-navn">Mat</span>
-        <span class="flis-sist" id="sist-mat"></span>
-      </button>
-      <button class="flis flis-tiss" id="flis-tiss">
-        <span class="flis-ikon"><svg><use href="#i-draape"/></svg></span>
-        <span class="flis-navn">Tiss</span>
-        <span class="flis-sist" id="sist-tiss"></span>
-      </button>
-      <button class="flis flis-baesj" id="flis-baesj">
-        <span class="flis-ikon"><svg><use href="#i-baesj"/></svg></span>
-        <span class="flis-navn">Bæsj</span>
-        <span class="flis-sist" id="sist-baesj"></span>
-      </button>
-      <button class="flis-smal" id="flis-begge">
-        <svg><use href="#i-draape"/></svg><svg><use href="#i-baesj"/></svg>
-        <span>Tiss + bæsj</span>
-      </button>
-    </section>
 
-    <!-- Dagen -->
-    <section class="kort dag">
-      <div class="dag-hode">
-        <button class="ikonknapp liten" id="dag-forrige" aria-label="Forrige dag"><svg><use href="#i-venstre"/></svg></button>
-        <h2 id="dag-tittel">I dag</h2>
-        <button class="ikonknapp liten" id="dag-neste" aria-label="Neste dag"><svg><use href="#i-hoyre"/></svg></button>
-      </div>
+      <section class="helt" id="helt" aria-live="polite">
+        <div class="helt-tekst">
+          <span class="helt-merke" id="helt-merke">Våken</span>
+          <div class="helt-tid" id="helt-tid">–</div>
+          <div class="helt-under" id="helt-under"></div>
+        </div>
+        <div class="helt-knapper" id="helt-knapper"></div>
+      </section>
 
-      <div class="tall">
-        <div class="tall-boks t-sovn"><span class="tall-verdi" id="t-sovn">0 t</span><span class="tall-navn" id="t-sovn-under">søvn</span></div>
-        <div class="tall-boks t-mat"><span class="tall-verdi" id="t-mat">0</span><span class="tall-navn" id="t-mat-under">måltider</span></div>
-        <div class="tall-boks t-tiss"><span class="tall-verdi" id="t-tiss">0</span><span class="tall-navn">tiss</span></div>
-        <div class="tall-boks t-baesj"><span class="tall-verdi" id="t-baesj">0</span><span class="tall-navn">bæsj</span></div>
-      </div>
+      <section class="fliser">
+        <button class="flis flis-sovn" id="flis-sovn">
+          <span class="flis-ikon"><svg><use href="#i-maane"/></svg></span>
+          <span class="flis-navn" id="flis-sovn-navn">Sover</span>
+          <span class="flis-sist" id="sist-sovn"></span>
+        </button>
+        <button class="flis flis-mat" id="flis-mat">
+          <span class="flis-ikon"><svg><use href="#i-flaske"/></svg></span>
+          <span class="flis-navn">Mat</span>
+          <span class="flis-sist" id="sist-mat"></span>
+        </button>
+        <button class="flis flis-tiss" id="flis-tiss">
+          <span class="flis-ikon"><svg><use href="#i-draape"/></svg></span>
+          <span class="flis-navn">Tiss</span>
+          <span class="flis-sist" id="sist-tiss"></span>
+        </button>
+        <button class="flis flis-baesj" id="flis-baesj">
+          <span class="flis-ikon"><svg><use href="#i-baesj"/></svg></span>
+          <span class="flis-navn">Bæsj</span>
+          <span class="flis-sist" id="sist-baesj"></span>
+        </button>
+        <button class="flis-smal" id="flis-begge">
+          <svg><use href="#i-draape"/></svg><svg><use href="#i-baesj"/></svg>
+          <span>Tiss + bæsj</span>
+        </button>
+      </section>
+    </main>
 
-      <div class="stripe-wrap">
-        <div class="stripe" id="stripe"></div>
-        <div class="stripe-akse"><span>00</span><span>06</span><span>12</span><span>18</span><span>24</span></div>
-      </div>
+    <!-- ============ DAGBOK ============ -->
+    <main class="visning" id="v-dagbok" hidden>
+      <section class="kort dag">
+        <div class="dag-hode">
+          <button class="ikonknapp liten" id="dag-forrige" aria-label="Forrige dag"><svg><use href="#i-venstre"/></svg></button>
+          <h2 id="dag-tittel">I dag</h2>
+          <button class="ikonknapp liten" id="dag-neste" aria-label="Neste dag"><svg><use href="#i-hoyre"/></svg></button>
+        </div>
+        <div class="tall">
+          <div class="tall-boks t-sovn"><span class="tall-verdi" id="t-sovn">0 t</span><span class="tall-navn" id="t-sovn-under">søvn</span></div>
+          <div class="tall-boks t-mat"><span class="tall-verdi" id="t-mat">0</span><span class="tall-navn" id="t-mat-under">måltider</span></div>
+          <div class="tall-boks t-tiss"><span class="tall-verdi" id="t-tiss">0</span><span class="tall-navn">tiss</span></div>
+          <div class="tall-boks t-baesj"><span class="tall-verdi" id="t-baesj">0</span><span class="tall-navn">bæsj</span></div>
+        </div>
+        <div class="stripe-wrap">
+          <div class="stripe" id="stripe"></div>
+          <div class="stripe-akse"><span>00</span><span>06</span><span>12</span><span>18</span><span>24</span></div>
+        </div>
+      </section>
 
-      <ol class="logg" id="logg"></ol>
-      <p class="tom" id="logg-tom" hidden>Ingen registreringer ennå.</p>
+      <section class="kort">
+        <ol class="logg" id="logg"></ol>
+        <p class="tom" id="logg-tom" hidden>Ingen registreringer denne dagen.</p>
+        <button class="legg-til" id="legg-til"><svg><use href="#i-pluss"/></svg> Legg inn noe som skjedde tidligere</button>
+      </section>
+    </main>
 
-      <button class="legg-til" id="legg-til"><svg><use href="#i-pluss"/></svg> Legg inn noe som skjedde tidligere</button>
-    </section>
+    <!-- ============ INNSTILLINGER ============ -->
+    <main class="visning" id="v-innstillinger" hidden>
+      <section class="kort skjema">
+        <h2>Babyen</h2>
+        <label class="felt"><span>Navn</span>
+          <input type="text" id="inn-navn" maxlength="40" autocomplete="off" placeholder="Valgfritt">
+        </label>
+        <label class="felt"><span>Fødselsdato eller termin</span>
+          <input type="date" id="inn-fodsel">
+        </label>
+        <p class="felt-hint">Før fødselen viser appen hvor lenge det er til termin. Bytt til faktisk fødselsdato når babyen er kommet.</p>
+      </section>
 
-    <footer class="bunn">
-      <a href="api/eksport.csv" class="lenke">Last ned alle data (CSV)</a>
-    </footer>
+      <section class="kort skjema">
+        <h2>Mating</h2>
+        <div class="segment" id="inn-mating">
+          <button data-verdi="amming">Amming</button>
+          <button data-verdi="flaske">Flaske</button>
+          <button data-verdi="begge">Begge</button>
+        </div>
+        <div class="felt" id="inn-ml-felt">
+          <span>Standard flaskemengde</span>
+          <div class="stepper liten">
+            <button id="inn-ml-minus" type="button">−</button>
+            <div class="verdi" id="inn-ml">90<small> ml</small></div>
+            <button id="inn-ml-pluss" type="button">+</button>
+          </div>
+        </div>
+      </section>
+
+      <section class="kort skjema">
+        <h2>Nattmodus</h2>
+        <p class="felt-hint">Mørk, rødtonet skjerm som ikke blender om natta. Kan alltid slås av og på med månen øverst.</p>
+        <div class="felt-rad">
+          <label class="felt"><span>Fra</span><input type="time" id="inn-natt-fra"></label>
+          <label class="felt"><span>Til</span><input type="time" id="inn-natt-til"></label>
+        </div>
+      </section>
+
+      <button class="knapp lagre" id="inn-lagre">Lagre</button>
+
+      <section class="kort skjema">
+        <h2>Data</h2>
+        <a href="api/eksport.csv" class="knapp sekundaer lenkeknapp">Last ned alle data (CSV)</a>
+      </section>
+    </main>
   </div>
+
+  <nav class="faner" id="faner">
+    <button data-fane="registrer" class="valgt"><svg><use href="#i-hjem"/></svg><span>Registrer</span></button>
+    <button data-fane="dagbok"><svg><use href="#i-bok"/></svg><span>Dagbok</span></button>
+    <button data-fane="innstillinger"><svg><use href="#i-tannhjul"/></svg><span>Innstillinger</span></button>
+  </nav>
 
   <!-- Bunnark -->
   <div class="ark-bakgrunn" id="ark-bakgrunn" hidden></div>

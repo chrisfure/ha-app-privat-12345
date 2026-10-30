@@ -1,5 +1,11 @@
 # Endringslogg
 
+## 0.2.0
+
+* Tre faner: Registrer, Dagbok og Innstillinger.
+* Navn, fødselsdato/termin, mating, flaskemengde og nattmodus stilles inn i appen (ikke lenger i HA-konfigurasjonen).
+* Velkomstkort første gang, og nedtelling til termin.
+
 ## 0.1.0
 
 * Første versjon: registrering av søvn, amming, flaske og bleier.

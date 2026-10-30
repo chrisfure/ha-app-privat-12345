@@ -6,8 +6,8 @@ En Home Assistant-app for å registrere babyens søvn, mat og bleier – raskt n
 
 1. I Home Assistant: **Innstillinger → Apper → App-butikk → ⋮ → Repositories**.
 2. Legg til adressen til dette repoet.
-3. Installer **Babyuret**, fyll inn innstillingene og start appen.
-4. Åpne Babyuret fra sidemenyen.
+3. Installer og start **Babyuret**.
+4. Åpne Babyuret fra sidemenyen og legg inn navn og termin under **Innstillinger**.
 
 Se [babyuret/DOCS.md](babyuret/DOCS.md) for sensorer, automasjoner og eksempler.
 
@@ -19,4 +19,4 @@ Se [babyuret/DOCS.md](babyuret/DOCS.md) for sensorer, automasjoner og eksempler.
 4. Ukentlig AI-kalibrering og ukerapport
 5. Ekstra automasjoner: nattlys ved mating, «baby sover»-modus, bleier til handlelisten
 
-Ingen personlige opplysninger ligger i koden – navn og fødselsdato settes i app-innstillingene.
+Ingen personlige opplysninger ligger i koden – navn og fødselsdato settes inne i appen og lagres lokalt.

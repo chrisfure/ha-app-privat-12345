@@ -133,6 +133,7 @@
     const { innstillinger: inn, status: st, oppsummering: op } = data;
     $("tittel").textContent = inn.baby_navn || "Babyuret";
     $("alder").textContent = data.alder ? data.alder.tekst : "";
+    $("velkommen").hidden = !!(inn.baby_navn || inn.fodselsdato);
     settNatt();
     tegnHelt();
     tegnFliser();
@@ -604,8 +605,66 @@
     );
   }
 
+  // ---------------------------------------------------------------- faner
+  const FANER = ["registrer", "dagbok", "innstillinger"];
+  function visFane(navn, oppdaterHash = true) {
+    if (!FANER.includes(navn)) navn = "registrer";
+    for (const f of FANER) $(`v-${f}`).hidden = f !== navn;
+    document.querySelectorAll("#faner button").forEach((b) => b.classList.toggle("valgt", b.dataset.fane === navn));
+    if (oppdaterHash && location.hash !== `#${navn}`) history.replaceState(null, "", `#${navn}`);
+    if (navn === "innstillinger") fyllInnstillinger();
+    if (navn !== "dagbok" && visDag) { visDag = null; last(); }
+    window.scrollTo(0, 0);
+  }
+  document.querySelectorAll("#faner button").forEach((b) => b.addEventListener("click", () => { vibrer(); visFane(b.dataset.fane); }));
+  $("velkommen").addEventListener("click", () => visFane("innstillinger"));
+
+  // ---------------------------------------------------------------- innstillinger
+  const skjemaState = { mating: "begge", ml: 90 };
+  function tegnMating() {
+    document.querySelectorAll("#inn-mating button").forEach((b) => b.classList.toggle("valgt", b.dataset.verdi === skjemaState.mating));
+    $("inn-ml-felt").hidden = skjemaState.mating === "amming";
+    $("inn-ml").replaceChildren(String(skjemaState.ml), el("small", {}, " ml"));
+  }
+  function fyllInnstillinger() {
+    if (!data) return;
+    const inn = data.innstillinger;
+    $("inn-navn").value = inn.baby_navn || "";
+    $("inn-fodsel").value = inn.fodselsdato || "";
+    $("inn-natt-fra").value = inn.nattmodus_fra;
+    $("inn-natt-til").value = inn.nattmodus_til;
+    skjemaState.mating = inn.mating;
+    skjemaState.ml = inn.standard_flaske_ml;
+    tegnMating();
+  }
+  document.querySelectorAll("#inn-mating button").forEach((b) =>
+    b.addEventListener("click", () => { skjemaState.mating = b.dataset.verdi; tegnMating(); }));
+  $("inn-ml-minus").addEventListener("click", () => { skjemaState.ml = Math.max(10, skjemaState.ml - 10); tegnMating(); });
+  $("inn-ml-pluss").addEventListener("click", () => { skjemaState.ml = Math.min(400, skjemaState.ml + 10); tegnMating(); });
+  $("inn-lagre").addEventListener("click", async () => {
+    const knapp = $("inn-lagre");
+    knapp.disabled = true;
+    try {
+      await api("api/innstillinger", { method: "PUT", body: {
+        baby_navn: $("inn-navn").value.trim(),
+        fodselsdato: $("inn-fodsel").value || null,
+        mating: skjemaState.mating,
+        standard_flaske_ml: skjemaState.ml,
+        nattmodus_fra: $("inn-natt-fra").value || "21:00",
+        nattmodus_til: $("inn-natt-til").value || "07:00",
+      } });
+      await last();
+      visToast("Innstillingene er lagret", [], 2500);
+    } catch (e) {
+      visToast(e.message, []);
+    } finally {
+      knapp.disabled = false;
+    }
+  });
+
   // ---------------------------------------------------------------- oppstart
-  last();
+  visFane(location.hash.slice(1), false);
+  last().then(() => { if (!$("v-innstillinger").hidden) fyllInnstillinger(); });
   setInterval(tikk, 1000);
   setInterval(() => { if (!document.hidden) last(); }, 20000);
   setInterval(settNatt, 60000);

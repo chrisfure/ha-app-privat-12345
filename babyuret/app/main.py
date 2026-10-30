@@ -60,6 +60,17 @@ def lag_app(bu: Babyuret) -> web.Application:
             return _feil(str(e))
         return web.json_response(res)
 
+    @routes.get("/api/innstillinger")
+    async def hent_innstillinger(_req):
+        return web.json_response(bu.cfg.offentlig())
+
+    @routes.put("/api/innstillinger")
+    async def lagre_innstillinger(req):
+        try:
+            return web.json_response(bu.lagre_innstillinger(await req.json()))
+        except Feil as e:
+            return _feil(str(e))
+
     @routes.post("/api/hendelser")
     async def legg_til(req):
         d = await req.json()

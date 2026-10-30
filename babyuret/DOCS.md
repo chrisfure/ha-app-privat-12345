@@ -4,13 +4,18 @@ Registrer søvn, mat og bleier med ett trykk – fra telefonen, en fysisk knapp,
 
 ## Innstillinger
 
-| Innstilling | Beskrivelse |
-|---|---|
-| `baby_navn` | Vises øverst i appen. Kan stå tomt. |
-| `fodselsdato` | `ÅÅÅÅ-MM-DD`. Viser alder (og brukes senere til aldersbaserte anbefalinger). |
-| `mating` | `amming`, `flaske` eller `begge`. Styrer valgene du får når du trykker «Mat». |
-| `standard_flaske_ml` | Forhåndsvalgt mengde for flaske. |
-| `nattmodus_fra` / `nattmodus_til` | Tidsrom for automatisk mørk, rødtonet nattmodus. Kan overstyres med månen øverst. |
+Alt stilles inn i selve appen, under fanen **Innstillinger**:
+
+* **Navn** og **fødselsdato eller termin** – før fødselen viser appen hvor lenge det er igjen.
+* **Mating** – amming, flaske eller begge. Styrer valgene du får når du trykker «Mat».
+* **Standard flaskemengde**.
+* **Nattmodus** – tidsrom for mørk, rødtonet skjerm. Kan overstyres med månen øverst.
+
+## Faner
+
+* **Registrer** – status og de store knappene. Det eneste du trenger i hverdagen.
+* **Dagbok** – nøkkeltall, døgnstripe og logg per dag. Bla mellom dager med pilene.
+* **Innstillinger**.
 
 ## Bruk
 
@@ -18,7 +23,7 @@ Registrer søvn, mat og bleier med ett trykk – fra telefonen, en fysisk knapp,
 * **Mat** – velg venstre/høyre (den som står for tur er merket «Neste») eller flaske. Amming kjører med stoppeklokke til du trykker «Ferdig» eller «Bytt side».
 * **Tiss / Bæsj / Tiss + bæsj** – ett trykk.
 * Etter hver registrering får du **Angre** og **Endre** nederst på skjermen.
-* Trykk på en rad i dagsloggen for å endre tid, side, mengde eller slette.
+* Trykk på en rad i Dagbok for å endre tid, side, mengde eller slette.
 * Glemte du å trykke? Bruk «Legg inn noe som skjedde tidligere».
 
 ## Sensorer i Home Assistant

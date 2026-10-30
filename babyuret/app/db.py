@@ -21,6 +21,10 @@ CREATE TABLE IF NOT EXISTS hendelser (
 );
 CREATE INDEX IF NOT EXISTS idx_hendelser_start ON hendelser(start);
 CREATE INDEX IF NOT EXISTS idx_hendelser_kategori ON hendelser(kategori, start);
+CREATE TABLE IF NOT EXISTS innstillinger (
+    nokkel TEXT PRIMARY KEY,
+    verdi  TEXT
+);
 """
 
 KATEGORIER = ("sovn", "mat", "bleie")
@@ -131,6 +135,18 @@ class Database:
             (til_iso(til), til_iso(fra)),
         ).fetchall()
         return [self._rad(r) for r in rader]
+
+    # ---- innstillinger --------------------------------------------------
+    def les_innstillinger(self) -> dict:
+        return {r["nokkel"]: json.loads(r["verdi"]) for r in self.con.execute("SELECT * FROM innstillinger")}
+
+    def lagre_innstillinger(self, d: dict) -> None:
+        self.con.executemany(
+            "INSERT INTO innstillinger (nokkel, verdi) VALUES (?, ?) "
+            "ON CONFLICT(nokkel) DO UPDATE SET verdi = excluded.verdi",
+            [(k, json.dumps(v, ensure_ascii=False)) for k, v in d.items()],
+        )
+        self.con.commit()
 
     def alle(self) -> list[dict]:
         return [self._rad(r) for r in self.con.execute("SELECT * FROM hendelser ORDER BY start").fetchall()]

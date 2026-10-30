@@ -328,3 +328,55 @@ svg { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width:
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
 }
+
+/* ================= faner (v0.2) ================= */
+.app { padding-bottom: calc(104px + env(safe-area-inset-bottom)); }
+.visning { display: flex; flex-direction: column; gap: 14px; animation: inn .2s ease; }
+
+.faner {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 15;
+  display: flex; justify-content: center; gap: 4px;
+  padding: 8px 12px calc(8px + env(safe-area-inset-bottom));
+  background: color-mix(in srgb, var(--flate) 88%, transparent);
+  backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+  border-top: 1px solid var(--linje);
+}
+.faner button {
+  flex: 1; max-width: 180px; min-height: 58px; border-radius: 16px;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
+  color: var(--dempet); font-weight: 800; font-size: 12px;
+  transition: background .2s, color .2s;
+}
+.faner button svg { width: 24px; height: 24px; }
+.faner button.valgt { color: var(--sovn-blekk); background: var(--sovn-lys); }
+:root[data-natt="1"] .faner button.valgt { color: var(--blekk); }
+
+.toast { bottom: calc(94px + env(safe-area-inset-bottom)); }
+
+.velkommen {
+  display: flex; align-items: center; gap: 12px; text-align: left;
+  padding: 16px 18px; border-radius: 22px;
+  background: var(--sovn); color: #fff; box-shadow: var(--skygge);
+}
+.velkommen-tekst { flex: 1; font-weight: 600; line-height: 1.4; }
+.velkommen-tekst b { font-size: 18px; font-weight: 800; }
+:root[data-natt="1"] .velkommen { color: #0A0606; }
+
+.skjema { display: flex; flex-direction: column; gap: 12px; padding: 18px; }
+.skjema h2 { margin: 0; font-size: 18px; font-weight: 800; }
+.felt input[type="text"], .felt input[type="date"] { font-size: 18px; }
+.felt input::placeholder { color: var(--dempet); font-weight: 600; }
+.felt-hint { margin: 0; color: var(--dempet); font-size: 14px; font-weight: 600; }
+
+.segment { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; padding: 4px; border-radius: 16px; background: var(--flate-2); }
+.segment button { min-height: 48px; border-radius: 12px; font-weight: 800; color: var(--dempet); }
+.segment button.valgt { background: var(--flate); color: var(--mat-blekk); box-shadow: var(--skygge); }
+:root[data-natt="1"] .segment button.valgt { background: var(--sovn-lys); color: var(--blekk); }
+
+.stepper.liten { justify-content: space-between; margin: 0; }
+.stepper.liten button { width: 52px; height: 52px; font-size: 24px; }
+.stepper.liten .verdi { font-size: 34px; min-width: 0; }
+
+.knapp.lagre { --aksent: var(--sovn); flex: none; }
+.knapp.lagre:disabled { opacity: .45; }
+.lenkeknapp { text-decoration: none; --aksent-lys: var(--flate-2); --aksent-blekk: var(--blekk); }
