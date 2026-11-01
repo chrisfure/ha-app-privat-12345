@@ -6,6 +6,7 @@ Små apper for familiehverdagen, laget for Home Assistant.
 |---|---|
 | [Babyuret](babyuret/DOCS.md) | Registrer babyens søvn, mat og bleier – raskt nok til å brukes med én hånd klokka tre om natta. |
 | [Plasterboka](plasterboka/DOCS.md) | Sykdomslogg for barna: temperatur, medisin og symptomer med ett trykk, døgndose per legemiddel og sykehistorie med feberkurver. |
+| [Smarthus](smarthus/DOCS.md) | Hele huset i én app: rom med faner, lys, varme og en Mer-side – enkel for alle, med redigeringsmodus for den som styrer oppsettet. |
 
 ## Installering
 

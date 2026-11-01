@@ -1,0 +1,15 @@
+name: Smarthus
+version: "0.1.0"
+slug: smarthus
+description: Hele huset i én app – rom, lys, varme og mer, med redigeringsmodus.
+url: https://github.com/chrisfure/ha-app-privat-12345
+arch:
+  - aarch64
+  - amd64
+init: false
+startup: once
+boot: auto
+map:
+  - homeassistant_config:rw
+# Appen installerer selve grensesnittet i Home Assistant og avslutter.
+# Alt oppsett (rom, faner, hvem som ser hva) gjøres inne i appen.
