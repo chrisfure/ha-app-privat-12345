@@ -1,5 +1,13 @@
 # Endringslogg
 
+## 0.5.0
+
+* Dagbok: velg mellom Dag, Uke og Måned øverst.
+* Uke og måned viser snitt per døgn for søvn, måltider, tiss og bæsj, med totaler for perioden.
+* Søylediagram for søvn per døgn, med feltet for det som er vanlig for alderen (Helsenorge), og for måltider per døgn.
+* Døgnrytme: én tidslinje per dag, så mønsteret over uka eller måneden blir synlig. Trykk på en dag for å se detaljene.
+* Bla bakover i uker og måneder med pilene.
+
 ## 0.4.1
 
 * Bruksanvisning for lydgjenkjenning i appen (Innstillinger → Lydgjenkjenning → «Slik bruker du det»), med ferdig utfylte data for hver enhet og kopier-knapp.

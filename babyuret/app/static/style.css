@@ -542,3 +542,48 @@ svg { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width:
   position: absolute; top: 6px; right: 6px; min-height: 32px; padding: 0 10px; border-radius: 10px;
   background: var(--flate); color: var(--sovn-blekk); font-weight: 800; font-size: 13px; box-shadow: var(--skygge);
 }
+
+/* ---- Uke og måned i dagboken ---- */
+#dagbok-valg button.valgt { color: var(--sovn-blekk); }
+.periode { display: flex; flex-direction: column; gap: 14px; }
+.periode[hidden] { display: none; }
+.periode h2 { margin: 0 0 12px; font-size: 16px; font-weight: 800; }
+.p-tittel { display: flex; flex-direction: column; align-items: center; }
+.p-tittel h2 { margin: 0; font-size: 18px; }
+.p-tittel span { font-size: 13px; font-weight: 700; color: var(--dempet); }
+
+.soyle-flate { position: relative; height: 160px; }
+.soyle-omr { position: absolute; left: 0; right: 0; top: 18px; bottom: 20px; }
+.soyle-band {
+  position: absolute; left: 0; right: 0;
+  background: color-mix(in srgb, var(--sovn) 14%, transparent); border-radius: 6px;
+  border-top: 1px dashed color-mix(in srgb, var(--sovn) 50%, transparent);
+  border-bottom: 1px dashed color-mix(in srgb, var(--sovn) 50%, transparent);
+}
+.soyle-rad { position: absolute; inset: 0; display: flex; gap: 6px; align-items: stretch; }
+.soyle-rad.tett { gap: 2px; }
+.soyle { flex: 1; min-width: 0; display: grid; grid-template-rows: 18px 1fr 20px; justify-items: center; padding: 0; }
+.soyle-plass { position: relative; width: 100%; display: flex; justify-content: center; align-items: flex-end; }
+.soyle:disabled { opacity: 1; cursor: default; }
+.soyle-verdi { font-size: 11px; font-weight: 800; color: var(--sovn-blekk); white-space: nowrap; align-self: end; }
+.soyle-stolpe { width: 100%; max-width: 34px; background: var(--sovn); border-radius: 6px 6px 2px 2px; opacity: .85; }
+.soyle-rad.tett .soyle-stolpe { border-radius: 3px 3px 1px 1px; }
+.soyle.i-dag .soyle-stolpe { opacity: .5; }
+.soyle-dag { height: 20px; line-height: 20px; font-size: 11px; font-weight: 800; color: var(--dempet); }
+.soyler.mat .soyle-stolpe { background: var(--mat); }
+.soyler.mat .soyle-verdi { color: var(--mat-blekk); }
+.soyler.mat .soyle-flate { height: 120px; }
+
+.rytme { display: flex; flex-direction: column; gap: 6px; }
+.rytme.tett { gap: 3px; }
+.rytme-rad { display: grid; grid-template-columns: 46px 1fr; align-items: center; gap: 6px; text-align: left; padding: 0; }
+.rytme-dag { font-size: 12px; font-weight: 800; color: var(--dempet); white-space: nowrap; }
+.rytme-rad.i-dag .rytme-dag { color: var(--sovn-blekk); }
+.stripe.liten { height: 26px; }
+.rytme.tett .stripe.liten { height: 14px; border-radius: 4px; }
+.rytme.tett .stripe .blokk.sovn { top: 2px; bottom: 2px; border-radius: 2px; }
+.rytme.tett .stripe .blokk.mat { height: 4px; }
+.rytme.tett .stripe .prikk { display: none; }
+.rytme.tett .rytme-dag { font-size: 10px; }
+.rytme-akse { display: grid; grid-template-columns: 46px 1fr; gap: 6px; }
+.rytme-akse .stripe-akse { margin-top: 2px; }

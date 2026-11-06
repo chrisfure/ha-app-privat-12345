@@ -106,7 +106,48 @@
 
     <!-- ============ DAGBOK ============ -->
     <main class="visning" id="v-dagbok" hidden>
-      <section class="kort dogn" id="dogn">
+      <div class="segment" id="dagbok-valg">
+        <button data-modus="dag" class="valgt">Dag</button>
+        <button data-modus="uke">Uke</button>
+        <button data-modus="maaned">Måned</button>
+      </div>
+
+      <div class="periode" id="periode" hidden>
+        <section class="kort">
+          <div class="dag-hode">
+            <button class="ikonknapp liten" id="p-forrige" aria-label="Forrige periode"><svg><use href="#i-venstre"/></svg></button>
+            <div class="p-tittel"><h2 id="p-tittel">Uke</h2><span id="p-under"></span></div>
+            <button class="ikonknapp liten" id="p-neste" aria-label="Neste periode"><svg><use href="#i-hoyre"/></svg></button>
+          </div>
+          <div class="tall">
+            <div class="tall-boks t-sovn"><span class="tall-verdi" id="p-sovn">–</span><span class="tall-navn" id="p-sovn-under">søvn per døgn</span></div>
+            <div class="tall-boks t-mat"><span class="tall-verdi" id="p-mat">–</span><span class="tall-navn" id="p-mat-under">måltider per døgn</span></div>
+            <div class="tall-boks t-tiss"><span class="tall-verdi" id="p-tiss">–</span><span class="tall-navn">tiss per døgn</span></div>
+            <div class="tall-boks t-baesj"><span class="tall-verdi" id="p-baesj">–</span><span class="tall-navn">bæsj per døgn</span></div>
+          </div>
+          <p class="ref-tekst" id="p-totalt"></p>
+        </section>
+
+        <section class="kort">
+          <h2>Søvn per døgn</h2>
+          <div class="soyler" id="p-sovn-graf"></div>
+          <p class="ref-tekst" id="p-sovn-ref"></p>
+        </section>
+
+        <section class="kort">
+          <h2>Måltider per døgn</h2>
+          <div class="soyler mat" id="p-mat-graf"></div>
+        </section>
+
+        <section class="kort">
+          <h2>Døgnrytme</h2>
+          <div class="rytme" id="p-rytme"></div>
+          <div class="rytme-akse"><span></span><div class="stripe-akse"><span>00</span><span>06</span><span>12</span><span>18</span><span>24</span></div></div>
+          <p class="ref-tekst">Søvn er blå, måltider oransje øverst. Trykk på en dag for å se detaljene.</p>
+        </section>
+      </div>
+
+      <section class="kort dogn dag-del" id="dogn">
         <h2>Siste 24 timer</h2>
         <div class="dogn-rad">
           <span class="dogn-tall" id="dogn-sovn">–</span>
@@ -121,7 +162,7 @@
         <p class="ref-tekst" id="dogn-ref"></p>
         <p class="ref-tekst" id="dogn-amming" hidden></p>
       </section>
-      <section class="kort dag">
+      <section class="kort dag dag-del">
         <div class="dag-hode">
           <button class="ikonknapp liten" id="dag-forrige" aria-label="Forrige dag"><svg><use href="#i-venstre"/></svg></button>
           <h2 id="dag-tittel">I dag</h2>
@@ -139,7 +180,7 @@
         </div>
       </section>
 
-      <section class="kort">
+      <section class="kort dag-del">
         <ol class="logg" id="logg"></ol>
         <p class="tom" id="logg-tom" hidden>Ingen registreringer denne dagen.</p>
         <button class="legg-til" id="legg-til"><svg><use href="#i-pluss"/></svg> Legg inn noe som skjedde tidligere</button>

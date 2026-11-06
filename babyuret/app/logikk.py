@@ -8,7 +8,12 @@ from zoneinfo import ZoneInfo
 from db import UTC, Database, fra_iso, naa, til_iso
 from innstillinger import Innstillinger
 from lyd import Lydlogikk
+import referanser as ref
 from prognose import Prognose
+
+MND = ("januar", "februar", "mars", "april", "mai", "juni", "juli", "august",
+       "september", "oktober", "november", "desember")
+MND_KORT = ("jan.", "feb.", "mars", "apr.", "mai", "juni", "juli", "aug.", "sep.", "okt.", "nov.", "des.")
 
 # Amming-økter med mindre pause enn dette regnes som ett måltid.
 MALTID_PAUSE = timedelta(minutes=20)
@@ -337,6 +342,72 @@ class Babyuret:
             "baesj": baesj,
             "bleier": bleier,
             "hendelser": hendelser,
+        }
+
+    def periode(self, type_: str, dato: date | None = None) -> dict:
+        """Uke- eller månedsoversikt: én rad per døgn, snitt og totaler."""
+        if type_ not in ("uke", "maaned"):
+            raise Feil("Ukjent periode")
+        i_dag = self.i_dag()
+        dato = dato or i_dag
+        if type_ == "uke":
+            fra = dato - timedelta(days=dato.weekday())
+            til = fra + timedelta(days=6)
+            uke = fra.isocalendar()[1]
+            tittel = f"Uke {uke}"
+            under = f"{fra.day}.{'' if fra.month == til.month else ' ' + MND_KORT[fra.month - 1]} – {til.day}. {MND_KORT[til.month - 1]}"
+            forrige, neste = fra - timedelta(days=7), fra + timedelta(days=7)
+        else:
+            fra = dato.replace(day=1)
+            neste = (fra + timedelta(days=32)).replace(day=1)
+            til = neste - timedelta(days=1)
+            tittel = f"{MND[fra.month - 1].capitalize()} {fra.year}"
+            under = f"{til.day} dager"
+            forrige = (fra - timedelta(days=1)).replace(day=1)
+
+        fodsel = self.cfg.fodselsdato
+        dager, d = [], fra
+        while d <= til:
+            framtid = d > i_dag
+            for_fodsel = bool(fodsel and d < fodsel)
+            rad = {"dag": d.isoformat(), "framtid": framtid, "for_fodsel": for_fodsel, "i_dag": d == i_dag}
+            if not framtid:
+                op = self.oppsummering(d)
+                rad.update({k: op[k] for k in ("sovn_sek", "lurer", "maltider", "ml", "tiss", "baesj", "bleier")})
+                rad["blokker"] = [
+                    [h["kategori"], h["start"], h["slutt"],
+                     int(bool(h["detaljer"].get("tiss"))), int(bool(h["detaljer"].get("baesj")))]
+                    for h in op["hendelser"]
+                ]
+                rad["har_data"] = bool(op["hendelser"])
+            dager.append(rad)
+            d += timedelta(days=1)
+
+        # Snitt over hele døgn med registreringer (dagen i dag teller bare hvis den er alene)
+        hele = [r for r in dager if not r["framtid"] and not r["i_dag"] and r.get("har_data")]
+        if not hele:
+            hele = [r for r in dager if not r["framtid"] and r.get("har_data")]
+        def snitt(felt):
+            return round(sum(r[felt] for r in hele) / len(hele), 1) if hele else None
+        sum_felt = ("sovn_sek", "lurer", "maltider", "ml", "tiss", "baesj", "bleier")
+        totalt = {f: sum(r.get(f, 0) for r in dager) for f in sum_felt}
+
+        alder = self.alder()
+        return {
+            "type": type_,
+            "fra": fra.isoformat(),
+            "til": til.isoformat(),
+            "tittel": tittel,
+            "under": under,
+            "forrige": forrige.isoformat(),
+            "neste": neste.isoformat() if neste <= i_dag else None,
+            "dager": dager,
+            "dager_i_snitt": len(hele),
+            "snitt": {"sovn_timer": round(snitt("sovn_sek") / 3600, 1) if hele else None,
+                      "lurer": snitt("lurer"), "maltider": snitt("maltider"), "ml": snitt("ml"),
+                      "tiss": snitt("tiss"), "baesj": snitt("baesj"), "bleier": snitt("bleier")},
+            "totalt": totalt,
+            "sovn_referanse": ref.sovn_referanse(alder["dager"]) if alder else None,
         }
 
     def status(self) -> dict:

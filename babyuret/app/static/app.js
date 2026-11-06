@@ -424,6 +424,113 @@
 
   $("flis-mat").addEventListener("click", () => matArk());
 
+  // ---------------------------------------------------------------- uke og måned
+  let dagbokModus = "dag";
+  let periodeDato = null;      // null = inneværende periode
+  const UKEDAG = ["ma", "ti", "on", "to", "fr", "lø", "sø"];
+
+  function settDagbokModus(modus) {
+    dagbokModus = modus;
+    document.querySelectorAll("#dagbok-valg button").forEach((b) => b.classList.toggle("valgt", b.dataset.modus === modus));
+    document.querySelectorAll("#v-dagbok .dag-del").forEach((e) => { e.hidden = modus !== "dag"; });
+    $("periode").hidden = modus === "dag";
+    if (modus !== "dag") lastPeriode();
+  }
+  document.querySelectorAll("#dagbok-valg button").forEach((b) =>
+    b.addEventListener("click", () => { vibrer(); periodeDato = null; settDagbokModus(b.dataset.modus); }));
+
+  async function lastPeriode() {
+    try {
+      const p = await api(`api/periode?type=${dagbokModus}` + (periodeDato ? `&dato=${periodeDato}` : ""));
+      tegnPeriode(p);
+    } catch (e) { visToast(e.message, []); }
+  }
+  $("p-forrige").addEventListener("click", () => { periodeDato = $("p-forrige").dataset.dato; lastPeriode(); });
+  $("p-neste").addEventListener("click", () => { periodeDato = $("p-neste").dataset.dato || null; lastPeriode(); });
+
+  function aapneDag(iso) {
+    vibrer();
+    visDag = iso >= data.i_dag ? null : iso;
+    settDagbokModus("dag");
+    last();
+  }
+
+  function dagEtikett(p, r, i) {
+    const [y, m, d] = r.dag.split("-").map(Number);
+    if (p.type === "uke") return UKEDAG[i];
+    return (d === 1 || d % 5 === 0) ? String(d) : "";
+  }
+
+  function tegnSoyler(boks, p, verdi, tekst, ref) {
+    const vist = p.dager.map((r) => (r.framtid || r.for_fodsel ? null : verdi(r)));
+    const maks = Math.max(1, ...vist.filter((v) => v != null), ref ? ref.normal[1] : 0);
+    const pst = (v) => `${Math.min(100, (v / maks) * 100)}%`;
+    const deler = [];
+    if (ref) deler.push(el("div", { class: "soyle-omr" },
+      el("div", { class: "soyle-band", style: `bottom:${pst(ref.vanlig[0])};height:calc(${pst(ref.vanlig[1])} - ${pst(ref.vanlig[0])})` })));
+    const kolonner = el("div", { class: `soyle-rad${p.type === "maaned" ? " tett" : ""}` },
+      ...p.dager.map((r, i) => {
+        const v = vist[i];
+        return el("button", { class: `soyle${r.i_dag ? " i-dag" : ""}`, disabled: v == null, title: v == null ? "" : `${dagTittel(r.dag)}: ${tekst(v)}`,
+          onclick: () => aapneDag(r.dag) },
+          el("span", { class: "soyle-verdi" }, p.type === "uke" && v ? tekst(v) : ""),
+          el("span", { class: "soyle-plass" }, el("span", { class: "soyle-stolpe", style: `height:${v ? pst(v) : "0"}` })),
+          el("span", { class: "soyle-dag" }, dagEtikett(p, r, i)));
+      }));
+    boks.replaceChildren(el("div", { class: "soyle-flate" }, ...deler, kolonner));
+  }
+
+  function tegnRytme(p) {
+    const rader = p.dager.filter((r) => !r.framtid && !r.for_fodsel).map((r, i) => {
+      const start = dagStart(r.dag), lengde = dagStart(flyttDag(r.dag, 1)) - start;
+      const pos = (t) => Math.min(100, Math.max(0, ((t - start) / lengde) * 100));
+      const naa = Date.now();
+      const stripe = el("div", { class: "stripe liten" });
+      for (const [kat, s0, e0, tiss, baesj] of r.blokker || []) {
+        const s = new Date(s0).getTime(), e = e0 ? new Date(e0).getTime() : naa;
+        if (kat === "sovn") stripe.append(el("div", { class: "blokk sovn", style: `left:${pos(s)}%;width:${Math.max(0.5, pos(e) - pos(s))}%` }));
+        else if (kat === "mat") stripe.append(el("div", { class: "blokk mat", style: `left:${pos(s)}%;width:${Math.max(0.8, pos(e) - pos(s))}%` }));
+        else {
+          if (tiss) stripe.append(el("div", { class: "prikk tiss", style: `left:${pos(s)}%` }));
+          if (baesj) stripe.append(el("div", { class: "prikk baesj", style: `left:${pos(s)}%` }));
+        }
+      }
+      const [, , d] = r.dag.split("-").map(Number);
+      const ukedag = UKEDAG[(new Date(r.dag + "T12:00").getDay() + 6) % 7];
+      return el("button", { class: `rytme-rad${r.i_dag ? " i-dag" : ""}`, onclick: () => aapneDag(r.dag) },
+        el("span", { class: "rytme-dag" }, `${ukedag} ${d}.`), stripe);
+    });
+    $("p-rytme").classList.toggle("tett", p.type === "maaned");
+    $("p-rytme").replaceChildren(...(rader.length ? rader : [el("p", { class: "tom" }, "Ingen dager å vise ennå.")]));
+  }
+
+  function tegnPeriode(p) {
+    $("p-tittel").textContent = p.tittel;
+    $("p-under").textContent = p.under;
+    $("p-forrige").dataset.dato = p.forrige;
+    $("p-neste").dataset.dato = p.neste || "";
+    $("p-neste").disabled = !p.neste;
+
+    const s = p.snitt, tom = s.sovn_timer == null;
+    $("p-sovn").textContent = tom ? "–" : minTekst(s.sovn_timer * 60);
+    $("p-mat").textContent = tom ? "–" : String(s.maltider).replace(".", ",");
+    $("p-tiss").textContent = tom ? "–" : String(s.tiss).replace(".", ",");
+    $("p-baesj").textContent = tom ? "–" : String(s.baesj).replace(".", ",");
+    $("p-mat-under").textContent = "måltider per døgn" + (!tom && s.ml ? ` · ${Math.round(s.ml)} ml` : "");
+    const t = p.totalt;
+    $("p-totalt").textContent = tom
+      ? "Ingen registreringer i denne perioden."
+      : `Snitt av ${p.dager_i_snitt} ${p.dager_i_snitt === 1 ? "døgn" : "hele døgn"}. Totalt: ${varighet(t.sovn_sek, true)} søvn, ${t.maltider} måltider${t.ml ? ` (${t.ml} ml)` : ""}, ${t.bleier} bleier.`;
+
+    const ref = p.sovn_referanse;
+    tegnSoyler($("p-sovn-graf"), p, (r) => (r.har_data ? r.sovn_sek / 3600 : null), (v) => `${v.toFixed(1).replace(".", ",")} t`, ref);
+    $("p-sovn-ref").textContent = ref
+      ? `Feltet viser det vanlige for ${ref.aldersgruppe}: ${ref.vanlig[0]}–${ref.vanlig[1]} timer i døgnet (Helsenorge).`
+      : "";
+    tegnSoyler($("p-mat-graf"), p, (r) => (r.har_data ? r.maltider : null), (v) => String(v), null);
+    tegnRytme(p);
+  }
+
   $("dag-forrige").addEventListener("click", () => { visDag = flyttDag(data.oppsummering.dag, -1); last(); });
   $("dag-neste").addEventListener("click", () => {
     const ny = flyttDag(data.oppsummering.dag, 1);

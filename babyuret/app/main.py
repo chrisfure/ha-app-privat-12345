@@ -57,6 +57,16 @@ def lag_app(bu: Babyuret) -> web.Application:
             "bruker": _bruker(req),
         })
 
+    @routes.get("/api/periode")
+    async def periode(req):
+        try:
+            dato = date.fromisoformat(req.query["dato"]) if req.query.get("dato") else None
+            return web.json_response(bu.periode(req.query.get("type", "uke"), dato))
+        except ValueError:
+            return _feil("Ugyldig dato")
+        except Feil as e:
+            return _feil(str(e))
+
     @routes.post("/api/handling")
     async def handling(req):
         data = await req.json()

@@ -136,6 +136,16 @@ actions:
   - set_conversation_response: "Notert!"
 ```
 
+## Dagbok: dag, uke og måned
+
+Øverst i Dagbok velger du **Dag**, **Uke** eller **Måned**.
+
+* **Dag** er som før: siste 24 timer, dagens tall, tidslinje og alle registreringer.
+* **Uke** (mandag–søndag) og **Måned** viser snitt per døgn for søvn, måltider, tiss og bæsj. Snittet regnes av hele døgn med registreringer; dagen i dag er med bare når den er den eneste.
+* **Søvn per døgn** er et søylediagram med feltet for det som er vanlig for alderen. **Måltider per døgn** vises på samme måte.
+* **Døgnrytme** viser én tidslinje per dag under hverandre, så du ser når babyen pleier å sove og spise.
+* Trykk på en søyle eller en dag i døgnrytmen for å åpne den dagen. Pilene blar til forrige eller neste uke/måned.
+
 ## Lydgjenkjenning (gråt og rop)
 
 Gråt og rop fra telefoner og nettbrett brukes som **data til søvnloggen**. Babyuret sender ingen varsler – bruk babycall til det. Slås på under **Innstillinger → Lydgjenkjenning**. Der finner du også **Slik bruker du det** – en trinnvis bruksanvisning med ferdig utfylte data for hver av enhetene deres.
