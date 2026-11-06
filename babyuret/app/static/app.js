@@ -1105,6 +1105,94 @@
     );
   }
   $("inn-lydlogg").addEventListener("click", () => lydloggArk());
+  function kopiFelt(tekst) {
+    const pre = el("pre", { class: "kode" }, tekst);
+    const knapp = el("button", { class: "kopier", type: "button", onclick: async () => {
+      try { await navigator.clipboard.writeText(tekst); knapp.textContent = "Kopiert"; }
+      catch (_) {
+        const r = document.createRange(); r.selectNodeContents(pre);
+        const sel = getSelection(); sel.removeAllRanges(); sel.addRange(r);
+        knapp.textContent = "Merket – kopier";
+      }
+      setTimeout(() => { knapp.textContent = "Kopier"; }, 2500);
+    } }, "Kopier");
+    return el("div", { class: "kode-boks" }, pre, knapp);
+  }
+
+  function steg(nr, tittel, ...innhold) {
+    return el("li", { class: "steg" },
+      el("span", { class: "steg-nr" }, String(nr)),
+      el("div", { class: "steg-innhold" }, el("b", {}, tittel), ...innhold));
+  }
+
+  function lydGuideArk() {
+    const enheter = (skjemaState.lyd && skjemaState.lyd.enheter) || (data.innstillinger.lyd.enheter || []);
+    const lyttere = enheter;
+    const p = (t) => el("p", {}, t);
+    const punkt = (...l) => el("ul", { class: "liste-enkel prikker" }, l.map((t) => el("li", {}, t)));
+
+    const perEnhet = lyttere.length ? lyttere.map((e) => el("div", { class: "enhet-guide" },
+      el("div", { class: "ark-etikett" }, `${e.navn} (${ROLLER[e.rolle][0].toLowerCase()})`),
+      el("p", { class: "dempet" }, "Data for «Baby som gråter»:"),
+      kopiFelt(JSON.stringify({ type: "grat", kilde: e.kilde })),
+      el("p", { class: "dempet" }, "Data for «Roping»:"),
+      kopiFelt(JSON.stringify({ type: "rop", kilde: e.kilde })),
+    )) : [el("p", { class: "dempet" }, "Legg til en enhet først (steg 1), så vises ferdig tekst for hver enhet her.")];
+
+    const android = lyttere.length ? lyttere[0].kilde : "android_barnerom";
+    const yaml = `alias: Babyuret – lyd fra Android
+triggers:
+  - trigger: state
+    entity_id: sensor.DIN_TELEFON_last_notification
+conditions:
+  - condition: template
+    value_template: >
+      {{ 'baby' in (trigger.to_state.state | lower) }}
+actions:
+  - event: babyuret_lyd
+    event_data:
+      type: grat
+      kilde: ${android}
+mode: queued`;
+
+    aapneArk(
+      el("h3", {}, "Slik bruker du lydgjenkjenning"),
+      el("p", { class: "hint" }, "Gråt og rop blir data til søvnloggen. Appen varsler ikke – bruk babycall til det."),
+      el("ol", { class: "steg-liste" },
+        steg(1, "Legg inn enhetene her i appen",
+          p("Under Lydgjenkjenning: slå på, trykk «Legg til enhet» for hver telefon eller iPad som skal lytte, og trykk Lagre nederst."),
+          punkt("Fast lytter: står fast der babyen sover.",
+            "Flyttbar: følger babyen, f.eks. iPaden på reise eller ved vogna.",
+            "Personlig telefon: teller lite hjemme, fullt når den er valgt som «med babyen».",
+            "Motbevis: en enhet i stua som avslører gråt fra TV."),
+          p("Kilde-navnet (små bokstaver) er det enheten bruker for å si hvem den er.")),
+        steg(2, "Slå på Lydgjenkjenning på iPhone/iPad",
+          p("Innstillinger → Tilgjengelighet → Lydgjenkjenning → slå på. Under «Lyder»: slå på «Baby som gråter» og «Roping»."),
+          punkt("«Hei Siri» virker ikke mens Lydgjenkjenning er på.", "La enheten stå på lading – den lytter hele tiden.")),
+        steg(3, "Lag snarvei-automasjonen",
+          p("Snarveier → Automatisering → Ny automatisering → Lydgjenkjenning → velg «Baby som gråter» → «Kjør umiddelbart». Skru av «Varsle når den kjøres»."),
+          p("Ny tom snarvei → Legg til handling → søk «Home Assistant» → «Fire Event». Hendelse: babyuret_lyd. Lim inn dataene for enheten under."),
+          p("Lag en ny automasjon på samme måte for «Roping» med rop-dataene."),
+          ...perEnhet),
+        steg(4, "Gammel Android-telefon (valgfritt)",
+          p("Slå på Lydvarsler (appen Live Transcribe & Notifications) og velg babylyder. I Home Assistant-appen: slå på sensoren «Last notification». Lag så denne automasjonen i Home Assistant, med riktig sensor og kilde:"),
+          kopiFelt(yaml)),
+        steg(5, "Test at det virker",
+          p("Spill av babygråt (f.eks. fra YouTube) like ved enheten. Åpne «Lydlogg og treffsikkerhet»: meldingen skal dukke opp i løpet av noen sekunder."),
+          punkt("«Gråt mens våken» betyr at alt virker – babyen er bare ikke registrert som sovende.",
+            "«Avvist» har grunnen skrevet under, f.eks. ukjent enhet eller ikke på hjemmenettet.",
+            "Ingen melding? Sjekk at snarveien kjører, og at kilde-navnet er stavet likt.")),
+        steg(6, "I hverdagen",
+          punkt("Trykk «Sover» som før. Mens babyen sover kan du trykke på «Seng» og «Ingen støy» i statuskortet for å endre sted og støykilde.",
+            "Knappen øverst på forsiden viser hvor babyen er. Endre den når dere går ut, reiser eller har barnevakt, og velg hvilke enheter som er med babyen. Blir den oransje, mangler det en enhet.",
+            "«Våknet kl. …?» vises øverst når appen tror babyen har våknet. Svar Våknet, Sovnet igjen eller Feil – svarene gjør appen mer treffsikker.",
+            "Ubesvart etter 30 minutter avsluttes søvnen automatisk og merkes i dagboken, så du kan rette den.",
+            "De første ukene: sjekk lydloggen innimellom og juster ved behov under «Avansert».")),
+      ),
+    );
+  }
+  $("inn-lydguide").addEventListener("click", () => { if (!skjemaState.lyd) fyllLyd(data.innstillinger.lyd); lydGuideArk(); });
+
 
   function enhetArk(indeks) {
     const liste = skjemaState.lyd.enheter;

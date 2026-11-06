@@ -517,3 +517,28 @@ svg { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width:
 .liste-enkel { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; font-size: 14px; font-weight: 600; }
 .liste-enkel li { line-height: 1.4; }
 .liste-enkel .dempet { color: var(--dempet); font-size: 13px; }
+
+/* ---- Bruksanvisning ---- */
+#inn-lydguide { --aksent-lys: var(--sovn-lys); --aksent-blekk: var(--sovn-blekk); }
+.steg-liste { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 18px; }
+.steg { display: flex; gap: 12px; }
+.steg-nr {
+  flex: none; width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center;
+  background: var(--sovn); color: #fff; font-weight: 800; font-size: 14px;
+}
+.steg-innhold { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 8px; font-size: 15px; font-weight: 600; line-height: 1.45; }
+.steg-innhold b { font-size: 16px; font-weight: 800; }
+.steg-innhold p { margin: 0; }
+.steg-innhold .dempet { color: var(--dempet); font-size: 13px; }
+.liste-enkel.prikker { list-style: disc; padding-left: 18px; gap: 4px; }
+.enhet-guide { display: flex; flex-direction: column; gap: 6px; }
+.enhet-guide .ark-etikett { margin: 8px 0 0; }
+.kode-boks { position: relative; }
+.kode {
+  margin: 0; padding: 12px 74px 12px 12px; border-radius: 12px; background: var(--flate-2);
+  font: 600 13px/1.45 ui-monospace, "SF Mono", Menlo, monospace; white-space: pre-wrap; word-break: break-word;
+}
+.kopier {
+  position: absolute; top: 6px; right: 6px; min-height: 32px; padding: 0 10px; border-radius: 10px;
+  background: var(--flate); color: var(--sovn-blekk); font-weight: 800; font-size: 13px; box-shadow: var(--skygge);
+}

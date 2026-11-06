@@ -138,7 +138,7 @@ actions:
 
 ## Lydgjenkjenning (gråt og rop)
 
-Gråt og rop fra telefoner og nettbrett brukes som **data til søvnloggen**. Babyuret sender ingen varsler – bruk babycall til det. Slås på under **Innstillinger → Lydgjenkjenning**.
+Gråt og rop fra telefoner og nettbrett brukes som **data til søvnloggen**. Babyuret sender ingen varsler – bruk babycall til det. Slås på under **Innstillinger → Lydgjenkjenning**. Der finner du også **Slik bruker du det** – en trinnvis bruksanvisning med ferdig utfylte data for hver av enhetene deres.
 
 ### Lytteenheter
 

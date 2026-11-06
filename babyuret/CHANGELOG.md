@@ -1,5 +1,9 @@
 # Endringslogg
 
+## 0.4.1
+
+* Bruksanvisning for lydgjenkjenning i appen (Innstillinger → Lydgjenkjenning → «Slik bruker du det»), med ferdig utfylte data for hver enhet og kopier-knapp.
+
 ## 0.4.0
 
 * Lydgjenkjenning: gråt og rop fra lytteenheter (hendelsen `babyuret_lyd`) brukes som data til søvnloggen. Appen sender ingen varsler.
