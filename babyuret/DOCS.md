@@ -149,7 +149,7 @@ actions:
 
 ### Registrere i ettertid
 
-Trykk **+** i dagboken for å legge inn noe du glemte. Velg **I dag**, **I går** eller en dato i kalenderen, og juster klokkeslettet. Ser du på en tidligere dag, foreslås den dagen. Datoen kan også endres når du redigerer en registrering.
+Trykk **Legg inn noe som skjedde tidligere** i dagboken for å legge inn noe du glemte. Velg **I dag**, **I går** eller en dato i kalenderen, og juster klokkeslettet. Ser du på en tidligere dag, foreslås den dagen. Datoen kan også endres når du redigerer en registrering.
 
 ## Lydgjenkjenning (gråt og rop)
 
