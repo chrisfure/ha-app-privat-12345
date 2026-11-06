@@ -1,5 +1,11 @@
 # Endringslogg
 
+## 0.5.2
+
+* Uke og måned: nytt kort «Dager» med alle dagene i perioden og timer søvn per døgn. Trykk på en dag for å gå rett til detaljene.
+* Registrere i ettertid og redigere: velg dato (I dag, I går eller hvilken som helst dato), ikke bare klokkeslett.
+* «Legg inn tidligere» bruker dagen du ser på i dagboken som dato.
+
 ## 0.5.1
 
 * Dagbok: trykk på datoen (eller uke-/månedstittelen) for å åpne en kalender og gå rett til en bestemt dag. Dager med registreringer har prikk.

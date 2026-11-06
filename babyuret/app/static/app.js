@@ -504,7 +504,26 @@
     $("p-rytme").replaceChildren(...(rader.length ? rader : [el("p", { class: "tom" }, "Ingen dager å vise ennå.")]));
   }
 
+  function tegnDagRutenett(p) {
+    const boks = $("p-dager");
+    const [y, m] = p.fra.split("-").map(Number);
+    const tomme = p.type === "maaned" ? (new Date(y, m - 1, 1).getDay() + 6) % 7 : 0;
+    boks.replaceChildren(
+      ...UKEDAG.map((u) => el("span", { class: "kal-ukedag" }, u)),
+      ...Array.from({ length: tomme }, () => el("span")),
+      ...p.dager.map((r) => {
+        const av = r.framtid || r.for_fodsel;
+        const timer = r.har_data ? (r.sovn_sek / 3600).toFixed(1).replace(".", ",") + " t" : "";
+        return el("button", {
+          class: `p-dag${r.i_dag ? " i-dag" : ""}${r.har_data ? " data" : ""}`,
+          disabled: av, "aria-label": dagTittel(r.dag), onclick: () => aapneDag(r.dag),
+        }, el("b", {}, String(Number(r.dag.slice(8)))), el("span", {}, timer));
+      }),
+    );
+  }
+
   function tegnPeriode(p) {
+    tegnDagRutenett(p);
     $("p-tittel").textContent = p.tittel;
     $("p-under").textContent = p.under;
     $("p-forrige").dataset.dato = p.forrige;
@@ -724,11 +743,30 @@
       ));
   }
 
+  /** Dato for hendelsen: «I dag», «I går» eller valgfri dato fra kalenderen. */
+  function datofelt(state) {
+    const i_dag = lokalDato();
+    const i_gaar = flyttDag(i_dag, -1);
+    const input = el("input", { type: "date", value: state.dato, max: i_dag, class: "dato-input" });
+    if (data && data.innstillinger.fodselsdato) input.min = data.innstillinger.fodselsdato;
+    const chips = el("div", { class: "chips" });
+    const sett = (v) => { state.dato = v; state.datoValgt = true; input.value = v; tegn(); };
+    const tegn = () => chips.replaceChildren(
+      el("button", { type: "button", class: `chip${state.dato === i_dag ? " valgt" : ""}`, onclick: () => sett(i_dag) }, "I dag"),
+      el("button", { type: "button", class: `chip${state.dato === i_gaar ? " valgt" : ""}`, onclick: () => sett(i_gaar) }, "I går"),
+      input,
+    );
+    input.addEventListener("change", () => { if (input.value) sett(input.value > i_dag ? i_dag : input.value); });
+    tegn();
+    return el("div", { class: "felt dato-felt" }, el("span", {}, "Dato"), chips);
+  }
+
   function skjema(h, erNy) {
     // h: { kategori, start, slutt, detaljer }
-    const state = { start: tilTidInput(h.start), slutt: h.slutt ? tilTidInput(h.slutt) : null, detaljer: { ...h.detaljer } };
+    const state = { start: tilTidInput(h.start), slutt: h.slutt ? tilTidInput(h.slutt) : null, detaljer: { ...h.detaljer },
+      dato: h.dato || lokalDato(new Date(h.start)), datoValgt: !!h.dato || !erNy };
     const punkt = h.kategori === "bleie" || (h.kategori === "mat" && h.detaljer.type === "flaske");
-    const deler = [];
+    const deler = [datofelt(state)];
 
     const tider = el("div", { class: punkt ? "" : "felt-rad" });
     tider.append(tidsfelt(punkt ? "Tidspunkt" : "Start", state.start, (v) => { state.start = v; }));
@@ -781,9 +819,12 @@
 
     /** Gjør om HH:MM til ISO, med fornuftig dato (i går hvis i fremtiden, neste dag hvis slutt < start). */
     function tilVerdier() {
-      const ref = h.start ? new Date(h.start) : new Date();
-      let s = fraTidInput(state.start, ref);
-      if (s.getTime() > Date.now() + 60e3) s = new Date(s.getTime() - 864e5);
+      const [y, m, d] = state.dato.split("-").map(Number);
+      let s = fraTidInput(state.start, new Date(y, m - 1, d, 12));
+      if (s.getTime() > Date.now() + 60e3) {
+        if (state.datoValgt) throw new Error("Tidspunktet ligger frem i tid");
+        s = new Date(s.getTime() - 864e5);
+      }
       let e = null;
       if (state.slutt !== null && !punkt) {
         e = fraTidInput(state.slutt, s);
@@ -813,7 +854,8 @@
       el("div", { class: "ark-knapper" },
         slettKnapp,
         el("button", { class: "knapp", style: `--aksent: ${aksent}`, onclick: async () => {
-          const v = tilVerdier();
+          let v;
+          try { v = tilVerdier(); } catch (e) { visToast(e.message, []); return; }
           const body = { start: v.start, detaljer: v.detaljer };
           if (h.slutt !== null || v.slutt) body.slutt = v.slutt;
           try {
@@ -846,15 +888,17 @@
   }
 
   function nyArk(navn, mal) {
+    if (visDag) mal = { ...mal, dato: visDag };
     const { deler, tilVerdier } = skjema(mal, true);
     const aksent = { sovn: "var(--sovn)", mat: "var(--mat)", bleie: "var(--tiss)" }[mal.kategori];
     aapneArk(
       el("h3", {}, navn),
-      el("p", { class: "hint" }, "Juster tiden – dagens dato brukes, eller i går hvis tiden ligger frem i tid."),
+      el("p", { class: "hint" }, "Velg dato og juster tiden. Varer det over midnatt, legges slutten automatisk på neste dag."),
       ...deler,
       el("div", { class: "ark-knapper" },
         el("button", { class: "knapp", style: `--aksent: ${aksent}`, onclick: async () => {
-          const v = tilVerdier();
+          let v;
+          try { v = tilVerdier(); } catch (e) { visToast(e.message, []); return; }
           try {
             await api("api/hendelser", { method: "POST", body: { kategori: mal.kategori, ...v } });
             lukkArk(); await last(); visToast(`${navn} lagt inn`, [], 2500);

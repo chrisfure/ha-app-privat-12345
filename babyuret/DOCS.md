@@ -144,8 +144,12 @@ actions:
 * **Uke** (mandag–søndag) og **Måned** viser snitt per døgn for søvn, måltider, tiss og bæsj. Snittet regnes av hele døgn med registreringer; dagen i dag er med bare når den er den eneste.
 * **Søvn per døgn** er et søylediagram med feltet for det som er vanlig for alderen. **Måltider per døgn** vises på samme måte.
 * **Døgnrytme** viser én tidslinje per dag under hverandre, så du ser når babyen pleier å sove og spise.
-* Trykk på en søyle eller en dag i døgnrytmen for å åpne den dagen. Pilene blar til forrige eller neste uke/måned.
+* Kortet **Dager** viser alle dagene i perioden med timer søvn. Trykk på en dag (eller en søyle eller en rad i døgnrytmen) for å åpne den dagen. Pilene blar til forrige eller neste uke/måned.
 * Trykk på datoen øverst (eller tittelen på uka/måneden) for å åpne en kalender og gå rett til en bestemt dag. Dager med prikk har registreringer.
+
+### Registrere i ettertid
+
+Trykk **+** i dagboken for å legge inn noe du glemte. Velg **I dag**, **I går** eller en dato i kalenderen, og juster klokkeslettet. Ser du på en tidligere dag, foreslås den dagen. Datoen kan også endres når du redigerer en registrering.
 
 ## Lydgjenkjenning (gråt og rop)
 
