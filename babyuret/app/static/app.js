@@ -136,6 +136,7 @@
     $("velkommen").hidden = !!(inn.baby_navn || inn.fodselsdato);
     settNatt();
     tegnHelt();
+    tegnLyd();
     tegnFliser();
     tegnDag(op);
   }
@@ -329,7 +330,10 @@
     const d = h.detaljer;
     if (h.kategori === "sovn") {
       const tittel = "Søvn";
-      const under = h.slutt ? `${kl(h.start)}–${kl(h.slutt)} · ${varighet(sek(h.start, new Date(h.slutt)))}` : `Sover nå · ${varighet(sek(h.start))}`;
+      let under = h.slutt ? `${kl(h.start)}–${kl(h.slutt)} · ${varighet(sek(h.start, new Date(h.slutt)))}` : `Sover nå · ${varighet(sek(h.start))}`;
+      if (d.slutt_kilde === "auto") under += " · avsluttet automatisk";
+      else if (d.slutt_kilde === "lyd") under += " · bekreftet fra lyd";
+      if (d.sted && d.sted !== "seng") under += ` · ${SOVN_STED[d.sted] || d.sted}`;
       return { kl: "k-sovn", ikon: "maane", tittel, under };
     }
     if (h.kategori === "mat") {
@@ -595,6 +599,12 @@
       deler.push(el("div", { class: "ark-etikett" }, "Mengde"), el("div", { class: "stepper" },
         el("button", { onclick: () => { state.detaljer.ml = Math.max(10, state.detaljer.ml - 10); opp(); } }, "−"), verdi,
         el("button", { onclick: () => { state.detaljer.ml = Math.min(400, state.detaljer.ml + 10); opp(); } }, "+")));
+    }
+    if (h.kategori === "sovn" && data && data.lyd && data.lyd.aktiv) {
+      state.detaljer.sted = state.detaljer.sted || "seng";
+      state.detaljer.stoykilde = state.detaljer.stoykilde || "ingen";
+      deler.push(el("div", { class: "ark-etikett" }, "Hvor"), velgRad(SOVN_STED, state.detaljer, "sted"),
+        el("div", { class: "ark-etikett" }, "Støykilde"), velgRad(STOY, state.detaljer, "stoykilde"));
     }
     if (h.kategori === "bleie") {
       const rad = el("div", { class: "veksle-rad" });
@@ -931,6 +941,248 @@
   document.querySelectorAll(".maal-knapper button").forEach((b) => b.addEventListener("click", () => { vibrer(); maalArk(b.dataset.type); }));
   document.querySelectorAll("#graf-valg button").forEach((b) => b.addEventListener("click", () => { valgtGraf = b.dataset.type; tegnMaalinger(); }));
 
+
+  // ---------------------------------------------------------------- lydgjenkjenning
+  const SOVN_STED = { seng: "Seng", vogn: "Vogn", bil: "Bil", baeresele: "Bæresele" };
+  const STOY = { ingen: "Ingen støy", vifte: "Vifte", hvit_stoy: "Hvit støy", annet: "Annen støy" };
+  const ROLLER = {
+    fast: ["Fast lytter", "Står fast der babyen sover, f.eks. på barnerommet."],
+    flyttbar: ["Flyttbar", "Lytter som flyttes med babyen, f.eks. en iPad på reise eller ved vogna."],
+    personlig: ["Personlig telefon", "Teller lite hjemme, men fullt når den er valgt som «ved babyen»."],
+    motbevis: ["Motbevis (stua)", "Står i stua. Hører den gråt samtidig, er det trolig TV – da trekkes poeng."],
+  };
+  const STED_TRENGER_MED = ["hjemme_vogn", "ute", "reise", "barnevakt_ute"];
+
+  function tegnLyd() {
+    const lyd = data.lyd;
+    const aktiv = !!(lyd && lyd.aktiv);
+    const stedKnapp = $("sted-knapp");
+    stedKnapp.hidden = !aktiv;
+    if (aktiv) {
+      const navn = Object.fromEntries(lyd.enheter.map((e) => [e.kilde, e.navn]));
+      const med = lyd.sted.med.map((k) => navn[k] || k);
+      $("sted-tekst").textContent = lyd.sted.navn + (med.length ? ` · ${med.join(", ")}` : "");
+      stedKnapp.classList.toggle("varsle", STED_TRENGER_MED.includes(lyd.sted.sted) && !med.length);
+    }
+
+    const gj = $("gjennomgang");
+    const forslag = aktiv ? lyd.forslag : [];
+    gj.hidden = !forslag.length;
+    gj.replaceChildren(...forslag.map((f) => el("div", { class: "forslag" },
+      el("div", { class: "forslag-tekst" },
+        el("b", {}, `Våknet ${kl(f.tid)}?`),
+        el("span", {}, "Gråt registrert under søvnen. Bekreft, så lærer appen."),
+      ),
+      el("div", { class: "forslag-knapper" },
+        el("button", { class: "knapp", onclick: () => svarForslag(f, "vaaknet") }, ikon("sol"), "Våknet"),
+        el("button", { class: "knapp sekundaer", onclick: () => svarForslag(f, "sovnet_igjen") }, ikon("maane"), "Sovnet igjen"),
+        el("button", { class: "knapp sekundaer", onclick: () => svarForslag(f, "feil") }, "Feil"),
+      ),
+    )));
+
+    const chips = $("sovn-chips");
+    const sovn = data.status.sovn;
+    chips.hidden = !(aktiv && sovn);
+    if (aktiv && sovn) {
+      const d = sovn.detaljer || {};
+      chips.replaceChildren(
+        el("button", { class: "mini-chip", onclick: () => sovnInfoArk(sovn) }, SOVN_STED[d.sted] || "Seng"),
+        el("button", { class: "mini-chip", onclick: () => sovnInfoArk(sovn) }, STOY[d.stoykilde] || "Ingen støy"),
+      );
+    }
+  }
+
+  async function svarForslag(f, svar) {
+    vibrer();
+    try {
+      const r = await api(`api/lyd/forslag/${f.id}`, { method: "POST", body: { svar } });
+      await last();
+      visToast(r.melding, [], 2500);
+    } catch (e) { visToast(e.message, []); }
+  }
+
+  function velgRad(valg, state, felt, ved) {
+    const rad = el("div", { class: "chips" });
+    const tegnV = () => rad.replaceChildren(...Object.entries(valg).map(([v, navn]) =>
+      el("button", { class: `chip${state[felt] === v ? " valgt" : ""}`, onclick: () => { state[felt] = v; tegnV(); ved && ved(); } }, navn)));
+    tegnV();
+    return rad;
+  }
+
+  function sovnInfoArk(sovn) {
+    const d = sovn.detaljer || {};
+    const state = { sted: d.sted || "seng", stoykilde: d.stoykilde || "ingen" };
+    aapneArk(
+      el("h3", {}, "Om søvnen"),
+      el("p", { class: "hint" }, "Hjelper appen å tolke lyd riktig. Støykilden huskes til neste gang."),
+      el("div", { class: "ark-etikett" }, "Hvor sover babyen"),
+      velgRad(SOVN_STED, state, "sted"),
+      el("div", { class: "ark-etikett" }, "Støykilde i rommet"),
+      velgRad(STOY, state, "stoykilde"),
+      el("div", { class: "ark-knapper" },
+        el("button", { class: "knapp", style: "--aksent: var(--sovn)", onclick: async () => {
+          try {
+            await api(`api/hendelser/${sovn.id}`, { method: "PATCH", body: { detaljer: { ...d, ...state } } });
+            lukkArk(); await last(); visToast("Lagret", [], 2000);
+          } catch (e) { visToast(e.message, []); }
+        } }, "Lagre"),
+      ),
+    );
+  }
+
+  function stedArk() {
+    const lyd = data.lyd;
+    const state = { sted: lyd.sted.sted, med: new Set(lyd.sted.med) };
+    const medEtikett = el("div", { class: "ark-etikett" });
+    const medHint = el("p", { class: "hint" });
+    const medRad = el("div", { class: "chips" });
+    const tegnMed = () => {
+      const trenger = STED_TRENGER_MED.includes(state.sted);
+      medEtikett.textContent = trenger ? "Enheter som er med babyen" : "Enheter ved babyen (valgfritt)";
+      medHint.textContent = trenger
+        ? "Bare disse teller nå. Velger du ingen, registreres ingen lyd før dere er hjemme igjen."
+        : "Den faste lytteren teller alltid. Velg andre enheter her hvis de står ved babyen.";
+      medRad.replaceChildren(...lyd.enheter.filter((e) => e.rolle !== "motbevis").map((e) =>
+        el("button", { class: `chip${state.med.has(e.kilde) ? " valgt" : ""}`, onclick: () => {
+          state.med.has(e.kilde) ? state.med.delete(e.kilde) : state.med.add(e.kilde); tegnMed();
+        } }, e.navn)));
+    };
+    const steder = Object.fromEntries(lyd.steder.map((s) => [s.verdi, s.navn]));
+    tegnMed();
+    aapneArk(
+      el("h3", {}, "Hvor er babyen?"),
+      el("p", { class: "hint" }, "Bare enheter der babyen er, teller som lyd. Barnevakt? Velg det her før dere går."),
+      velgRad(steder, state, "sted", tegnMed),
+      medEtikett, medHint, medRad,
+      el("div", { class: "ark-knapper" },
+        el("button", { class: "knapp", style: "--aksent: var(--sovn)", onclick: async () => {
+          try {
+            await api("api/lyd/sted", { method: "PUT", body: { sted: state.sted, med: [...state.med] } });
+            lukkArk(); await last(); visToast("Sted lagret", [], 2000);
+          } catch (e) { visToast(e.message, []); }
+        } }, "Lagre"),
+      ),
+    );
+  }
+  $("sted-knapp").addEventListener("click", () => { vibrer(); stedArk(); });
+
+  const TOLKNING = {
+    avvist: "Avvist", vaaken: "Gråt mens våken", innsovning: "Urolig innsovning", uro: "Uro i søvne",
+    mulig: "Mulig oppvåkning", trolig: "Trolig våknet", motbevis: "Motbevis (stua)",
+  };
+  const FORSLAG_STATUS = {
+    venter: "Venter", vaaknet: "Våknet", sovnet_igjen: "Sovnet igjen", feil: "Feil",
+    manuelt_vaaknet: "Våknet (trykket selv)", auto: "Avsluttet automatisk", utlopt: "Utløpt",
+  };
+
+  async function lydloggArk() {
+    let d;
+    try { d = await api("api/lyd/logg"); } catch (e) { visToast(e.message, []); return; }
+    const pros = (l) => l.presisjon == null ? "for få svar ennå" : `${Math.round(l.presisjon * 100)} % riktige av ${l.antall} svar`;
+    const just = (l) => l.justering ? ` · terskel ${l.justering > 0 ? "+" : ""}${l.justering}` : "";
+    aapneArk(
+      el("h3", {}, "Lydlogg"),
+      el("p", { class: "hint" }, "Alle meldinger fra lytteenhetene, også de som ble avvist, og hvorfor."),
+      el("div", { class: "ark-etikett" }, "Treffsikkerhet"),
+      el("ul", { class: "liste-enkel" },
+        el("li", {}, `Uten støykilde: ${pros(d.laering.uten_stoy)}${just(d.laering.uten_stoy)}`),
+        el("li", {}, `Med støykilde: ${pros(d.laering.med_stoy)}${just(d.laering.med_stoy)}`),
+      ),
+      d.per_enhet.length ? el("div", { class: "ark-etikett" }, "Per enhet, siste 14 dager") : null,
+      d.per_enhet.length ? el("ul", { class: "liste-enkel" }, d.per_enhet.map((e) =>
+        el("li", {}, `${e.enhet}: ${e.totalt} meldinger, ${e.avvist} avvist`))) : null,
+      d.forslag.length ? el("div", { class: "ark-etikett" }, "Siste forslag") : null,
+      d.forslag.length ? el("ul", { class: "liste-enkel" }, d.forslag.map((f) =>
+        el("li", {}, `${new Date(f.tid).toLocaleString("nb-NO", { weekday: "short", hour: "2-digit", minute: "2-digit" })} · ${FORSLAG_STATUS[f.status] || f.status} · ${f.poeng} p`))) : null,
+      el("div", { class: "ark-etikett" }, "Siste meldinger"),
+      d.logg.length ? el("ul", { class: "liste-enkel" }, d.logg.map((r) =>
+        el("li", {},
+          el("b", {}, `${kl(r.tid)} ${r.enhet}`),
+          ` · ${r.type === "rop" ? "rop" : "gråt"} · ${TOLKNING[r.tolkning] || r.tolkning}`,
+          r.poeng != null ? ` · ${r.poeng} p` : "",
+          r.grunn ? el("div", { class: "dempet" }, r.grunn) : null,
+        ))) : el("p", { class: "hint" }, "Ingen meldinger ennå. Test fra snarveien på en lytteenhet."),
+    );
+  }
+  $("inn-lydlogg").addEventListener("click", () => lydloggArk());
+
+  function enhetArk(indeks) {
+    const liste = skjemaState.lyd.enheter;
+    const ny = indeks == null;
+    const e = ny ? { kilde: "", navn: "", rolle: "fast", nett_entitet: "" } : { ...liste[indeks] };
+    const navn = el("input", { type: "text", maxlength: "40", value: e.navn, placeholder: "f.eks. Barnerommet", autocomplete: "off" });
+    const kilde = el("input", { type: "text", maxlength: "30", value: e.kilde, placeholder: "f.eks. barnerom", autocomplete: "off", autocapitalize: "off" });
+    const nett = el("input", { type: "text", value: e.nett_entitet, placeholder: "f.eks. sensor.ipad_ssid", autocomplete: "off", autocapitalize: "off" });
+    const rolleHint = el("p", { class: "felt-hint" });
+    const state = { rolle: e.rolle };
+    const tegnRolle = () => { rolleHint.textContent = ROLLER[state.rolle][1]; };
+    tegnRolle();
+    let sikker = false;
+    const slett = ny ? null : el("button", { class: "knapp fare", onclick: () => {
+      if (!sikker) { sikker = true; slett.textContent = "Sikker?"; return; }
+      liste.splice(indeks, 1); tegnEnheter(); lukkArk();
+    } }, "Fjern");
+    aapneArk(
+      el("h3", {}, ny ? "Ny lytteenhet" : e.navn || e.kilde),
+      el("p", { class: "hint" }, "Kilde-navnet skrives inn i snarveien på enheten. Husk å trykke Lagre i innstillingene etterpå."),
+      el("label", { class: "felt" }, el("span", {}, "Navn"), navn),
+      el("label", { class: "felt" }, el("span", {}, "Kilde (små bokstaver, tall og _)"), kilde),
+      el("div", { class: "ark-etikett" }, "Rolle"),
+      velgRad(Object.fromEntries(Object.entries(ROLLER).map(([k, v]) => [k, v[0]])), state, "rolle", tegnRolle),
+      rolleHint,
+      el("label", { class: "felt" }, el("span", {}, "Nett-sensor i Home Assistant (valgfritt)"), nett),
+      el("p", { class: "felt-hint" }, "Wi-Fi-sensoren fra Home Assistant-appen, eller en device_tracker fra UniFi. Uten den regnes faste lyttere som hjemme."),
+      el("div", { class: "ark-knapper" }, slett,
+        el("button", { class: "knapp", style: "--aksent: var(--sovn)", onclick: () => {
+          const ut = {
+            navn: navn.value.trim() || kilde.value.trim(),
+            kilde: kilde.value.trim().toLowerCase(),
+            rolle: state.rolle,
+            nett_entitet: nett.value.trim(),
+          };
+          if (!/^[a-z0-9_]{1,30}$/.test(ut.kilde)) { visToast("Kilde kan bare ha a–z, 0–9 og _", []); return; }
+          if (liste.some((x, i) => x.kilde === ut.kilde && i !== indeks)) { visToast("Kilden er allerede i bruk", []); return; }
+          if (ny) liste.push(ut); else liste[indeks] = ut;
+          tegnEnheter(); lukkArk();
+        } }, "OK"),
+      ),
+    );
+  }
+  $("inn-ny-enhet").addEventListener("click", () => enhetArk(null));
+
+  function tegnEnheter() {
+    const l = skjemaState.lyd;
+    $("inn-enheter").replaceChildren(...l.enheter.map((e, i) => el("li", {},
+      el("button", { class: "rad", type: "button", onclick: () => enhetArk(i) },
+        el("span", { class: "rad-ikon k-sovn" }, ikon("ore")),
+        el("span", { class: "rad-tekst" },
+          el("div", { class: "rad-tittel" }, e.navn || e.kilde),
+          el("div", { class: "rad-under" }, `${ROLLER[e.rolle][0]} · kilde: ${e.kilde}`)),
+      ))));
+    document.querySelectorAll("#inn-lyd-aktiv button").forEach((b) => b.classList.toggle("valgt", (b.dataset.verdi === "paa") === l.aktiv));
+    document.querySelectorAll("#inn-lyd-laering button").forEach((b) => b.classList.toggle("valgt", (b.dataset.verdi === "paa") === l.laering));
+    $("inn-lyd-detaljer").hidden = !l.aktiv;
+  }
+  document.querySelectorAll("#inn-lyd-aktiv button").forEach((b) =>
+    b.addEventListener("click", () => { skjemaState.lyd.aktiv = b.dataset.verdi === "paa"; tegnEnheter(); }));
+  document.querySelectorAll("#inn-lyd-laering button").forEach((b) =>
+    b.addEventListener("click", () => { skjemaState.lyd.laering = b.dataset.verdi === "paa"; tegnEnheter(); }));
+
+  const LYD_TALL = [["inn-lyd-innsovning", "innsovning_min"], ["inn-lyd-vindu", "vindu_min"],
+    ["inn-lyd-mulig", "terskel_mulig"], ["inn-lyd-trolig", "terskel_trolig"],
+    ["inn-lyd-frist", "svarfrist_min"], ["inn-lyd-rop", "rop_vekt"]];
+  function fyllLyd(lyd) {
+    skjemaState.lyd = JSON.parse(JSON.stringify(lyd));
+    $("inn-hjemmenett").value = (lyd.hjemmenett || []).join(", ");
+    for (const [id, felt] of LYD_TALL) $(id).value = lyd[felt];
+    tegnEnheter();
+  }
+  function lesLyd() {
+    const l = { ...skjemaState.lyd, hjemmenett: $("inn-hjemmenett").value };
+    for (const [id, felt] of LYD_TALL) if ($(id).value !== "") l[felt] = Number($(id).value);
+    return l;
+  }
+
   // ---------------------------------------------------------------- faner
   const FANER = ["registrer", "dagbok", "maalinger", "innstillinger"];
   function visFane(navn, oppdaterHash = true) {
@@ -948,7 +1200,7 @@
   $("velkommen").addEventListener("click", () => visFane("innstillinger"));
 
   // ---------------------------------------------------------------- innstillinger
-  const skjemaState = { mating: "begge", ml: 90, kjonn: "" };
+  const skjemaState = { mating: "begge", ml: 90, kjonn: "", lyd: null };
   function tegnMating() {
     document.querySelectorAll("#inn-mating button").forEach((b) => b.classList.toggle("valgt", b.dataset.verdi === skjemaState.mating));
     document.querySelectorAll("#inn-kjonn button").forEach((b) => b.classList.toggle("valgt", b.dataset.verdi === skjemaState.kjonn));
@@ -966,6 +1218,7 @@
     skjemaState.ml = inn.standard_flaske_ml;
     skjemaState.kjonn = inn.kjonn || "";
     tegnMating();
+    fyllLyd(inn.lyd);
     if (!$("kilder").children.length) {
       api("api/kilder").then((k) => $("kilder").replaceChildren(...Object.values(k).map((x) =>
         el("li", {}, el("a", { href: x.url, target: "_blank", rel: "noopener" }, x.navn))))).catch(() => {});
@@ -989,6 +1242,7 @@
         standard_flaske_ml: skjemaState.ml,
         nattmodus_fra: $("inn-natt-fra").value || "21:00",
         nattmodus_til: $("inn-natt-til").value || "07:00",
+        lyd: lesLyd(),
       } });
       await last();
       visToast("Innstillingene er lagret", [], 2500);

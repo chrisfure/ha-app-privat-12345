@@ -1,5 +1,17 @@
 # Endringslogg
 
+## 0.4.0
+
+* Lydgjenkjenning: gråt og rop fra lytteenheter (hendelsen `babyuret_lyd`) brukes som data til søvnloggen. Appen sender ingen varsler.
+* Fire sperrer før lyd teller: kjent enhet, enheten er der babyen er, søvn pågår og innsovningsvinduet er passert.
+* Poengsum over et glidende vindu med tillegg for flere enheter samtidig og nærhet til prognosen, og trekk for motbevis fra stua og kort søvn.
+* «Våknet kl. …?» på forsiden: bekreft med Våknet, Sovnet igjen eller Feil. Ubesvarte forslag avslutter søvnen automatisk etter svarfristen, merket «avsluttet automatisk».
+* Babyens sted: hjemme, i vogna ute, ute, på reise og barnevakt hjemme/ute, med valg av hvilke enheter som er med babyen.
+* Søvn får sted (seng, vogn, bil, bæresele) og støykilde. Støykilde hever terskelen og huskes til neste søvn.
+* Læring: terskelen justeres lokalt ut fra hvor ofte forslagene var riktige.
+* Lytteenheter, hjemmenett og terskler stilles inn under Innstillinger → Lydgjenkjenning, med lydlogg og treffsikkerhet.
+* Nye sensorer: `sensor.babyuret_sted` og `sensor.babyuret_lyd`.
+
 ## 0.3.1
 
 - Retting: appen fant ikke tilgangsnøkkelen til Home Assistant, så sensorer og hendelser virket ikke.

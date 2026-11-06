@@ -9,9 +9,11 @@ from __future__ import annotations
 import json
 import os
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date
 from pathlib import Path
+
+import lyd as lydmodul
 
 KL = re.compile(r"^([01]\d|2[0-3]):[0-5]\d$")
 
@@ -30,6 +32,7 @@ class Innstillinger:
     nattmodus_fra: str = "21:00"
     nattmodus_til: str = "07:00"
     kjonn: str = ""  # gutt | jente | "" – brukes kun til å velge riktig vekstkurve
+    lyd: dict = field(default_factory=lambda: dict(lydmodul.STANDARD))
     port: int = 8099
 
     def offentlig(self) -> dict:
@@ -41,6 +44,7 @@ class Innstillinger:
             "standard_flaske_ml": self.standard_flaske_ml,
             "nattmodus_fra": self.nattmodus_fra,
             "nattmodus_til": self.nattmodus_til,
+            "lyd": self.lyd,
         }
 
     def oppdater(self, d: dict) -> dict:
@@ -81,6 +85,8 @@ class Innstillinger:
                 if not KL.match(str(d[felt] or "")):
                     raise UgyldigInnstilling("Klokkeslett må være på formen TT:MM")
                 ny[felt] = d[felt]
+        if "lyd" in d:
+            ny["lyd"] = lydmodul.rens_oppsett(d["lyd"], self.lyd)
         for k, v in ny.items():
             setattr(self, k, v)
         return ny

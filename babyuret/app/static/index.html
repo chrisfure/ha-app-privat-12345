@@ -29,6 +29,8 @@
     <symbol id="i-hodemaal" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M4 12h16" stroke-dasharray="2 2.5"/></symbol>
     <symbol id="i-termometer" viewBox="0 0 24 24"><path d="M14 14.8V5a2 2 0 0 0-4 0v9.8a4 4 0 1 0 4 0Z"/><path d="M12 10v6"/></symbol>
     <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></symbol>
+    <symbol id="i-pin" viewBox="0 0 24 24"><path d="M12 21s-6.5-5.6-6.5-11a6.5 6.5 0 0 1 13 0c0 5.4-6.5 11-6.5 11Z"/><circle cx="12" cy="10" r="2.3"/></symbol>
+    <symbol id="i-ore" viewBox="0 0 24 24"><path d="M7 9a5 5 0 0 1 10 0c0 3-2.5 3.8-3.4 6.2-.6 1.7-1.6 3.8-3.6 3.8a3 3 0 0 1-3-3"/><path d="M10 9.5a2 2 0 0 1 4 0c0 1.3-1.2 1.6-1.5 2.6"/></symbol>
     <symbol id="i-stopp" viewBox="0 0 24 24"><rect x="6.5" y="6.5" width="11" height="11" rx="2.5"/></symbol>
   </svg>
 
@@ -50,11 +52,18 @@
         <svg><use href="#i-hoyre"/></svg>
       </button>
 
+      <button class="sted-knapp" id="sted-knapp" hidden>
+        <svg><use href="#i-pin"/></svg><span id="sted-tekst">Hjemme</span>
+      </button>
+
+      <section class="gjennomgang" id="gjennomgang" hidden></section>
+
       <section class="helt" id="helt" aria-live="polite">
         <div class="helt-tekst">
           <span class="helt-merke" id="helt-merke">Våken</span>
           <div class="helt-tid" id="helt-tid">–</div>
           <div class="helt-under" id="helt-under"></div>
+          <div class="sovn-chips" id="sovn-chips" hidden></div>
         </div>
         <button class="prognose" id="prognose" hidden>
           <span class="prognose-ikon"><svg><use href="#i-maane"/></svg></span>
@@ -206,6 +215,42 @@
         <div class="felt-rad">
           <label class="felt"><span>Fra</span><input type="time" id="inn-natt-fra"></label>
           <label class="felt"><span>Til</span><input type="time" id="inn-natt-til"></label>
+        </div>
+      </section>
+
+      <section class="kort skjema" id="inn-lyd">
+        <h2>Lydgjenkjenning</h2>
+        <p class="felt-hint">Gråt og rop fra lytteenheter brukes som data til søvnloggen. Appen sender ingen varsler – bruk babycall til det.</p>
+        <div class="segment to" id="inn-lyd-aktiv">
+          <button data-verdi="av">Av</button>
+          <button data-verdi="paa">På</button>
+        </div>
+        <div id="inn-lyd-detaljer">
+          <div class="felt"><span>Lytteenheter</span></div>
+          <ol class="logg enheter" id="inn-enheter"></ol>
+          <button class="legg-til" id="inn-ny-enhet" type="button"><svg><use href="#i-pluss"/></svg> Legg til enhet</button>
+          <label class="felt"><span>Hjemmenett (Wi-Fi-navn, kommaseparert)</span>
+            <input type="text" id="inn-hjemmenett" autocomplete="off" placeholder="Valgfritt">
+          </label>
+          <p class="felt-hint">Brukes for enheter som har en nett-sensor fra Home Assistant-appen. En enhet regnes også som hjemme når sensoren viser «home» (f.eks. fra UniFi).</p>
+          <details class="avansert">
+            <summary>Avansert</summary>
+            <div class="felt-rad">
+              <label class="felt"><span>Innsovning (min)</span><input type="number" id="inn-lyd-innsovning" min="0" max="60"></label>
+              <label class="felt"><span>Vindu (min)</span><input type="number" id="inn-lyd-vindu" min="1" max="30"></label>
+              <label class="felt"><span>Terskel mulig</span><input type="number" id="inn-lyd-mulig" min="0.5" max="10" step="0.5"></label>
+              <label class="felt"><span>Terskel trolig</span><input type="number" id="inn-lyd-trolig" min="1" max="15" step="0.5"></label>
+              <label class="felt"><span>Svarfrist (min)</span><input type="number" id="inn-lyd-frist" min="5" max="240"></label>
+              <label class="felt"><span>Vekt for rop</span><input type="number" id="inn-lyd-rop" min="0" max="1" step="0.1"></label>
+            </div>
+            <div class="felt"><span>Læring fra svarene</span>
+              <div class="segment to" id="inn-lyd-laering">
+                <button data-verdi="av">Av</button>
+                <button data-verdi="paa">På</button>
+              </div>
+            </div>
+          </details>
+          <button class="knapp sekundaer" id="inn-lydlogg" type="button"><svg><use href="#i-ore"/></svg> Lydlogg og treffsikkerhet</button>
         </div>
       </section>
 

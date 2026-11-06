@@ -470,3 +470,50 @@ svg { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width:
 .kildeliste a { color: inherit; }
 .felt-rad > * { min-width: 0; }
 .felt input { min-width: 0; max-width: 100%; }
+
+/* ---- Lydgjenkjenning ---- */
+.sted-knapp {
+  display: inline-flex; align-items: center; gap: 6px; align-self: flex-start;
+  min-height: 36px; padding: 0 14px 0 10px; border-radius: 999px;
+  background: var(--flate); box-shadow: var(--skygge);
+  font-weight: 800; font-size: 14px; color: var(--dempet);
+  max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.sted-knapp svg { width: 18px; height: 18px; flex: none; fill: none; stroke: currentColor; stroke-width: 2; }
+.sted-knapp span { overflow: hidden; text-overflow: ellipsis; }
+.sted-knapp.varsle { color: var(--mat-blekk); background: var(--mat-lys); }
+
+.gjennomgang { display: flex; flex-direction: column; gap: 10px; }
+.forslag {
+  background: var(--sovn-lys); border-radius: var(--radius); padding: 14px;
+  display: flex; flex-direction: column; gap: 12px; --aksent: var(--sovn);
+  --aksent-lys: var(--flate); --aksent-blekk: var(--sovn-blekk);
+}
+.forslag-tekst { display: flex; flex-direction: column; gap: 2px; }
+.forslag-tekst b { font-size: 18px; font-weight: 800; color: var(--sovn-blekk); }
+.forslag-tekst span { font-size: 14px; font-weight: 600; color: var(--dempet); }
+.forslag-knapper { display: grid; grid-template-columns: 1fr 1fr auto; gap: 8px; }
+.forslag-knapper .knapp { min-height: 48px; padding: 0 10px; font-size: 15px; }
+
+.sovn-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.sovn-chips[hidden] { display: none; }
+.mini-chip {
+  min-height: 30px; padding: 0 12px; border-radius: 999px;
+  background: var(--flate); color: var(--sovn-blekk); font-weight: 800; font-size: 13px;
+  box-shadow: inset 0 0 0 1.5px var(--linje);
+}
+
+.segment.to { grid-template-columns: repeat(2, 1fr); }
+#inn-lyd-detaljer { display: flex; flex-direction: column; gap: 12px; }
+#inn-lyd-detaljer[hidden] { display: none; }
+.logg.enheter { margin-top: 0; }
+.logg.enheter:empty { display: none; }
+.felt input[type="number"] { font-size: 18px; }
+.avansert summary { font-weight: 800; color: var(--dempet); cursor: pointer; padding: 6px 0; }
+.avansert[open] summary { margin-bottom: 10px; }
+.avansert .felt-rad { margin-bottom: 12px; }
+#inn-lydlogg { --aksent-lys: var(--sovn-lys); --aksent-blekk: var(--sovn-blekk); }
+
+.liste-enkel { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; font-size: 14px; font-weight: 600; }
+.liste-enkel li { line-height: 1.4; }
+.liste-enkel .dempet { color: var(--dempet); font-size: 13px; }

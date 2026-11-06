@@ -3,6 +3,7 @@
 * Publiserer sensorer (sensor.babyuret_*) ved hver endring og hvert minutt.
 * Sender hendelsen «babyuret_hendelse» ved endringer, så automasjoner kan reagere.
 * Lytter på hendelsen «babyuret_registrer», så knapper, NFC og Assist kan registrere.
+* Lytter på hendelsen «babyuret_lyd» fra lytteenheter (gråt/rop). Ingen varsler sendes.
 """
 from __future__ import annotations
 
@@ -19,6 +20,7 @@ log = logging.getLogger("babyuret.ha")
 CORE_API = "http://supervisor/core/api"
 CORE_WS = "ws://supervisor/core/websocket"
 LYTT_PA = "babyuret_registrer"
+LYTT_LYD = "babyuret_lyd"
 
 
 def _supervisor_token() -> str | None:
@@ -83,6 +85,7 @@ class HAKobling:
     async def _publiser_loop(self) -> None:
         while True:
             try:
+                self.bu.lyd.sjekk_frister()
                 await self.publiser()
                 if self._sende_hendelse:
                     self._sende_hendelse = False
@@ -116,6 +119,25 @@ class HAKobling:
                                       headers=self._hoder, json=nyttelast):
             pass
 
+    async def _tilstand(self, entity_id: str) -> str | None:
+        try:
+            async with self._session.get(f"{CORE_API}/states/{entity_id}", headers=self._hoder) as r:
+                if r.status == 200:
+                    return (await r.json()).get("state")
+        except aiohttp.ClientError as e:
+            log.warning("Klarte ikke lese %s: %s", entity_id, e)
+        return None
+
+    async def _lyd(self, ev: dict) -> None:
+        kilde = str(ev.get("kilde") or "").strip().lower()
+        enhet = self.bu.lyd.enhet(kilde)
+        nett = await self._tilstand(enhet["nett_entitet"]) if enhet and enhet["nett_entitet"] else None
+        try:
+            res = self.bu.lyd.motta(str(ev.get("type") or "grat"), kilde, nett)
+            log.info("Lyd fra %s: %s%s", kilde or "?", res["tolkning"], f" ({res['grunn']})" if res.get("grunn") else "")
+        except Exception as e:  # noqa: BLE001
+            log.warning("Kunne ikke behandle lyd fra %s: %s", kilde, e)
+
     async def _lytt_loop(self) -> None:
         vent = 5
         while True:
@@ -135,7 +157,8 @@ class HAKobling:
             if msg.get("type") != "auth_ok":
                 raise RuntimeError(f"Autentisering feilet: {msg}")
             await ws.send_json({"id": 1, "type": "subscribe_events", "event_type": LYTT_PA})
-            log.info("Lytter på hendelsen %s", LYTT_PA)
+            await ws.send_json({"id": 2, "type": "subscribe_events", "event_type": LYTT_LYD})
+            log.info("Lytter på hendelsene %s og %s", LYTT_PA, LYTT_LYD)
             async for m in ws:
                 if m.type != aiohttp.WSMsgType.TEXT:
                     if m.type in (aiohttp.WSMsgType.CLOSED, aiohttp.WSMsgType.ERROR):
@@ -145,6 +168,9 @@ class HAKobling:
                 if data.get("type") != "event":
                     continue
                 ev = data["event"].get("data", {}) or {}
+                if data["event"].get("event_type") == LYTT_LYD:
+                    await self._lyd(ev)
+                    continue
                 handling = ev.pop("handling", None)
                 av = ev.pop("av", None) or "Home Assistant"
                 try:

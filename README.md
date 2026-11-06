@@ -19,9 +19,10 @@ Små apper for familiehverdagen, laget for Home Assistant.
 
 1. ✅ Grunnmur: registrering, lagring, sensorer og hendelser
 2. ✅ Søvnprognose, normalområder per alder og målinger med vekstkurver
-3. Ukegrafer og trender
-4. Ukentlig AI-kalibrering og ukerapport
-5. Ekstra automasjoner: nattlys ved mating, «baby sover»-modus, bleier til handlelisten
+3. ✅ Lydgjenkjenning: gråt og rop som data til søvnloggen
+4. Ukegrafer og trender
+5. Ukentlig AI-kalibrering og ukerapport
+6. Ekstra automasjoner: nattlys ved mating, «baby sover»-modus, bleier til handlelisten
 
 Anbefalinger og normalområder er hentet fra Helsenorge, Helsedirektoratet og WHO – se kildelistene i hver app.
 

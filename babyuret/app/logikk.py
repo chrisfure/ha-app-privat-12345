@@ -7,12 +7,16 @@ from zoneinfo import ZoneInfo
 
 from db import UTC, Database, fra_iso, naa, til_iso
 from innstillinger import Innstillinger
+from lyd import Lydlogikk
 from prognose import Prognose
 
 # Amming-økter med mindre pause enn dette regnes som ett måltid.
 MALTID_PAUSE = timedelta(minutes=20)
 
 ANDRE_SIDE = {"V": "H", "H": "V"}
+
+SOVN_STED = ("seng", "vogn", "bil", "baeresele")
+STOYKILDER = ("ingen", "vifte", "hvit_stoy", "annet")
 
 
 class Feil(Exception):
@@ -49,6 +53,7 @@ class Babyuret:
             self.cfg.oppdater(self.db.les_innstillinger())
         except ValueError:
             pass
+        self.lyd = Lydlogikk(self)
 
     def lagre_innstillinger(self, d: dict) -> dict:
         try:
@@ -103,7 +108,10 @@ class Babyuret:
         pag = self.db.pagaende("sovn")
         if pag:
             return pag, "Sover allerede"
-        h = self.db.opprett("sovn", tid, None, {}, av)
+        forrige = self.db.siste("sovn")
+        standard = {"stoykilde": (forrige or {}).get("detaljer", {}).get("stoykilde", "ingen")}
+        detaljer = self._rens("sovn", {**standard, **{k: data[k] for k in ("sted", "stoykilde") if data.get(k)}})
+        h = self.db.opprett("sovn", tid, None, detaljer, av)
         return h, f"Sovnet {self._kl(tid)}"
 
     def _sovn_slutt(self, tid, data, av):
@@ -224,6 +232,14 @@ class Babyuret:
                 return {"type": "flaske", "ml": ml}
             side = str(d.get("side") or "V").upper()[:1]
             return {"type": "amming", "side": side if side in ("V", "H") else "V"}
+        if kategori == "sovn":
+            ut = {
+                "sted": d.get("sted") if d.get("sted") in SOVN_STED else "seng",
+                "stoykilde": d.get("stoykilde") if d.get("stoykilde") in STOYKILDER else "ingen",
+            }
+            if d.get("slutt_kilde") in ("lyd", "auto"):
+                ut["slutt_kilde"] = d["slutt_kilde"]
+            return ut
         return {}
 
     # ---- avledet info ---------------------------------------------------
@@ -386,7 +402,31 @@ class Babyuret:
                               "varighet_min": prog.get("varighet_min")})
         self._siste_prognose = prog
 
+        sted = self.lyd.sted()
+        lyd = self.lyd.oversikt()
+        siste_lyd = lyd["siste"]
+        sensorer_lyd = {
+            "sensor.babyuret_sted": {
+                "state": sted["sted"],
+                "attributes": {"friendly_name": "Babyuret babyens sted", "icon": "mdi:map-marker-outline",
+                               "navn": sted["navn"], "med": sted["med"], "siden": sted["siden"]},
+            },
+            "sensor.babyuret_lyd": {
+                "state": siste_lyd["tolkning"] if siste_lyd else "ingen",
+                "attributes": {"friendly_name": "Babyuret siste lyd", "icon": "mdi:ear-hearing",
+                               "aktiv": lyd["aktiv"],
+                               "tid": siste_lyd["tid"] if siste_lyd else None,
+                               "kilde": siste_lyd["kilde"] if siste_lyd else None,
+                               "type": siste_lyd["type"] if siste_lyd else None,
+                               "poeng": siste_lyd["poeng"] if siste_lyd else None,
+                               "grunn": siste_lyd["grunn"] if siste_lyd else None,
+                               "forslag_venter": len(lyd["forslag"]),
+                               "forslag_tid": lyd["forslag"][0]["tid"] if lyd["forslag"] else None},
+            },
+        }
+
         return {
+            **sensorer_lyd,
             "sensor.babyuret_prognose": {
                 "state": prog["midt"] if prog.get("klar") else "unknown",
                 "attributes": prog_attr,

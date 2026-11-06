@@ -44,6 +44,7 @@ def lag_app(bu: Babyuret) -> web.Application:
             dag = date.fromisoformat(req.query["dag"]) if req.query.get("dag") else None
         except ValueError:
             return _feil("Ugyldig dato")
+        bu.lyd.sjekk_frister()
         return web.json_response({
             "innstillinger": bu.cfg.offentlig(),
             "alder": bu.alder(),
@@ -51,6 +52,7 @@ def lag_app(bu: Babyuret) -> web.Application:
             "prognose": bu.prognose.beregn(),
             "siste_dogn": bu.prognose.siste_dogn(),
             "oppsummering": bu.oppsummering(dag),
+            "lyd": bu.lyd.oversikt(),
             "i_dag": bu.i_dag().isoformat(),
             "bruker": _bruker(req),
         })
@@ -112,6 +114,32 @@ def lag_app(bu: Babyuret) -> web.Application:
         if not bu.db.slett_maaling(int(req.match_info["mid"])):
             return _feil("Fant ikke målingen", 404)
         return web.json_response({"ok": True})
+
+    @routes.put("/api/lyd/sted")
+    async def lyd_sted(req):
+        d = await req.json()
+        try:
+            return web.json_response(bu.lyd.sett_sted(d.get("sted"), d.get("med"), _bruker(req)))
+        except ValueError as e:
+            return _feil(str(e))
+
+    @routes.post("/api/lyd/forslag/{fid:\\d+}")
+    async def lyd_svar(req):
+        d = await req.json()
+        try:
+            return web.json_response(bu.lyd.svar(int(req.match_info["fid"]), d.get("svar"), _bruker(req)))
+        except ValueError as e:
+            return _feil(str(e))
+
+    @routes.get("/api/lyd/logg")
+    async def lyd_logg(_req):
+        return web.json_response({
+            "logg": bu.lyd.logg(),
+            "per_enhet": bu.lyd.per_enhet(),
+            "forslag": bu.lyd.forslag(None, 10),
+            "laering": {"alle": bu.lyd.laering(), "uten_stoy": bu.lyd.laering(False),
+                        "med_stoy": bu.lyd.laering(True)},
+        })
 
     @routes.get("/api/kilder")
     async def kilder(_req):
