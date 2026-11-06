@@ -1,5 +1,9 @@
 # Endringslogg
 
+## 0.5.1
+
+* Dagbok: trykk på datoen (eller uke-/månedstittelen) for å åpne en kalender og gå rett til en bestemt dag. Dager med registreringer har prikk.
+
 ## 0.5.0
 
 * Dagbok: velg mellom Dag, Uke og Måned øverst.

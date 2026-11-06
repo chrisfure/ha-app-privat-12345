@@ -587,3 +587,25 @@ svg { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width:
 .rytme.tett .rytme-dag { font-size: 10px; }
 .rytme-akse { display: grid; grid-template-columns: 46px 1fr; gap: 6px; }
 .rytme-akse .stripe-akse { margin-top: 2px; }
+
+/* ---- Kalender: hopp til en dag ---- */
+.dato-knapp, .p-tittel { padding: 4px 10px; border-radius: 12px; background: none; color: inherit; }
+.dato-knapp { display: inline-flex; align-items: center; gap: 8px; }
+.dato-knapp svg { width: 18px; height: 18px; flex: none; fill: none; stroke: var(--sovn); stroke-width: 2; stroke-linecap: round; }
+.dato-knapp:active, .p-tittel:active { background: var(--sovn-lys); }
+.kal-hode { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+.kal-hode button:disabled { opacity: .3; }
+.kal-tittel { margin: 0; }
+.kal-rutenett { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; margin-bottom: 10px; }
+.kal-ukedag { text-align: center; font-size: 12px; font-weight: 800; color: var(--dempet); padding-bottom: 4px; }
+.kal-dag {
+  position: relative; aspect-ratio: 1; min-height: 40px; border-radius: 12px;
+  display: grid; place-items: center; font-size: 16px; font-weight: 800; color: inherit; background: none;
+}
+.kal-dag:disabled { opacity: .3; cursor: default; }
+.kal-dag.i-dag { box-shadow: inset 0 0 0 2px var(--sovn); color: var(--sovn-blekk); }
+.kal-dag.valgt { background: var(--sovn); color: #fff; }
+.kal-prikk { position: absolute; bottom: 5px; width: 5px; height: 5px; border-radius: 50%; background: transparent; }
+.kal-dag.data .kal-prikk { background: var(--sovn); }
+.kal-dag.valgt .kal-prikk { background: #fff; }
+.kal-idag { --aksent-lys: var(--sovn-lys); --aksent-blekk: var(--sovn-blekk); }

@@ -145,6 +145,7 @@ actions:
 * **Søvn per døgn** er et søylediagram med feltet for det som er vanlig for alderen. **Måltider per døgn** vises på samme måte.
 * **Døgnrytme** viser én tidslinje per dag under hverandre, så du ser når babyen pleier å sove og spise.
 * Trykk på en søyle eller en dag i døgnrytmen for å åpne den dagen. Pilene blar til forrige eller neste uke/måned.
+* Trykk på datoen øverst (eller tittelen på uka/måneden) for å åpne en kalender og gå rett til en bestemt dag. Dager med prikk har registreringer.
 
 ## Lydgjenkjenning (gråt og rop)
 

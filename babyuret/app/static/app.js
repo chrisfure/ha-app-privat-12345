@@ -538,6 +538,63 @@
     last();
   });
   $("legg-til").addEventListener("click", () => leggTilArk());
+  // ---------------------------------------------------------------- kalender: hopp til en dag
+  const MND_NAVN = ["januar", "februar", "mars", "april", "mai", "juni", "juli", "august",
+    "september", "oktober", "november", "desember"];
+
+  function kalenderArk(valgt) {
+    const i_dag = data.i_dag;
+    valgt = valgt || i_dag;
+    let maaned = valgt.slice(0, 8) + "01";
+    const tittel = el("h3", { class: "kal-tittel" });
+    const forrige = el("button", { class: "ikonknapp liten", "aria-label": "Forrige måned" }, ikon("venstre"));
+    const neste = el("button", { class: "ikonknapp liten", "aria-label": "Neste måned" }, ikon("hoyre"));
+    const rutenett = el("div", { class: "kal-rutenett" });
+
+    async function tegn() {
+      const [y, m] = maaned.split("-").map(Number);
+      tittel.textContent = `${MND_NAVN[m - 1][0].toUpperCase()}${MND_NAVN[m - 1].slice(1)} ${y}`;
+      let p;
+      try { p = await api(`api/periode?type=maaned&dato=${maaned}`); }
+      catch (e) { visToast(e.message, []); return; }
+      forrige.dataset.dato = p.forrige;
+      neste.dataset.dato = p.neste || "";
+      neste.disabled = !p.neste;
+      forrige.disabled = p.dager[0].for_fodsel;
+      const tomme = (new Date(y, m - 1, 1).getDay() + 6) % 7;
+      rutenett.replaceChildren(
+        ...UKEDAG.map((u) => el("span", { class: "kal-ukedag" }, u)),
+        ...Array.from({ length: tomme }, () => el("span")),
+        ...p.dager.map((r) => {
+          const nr = Number(r.dag.slice(8));
+          const av = r.framtid || r.for_fodsel;
+          return el("button", {
+            class: `kal-dag${r.dag === valgt ? " valgt" : ""}${r.i_dag ? " i-dag" : ""}${r.har_data ? " data" : ""}`,
+            disabled: av,
+            "aria-label": dagTittel(r.dag),
+            onclick: () => { lukkArk(); aapneDag(r.dag); },
+          }, String(nr), el("span", { class: "kal-prikk" }));
+        }),
+      );
+    }
+    forrige.addEventListener("click", () => { maaned = forrige.dataset.dato; tegn(); });
+    neste.addEventListener("click", () => { if (neste.dataset.dato) { maaned = neste.dataset.dato; tegn(); } });
+
+    aapneArk(
+      el("div", { class: "kal-hode" }, forrige, tittel, neste),
+      rutenett,
+      el("p", { class: "hint" }, "Dager med prikk har registreringer. Trykk på en dag for å åpne den."),
+      el("div", { class: "ark-knapper" },
+        el("button", { class: "knapp sekundaer kal-idag", onclick: () => { lukkArk(); aapneDag(i_dag); } }, "Gå til i dag")),
+    );
+    tegn();
+  }
+  $("dag-velg").addEventListener("click", () => { vibrer(); kalenderArk(data.oppsummering.dag); });
+  $("p-velg").addEventListener("click", () => {
+    vibrer();
+    kalenderArk(periodeDato || data.i_dag);
+  });
+
 
   // ---------------------------------------------------------------- bunnark
   function aapneArk(...innhold) {
