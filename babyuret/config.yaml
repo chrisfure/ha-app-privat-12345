@@ -1,5 +1,5 @@
 name: Babyuret
-version: "0.5.2"
+version: "0.5.3"
 slug: babyuret
 description: Registrer søvn, mat og bleier for babyen – med ett trykk.
 url: https://github.com/chrisfure/ha-app-privat-12345
@@ -11,5 +11,6 @@ ingress: true
 ingress_port: 8099
 panel_icon: mdi:baby-face-outline
 panel_title: Babyuret
+panel_admin: false
 homeassistant_api: true
 # Alle innstillinger gjøres inne i appen (fanen «Innstillinger»).

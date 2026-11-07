@@ -1,5 +1,9 @@
 # Endringslogg
 
+## 0.5.3
+
+* Babyuret vises nå i sidemenyen for alle brukere i Home Assistant, ikke bare administratorer.
+
 ## 0.5.2
 
 * Uke og måned: nytt kort «Dager» med alle dagene i perioden og timer søvn per døgn. Trykk på en dag for å gå rett til detaljene.
