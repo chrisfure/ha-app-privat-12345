@@ -41,6 +41,13 @@ OPPSETT = {
     6: ["overkropp_a", "underkropp_a", "helkropp_a", "overkropp_b", "underkropp_b", "helkropp_b"],
 }
 STORE = {"kne", "hofte", "utfall", "press_hor", "press_vert", "trekk_hor", "trekk_vert", "sete"}
+# Hovedøvelser står fast mellom blokker; resten varieres for variasjon og jevn belastning.
+HOVED = {"kne", "hofte", "press_hor", "press_vert", "trekk_hor", "trekk_vert"}
+
+# Treningsblokker: 6 uker er midt i det vanlige intervallet (4–8 uker) – lenge nok til å måle fremgang,
+# kort nok til at variasjonen holder motivasjonen oppe. Siste uke er en lettere uke (deload):
+# omtrent halvt så mange sett, samme vekt og flere reps i reserve.
+BLOKK_UKER = 6
 
 
 def antall_ovelser(minutter: int) -> int:
@@ -271,3 +278,45 @@ def beregn_tid(dag: list[dict]) -> int:
 
 def monster_navn(m: str) -> str:
     return MONSTER.get(m, m)
+
+
+def lett_dose(plan: dict) -> dict:
+    """Lettere uke: halvparten av settene (rundet opp), samme vekt, 2 flere reps i reserve."""
+    sett = int(plan.get("sett_plan") or plan.get("sett") or 3)
+    return {**plan, "sett_plan": max(1, math.ceil(sett / 2)), "sett": max(1, math.ceil(sett / 2)),
+            "rir": min(5, int(plan.get("rir") if plan.get("rir") is not None else 2) + 2)}
+
+
+def lett_forslag(f: dict, tidligere: list[list[dict]]) -> dict:
+    """I lettere uke økes ikke vekten – bruk samme vekt som sist."""
+    if tidligere and tidligere[0]:
+        vekter = [s["vekt"] for s in tidligere[0] if s.get("vekt") is not None]
+        kg = max(vekter) if vekter else f["kg"]
+    else:
+        kg = f["kg"]
+    return {**f, "kg": kg, "trend": "lett",
+            "tekst": "Lettere uke: samme vekt som sist, færre sett og stopp med god margin. Kroppen henter seg inn og blir sterkere til neste blokk."}
+
+
+def roter_hjelpeovelser(data: dict, ovelser: list[dict], utstyr: set[str] | None, erfaring: str, rehab: bool) -> tuple[dict, list[str]]:
+    """Ny blokk uten AI: behold faste øvelser, bytt hver hjelpeøvelse med en annen med samme bevegelse."""
+    idx = {o["nokkel"]: o for o in ovelser}
+    i_bruk = {o["ovelse"] for d in data["dager"] for o in d["ovelser"]}
+    endringer = []
+    ny = {**data, "dager": []}
+    for dag in data["dager"]:
+        nye = []
+        for o in dag["ovelser"]:
+            ov = idx.get(o["ovelse"])
+            if o.get("fast") or not ov:
+                nye.append(dict(o))
+                continue
+            alt = velg_ovelse(ov["monster"], ovelser, utstyr, erfaring, rehab, brukt=i_bruk, unnta=i_bruk)
+            if alt:
+                i_bruk.add(alt["nokkel"])
+                nye.append({**o, "ovelse": alt["nokkel"]})
+                endringer.append(f"{dag['navn']}: {ov['navn']} → {alt['navn']}")
+            else:
+                nye.append(dict(o))
+        ny["dager"].append({**dag, "ovelser": nye})
+    return ny, endringer

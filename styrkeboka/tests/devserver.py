@@ -30,6 +30,12 @@ class FalskAI:
 
     async def spor(self, oppgave, instruksjoner):
         await asyncio.sleep(0.4)
+        if "blokk" in oppgave:
+            p = self.sb.aktivt_program(self.sb.profiler()[0]["id"])
+            data = self.sb.foreslaa_ny_blokk(p["id"])
+            data["endringer"] = ["Byttet bicepscurl til hammercurl for variasjon", "Knebøy: 6–10 reps denne blokka"]
+            data["begrunnelse"] = "Hovedløftene står fast; hjelpeøvelsene varieres."
+            return json.dumps(data, ensure_ascii=False)
         if "program" in oppgave:
             p = self.sb.profiler()[0]
             data = self.sb.foreslaa_program(p["id"])

@@ -130,6 +130,8 @@
     return b;
   };
   const avatar = (p, cls = "") => el("span", { class: `avatar ${cls} farge-${p?.farge || "lilla"}` }, (p?.navn || "?").slice(0, 1).toUpperCase());
+  const fastMerke = (o) => o.fast ? el("span", { class: "merkelapp fast", title: "Fast hovedøvelse – beholdes ved ny blokk" }, ikon("laas"), "Fast") : null;
+  const blokkTekst = (b) => b ? (b.ferdig ? `Blokk ${b.nr} fullført` : `Blokk ${b.nr} · uke ${b.uke} av ${b.uker}${b.lett_naa ? " · lettere uke" : ""}`) : "";
   const aiLaster = (tekst) => el("div", { class: "ai-kort" }, el("div", { class: "laster" }, tekst));
 
   // ================================================================ navigasjon
@@ -203,7 +205,7 @@
 
   function tegnTrening() {
     const p = ov.profil;
-    settTittel(`Hei, ${p.navn}`, ov.program ? ov.program.navn : "");
+    settTittel(`Hei, ${p.navn}`, ov.program ? `${ov.program.navn} · ${blokkTekst(ov.program.blokk)}` : "");
     const v = $("v-trening");
     v.innerHTML = "";
     oppdaterOktPrikk();
@@ -226,13 +228,16 @@
       v.append(el("button", { class: "legg-til", onclick: () => startOkt(null) }, ikon("pluss"), "Start en fri økt uten program"));
     } else if (ov.neste) {
       const n = ov.neste;
+      const b = ov.program.blokk;
+      if (b?.ferdig) v.append(blokkBanner(ov.program.id, b));
       const stedId = sted();
       const valgtSted = S.utstyrsprofiler.find((u) => u.id === stedId);
       v.append(el("div", { class: "helt" },
         el("div", {},
-          el("div", { class: "merke" }, ov.sist ? `Neste økt · sist trent ${siden(ov.sist.startet)}` : "Første økt"),
+          el("div", { class: "merke" }, b?.lett_naa ? "Lettere uke" : ov.sist ? `Neste økt · sist trent ${siden(ov.sist.startet)}` : "Første økt"),
           el("div", { class: "helt-tittel" }, n.navn),
           el("div", { class: "helt-under" }, el("span", {}, ikon("klokke"), `ca. ${n.minutter} min`), el("span", {}, ikon("manual"), `${n.ovelser.length} øvelser`))),
+        b?.lett_naa ? el("p", { class: "forklaring" }, `Siste uke i blokk ${b.nr}: halvparten så mange sett og samme vekt som sist. En lettere uke lar kroppen hente seg inn, så du står sterkere til neste blokk.`) : null,
         el("ul", { class: "plan-liste" }, n.ovelser.map((o) => el("li", { class: o.tilgjengelig || !valgtSted ? "" : "utilgj" },
           el("span", { class: "navn" }, o.navn, el("small", {}, `${o.sett} × ${o.reps_min}–${o.reps_maks}${o.erstatter ? ` · i stedet for ${o.erstatter}` : ""}`)),
           o.kg != null ? el("span", { class: `kg ${o.trend === "opp" ? "trend-opp" : o.trend === "ned" ? "trend-ned" : ""}` },
@@ -315,6 +320,7 @@
     v.append(el("div", { class: "fremdrift" }, el("div", { style: `width:${pst}%` })));
     oppdaterOktHode();
 
+    if (okt.lett) v.append(el("div", { class: "info-boks obs" }, ikon("info"), "Lettere uke: færre sett og samme vekt som sist. Stopp med god margin – denne uka teller ikke i vektforslagene."));
     const tipsRot = el("div", { id: "tips-rot" });
     v.append(tipsRot);
     if (okt.ai_tips) tegnTips(okt.ai_tips);
@@ -754,6 +760,52 @@
     }
   }
 
+  // ================================================================ BLOKKER
+  function blokkBanner(prid, b) {
+    return el("div", { class: "velkommen" },
+      el("h2", {}, `Blokk ${b.nr} er fullført 🎉`),
+      el("p", {}, "Tid for litt variasjon. Hovedøvelsene står fast så du kan fortsette å måle fremgangen, mens noen av de andre øvelsene byttes ut."),
+      el("button", { class: "knapp", onclick: () => nyBlokk(prid, aiPaa()) }, aiPaa() ? ikon("gnist") : ikon("bytt"), "Se forslag til neste blokk"),
+      el("button", { class: "knapp", style: "background:rgba(255,255,255,.18);color:#fff", onclick: async () => {
+        if (!(await bekreft("Beholde programmet?", "Ny blokk starter med de samme øvelsene.", "Behold"))) return;
+        try { await post(`api/programmer/${prid}/ny-blokk`, { beskrivelse: "Ny blokk uten endringer" }); visToast(`Blokk ${b.nr + 1} er i gang`); visTrening(); } catch (e) { feil(e); }
+      } }, "Behold som det er"));
+  }
+
+  async function nyBlokk(prid, medAI) {
+    const ark = aapneArk(el("h3", {}, ikon("bytt"), "Neste blokk"), el("div", { style: "margin-top:8px" },
+      medAI ? aiLaster("Treneren ser på fremgangen og setter opp neste blokk …") : el("div", { class: "laster" }, "Lager forslag …")));
+    void ark;
+    try {
+      const r = await post(`api/programmer/${prid}/blokkforslag`, { ai: medAI });
+      lukkArk();
+      visForslag(r.forslag, { kilde: r.kilde, program_id: prid, blokk: true });
+    } catch (e) {
+      lukkArk(); feil(e);
+      if (medAI) visToast(`${e.message} – prøver uten AI`, [{ tekst: "Uten AI", fn: () => nyBlokk(prid, false) }], 8000);
+    }
+  }
+
+  function blokkArk(p) {
+    const b = p.blokk;
+    let uker = b.uker, lett = b.lett_uke;
+    const ukeValg = el("div", { class: "chips" }, [4, 5, 6, 8].map((n) => el("button", { class: `chip ${n === uker ? "valgt" : ""}`, onclick: (e) => {
+      uker = n; for (const x of ukeValg.children) x.classList.toggle("valgt", x === e.currentTarget);
+    } }, `${n} uker${n === 6 ? " (anbefalt)" : ""}`)));
+    aapneArk(el("h3", {}, ikon("kalender"), "Treningsblokker"),
+      el("p", { class: "hint" }, `Nå: ${blokkTekst(b)}. Blokka startet ${dato(b.start, true)}.`),
+      el("div", { class: "info-boks" }, ikon("info"), "Anbefalt: blokker på 4–8 uker. 6 uker er lenge nok til å måle fremgang og kort nok til at variasjonen holder motivasjonen oppe. Hovedøvelsene står fast, og hjelpeøvelsene byttes ved hver ny blokk."),
+      el("div", { class: "ark-etikett" }, "Lengde på blokka"), ukeValg,
+      el("div", { class: "liste-rad", style: "min-height:0;padding:14px 2px 0" },
+        el("span", { class: "tekst" }, el("b", {}, "Lettere uke til slutt"), el("small", {}, "Siste uke: halvparten av settene og samme vekt (deload). Anbefales når du har trent en stund – nybegynnere trenger det sjeldnere.")),
+        bryter(lett, (x) => { lett = x; })),
+      el("button", { class: "knapp sekundaer liten", style: "width:100%;margin-top:16px", onclick: () => { lukkArk(); nyBlokk(p.id, aiPaa()); } }, ikon("bytt"), "Start ny blokk nå"),
+      el("div", { class: "ark-knapper" }, el("button", { class: "knapp noytral", onclick: lukkArk }, "Avbryt"),
+        el("button", { class: "knapp", onclick: async () => {
+          try { await patch(`api/programmer/${p.id}/blokk`, { blokk_uker: uker, lett_uke: lett }); lukkArk(); visProgram(); } catch (e) { feil(e); }
+        } }, "Lagre")));
+  }
+
   // ================================================================ PROGRAM
   async function visProgram() {
     vis("program");
@@ -772,9 +824,13 @@
           el("button", { class: "knapp sekundaer", onclick: () => nyttProgramArk(false) }, "Appens forslag"),
           el("button", { class: "knapp noytral", onclick: () => redigerProgram(null, { navn: "Mitt program", dager: [{ navn: "Økt A", ovelser: [] }] }) }, "Lag selv"))));
     } else {
+      if (p.blokk.ferdig) v.append(blokkBanner(p.id, p.blokk));
       v.append(el("div", { class: "kort" },
         el("div", { class: "kort-hode" }, el("h2", {}, p.navn), el("span", { class: `merkelapp ${p.kilde === "ai" ? "ai" : "aksent"}` }, p.kilde === "ai" ? ikon("gnist") : null, p.kilde === "ai" ? "AI" : p.kilde === "mal" ? "Forslag" : "Egen")),
         p.beskrivelse ? el("p", { class: "forklaring" }, p.beskrivelse) : null,
+        el("button", { class: "blokk-linje", onclick: () => blokkArk(p) },
+          el("span", { class: "blokk-prikker" }, Array.from({ length: p.blokk.uker }, (_, i) => el("i", { class: `${i < p.blokk.uke - 1 ? "gjort" : i === p.blokk.uke - 1 ? "naa" : ""} ${p.blokk.lett_uke && i === p.blokk.uker - 1 ? "lett" : ""}` }))),
+          el("span", { class: "blokk-tekst" }, blokkTekst(p.blokk)), ikon("hoyre")),
         p.begrunnelse ? el("details", {}, el("summary", { class: "lenke", style: "cursor:pointer" }, "Hvorfor dette programmet?"), el("p", { class: "begrunnelse", style: "margin-top:6px" }, p.begrunnelse)) : null,
         el("div", { class: "knapperad" },
           aiPaa() ? el("button", { class: "knapp ai-lys liten", style: "flex:1", onclick: () => justerArk(p) }, ikon("gnist"), "Juster med AI") : null,
@@ -784,7 +840,7 @@
           el("h3", {}, el("span", {}, dag.navn), el("small", {}, `ca. ${dag.minutter} min`)),
           el("ul", { class: "prog-liste" }, dag.ovelser.map((o) => el("li", {},
             el("button", { class: "rad", onclick: () => ovelseInfoArk(o.ovelse) },
-              el("span", { class: "navn" }, o.navn, el("small", {}, [`hvile ${hvileTekst(o.hvile_s)}`, `${o.rir} i reserve`, o.notat].filter(Boolean).join(" · "))),
+              el("span", { class: "navn" }, el("span", { class: "navn-rad" }, o.navn, fastMerke(o)), el("small", {}, [`hvile ${hvileTekst(o.hvile_s)}`, `${o.rir} i reserve`, o.notat].filter(Boolean).join(" · "))),
               el("span", { class: "dose" }, `${o.sett} × ${o.reps_min}–${o.reps_maks}`))))),
           !dag.ovelser.length ? el("p", { class: "tom" }, "Ingen øvelser") : null));
       }
@@ -860,9 +916,9 @@
     setTimeout(() => onske.focus(), 250);
   }
 
-  function visForslag(f, { kilde, program_id = null, beskrivelse = "" }) {
+  function visForslag(f, { kilde, program_id = null, beskrivelse = "", blokk = false }) {
     vis("detalj", "program");
-    settTittel(program_id ? "Forslag til endring" : "Forslag til program", f.navn);
+    settTittel(blokk ? "Forslag til neste blokk" : program_id ? "Forslag til endring" : "Forslag til program", f.navn);
     const v = $("v-detalj");
     v.innerHTML = "";
     v.append(el("button", { class: "tilbake", onclick: visProgram }, ikon("venstre"), "Program"));
@@ -874,26 +930,27 @@
     for (const dag of f.dager) {
       v.append(el("div", { class: "dag-kort" }, el("h3", {}, el("span", {}, dag.navn), el("small", {}, `ca. ${dag.minutter} min`)),
         el("ul", { class: "prog-liste" }, dag.ovelser.map((o) => el("li", {},
-          el("span", { class: "navn" }, o.navn, el("small", {}, [`hvile ${hvileTekst(o.hvile_s)}`, `${o.rir} i reserve`, o.notat].filter(Boolean).join(" · "))),
+          el("span", { class: "navn" }, el("span", { class: "navn-rad" }, o.navn, fastMerke(o)), el("small", {}, [`hvile ${hvileTekst(o.hvile_s)}`, `${o.rir} i reserve`, o.notat].filter(Boolean).join(" · "))),
           el("span", { class: "dose" }, `${o.sett} × ${o.reps_min}–${o.reps_maks}`))))));
     }
-    const data = { navn: f.navn, beskrivelse: f.beskrivelse, begrunnelse: f.begrunnelse, dager: f.dager.map((d) => ({ navn: d.navn, ovelser: d.ovelser.map(({ ovelse: o, sett, reps_min, reps_maks, hvile_s, rir, notat }) => ({ ovelse: o, sett, reps_min, reps_maks, hvile_s, rir, notat })) })) };
+    const data = { navn: f.navn, beskrivelse: f.beskrivelse, begrunnelse: f.begrunnelse, dager: f.dager.map((d) => ({ navn: d.navn, ovelser: d.ovelser.map(({ ovelse: o, sett, reps_min, reps_maks, hvile_s, rir, notat, fast }) => ({ ovelse: o, sett, reps_min, reps_maks, hvile_s, rir, notat, fast })) })) };
     v.append(el("div", { class: "knapperad" },
-      el("button", { class: "knapp noytral", onclick: () => redigerProgram(program_id, data, { kilde, beskrivelse }) }, ikon("blyant"), "Tilpass først"),
+      el("button", { class: "knapp noytral", onclick: () => redigerProgram(program_id, data, { kilde, beskrivelse, blokk }) }, ikon("blyant"), "Tilpass først"),
       el("button", { class: "knapp", onclick: async () => {
         try {
+          if (blokk) { const r = await post(`api/programmer/${program_id}/ny-blokk`, { program: data, kilde, beskrivelse: kilde === "ai" ? "Ny blokk fra AI" : "Ny blokk" }); visToast(`Blokk ${r.program.blokk.nr} er i gang – god trening!`); visTrening(); return; }
           if (program_id) await put(`api/programmer/${program_id}`, { program: data, kilde, beskrivelse: beskrivelse || "Justert" });
           else await post(`api/profiler/${pid}/programmer`, { program: data, kilde, beskrivelse: kilde === "ai" ? "Laget av AI" : "Fra appens forslag" });
           visToast(program_id ? "Programmet er oppdatert" : "Programmet er klart – god trening!");
           visTrening();
         } catch (e) { feil(e); }
-      } }, ikon("sjekk"), program_id ? "Bruk endringene" : "Bruk programmet")));
+      } }, ikon("sjekk"), blokk ? "Start neste blokk" : program_id ? "Bruk endringene" : "Bruk programmet")));
     if (!program_id) v.append(el("p", { class: "forklaring", style: "text-align:center" }, "Et eventuelt eksisterende program blir liggende under «Andre programmer»."));
   }
 
-  async function redigerProgram(prid, data, { kilde = "egen", beskrivelse = "" } = {}) {
+  async function redigerProgram(prid, data, { kilde = "egen", beskrivelse = "", blokk = false } = {}) {
     if (!data) {
-      try { const p = (await api(`api/programmer/${prid}`)).program; data = { navn: p.navn, beskrivelse: p.beskrivelse, begrunnelse: p.begrunnelse, dager: p.dager.map((d) => ({ navn: d.navn, ovelser: d.ovelser.map(({ ovelse: o, sett, reps_min, reps_maks, hvile_s, rir, notat }) => ({ ovelse: o, sett, reps_min, reps_maks, hvile_s, rir, notat })) })) }; } catch (e) { feil(e); return; }
+      try { const p = (await api(`api/programmer/${prid}`)).program; data = { navn: p.navn, beskrivelse: p.beskrivelse, begrunnelse: p.begrunnelse, dager: p.dager.map((d) => ({ navn: d.navn, ovelser: d.ovelser.map(({ ovelse: o, sett, reps_min, reps_maks, hvile_s, rir, notat, fast }) => ({ ovelse: o, sett, reps_min, reps_maks, hvile_s, rir, notat, fast })) })) }; } catch (e) { feil(e); return; }
     }
     const kopi = JSON.parse(JSON.stringify(data));
     vis("detalj", "program");
@@ -917,18 +974,20 @@
               el("button", { "aria-label": "Flytt opp", disabled: oi === 0, onclick: () => { [dag.ovelser[oi - 1], dag.ovelser[oi]] = [dag.ovelser[oi], dag.ovelser[oi - 1]]; tegn(); } }, ikon("opp")),
               el("button", { "aria-label": "Flytt ned", disabled: oi === dag.ovelser.length - 1, onclick: () => { [dag.ovelser[oi + 1], dag.ovelser[oi]] = [dag.ovelser[oi], dag.ovelser[oi + 1]]; tegn(); } }, ikon("ned"))),
             el("button", { class: "rad", onclick: () => doseArk(o, () => { dag.ovelser.splice(oi, 1); tegn(); }, tegn) },
-              el("span", { class: "navn" }, ovelse(o.ovelse).navn, el("small", {}, [`hvile ${hvileTekst(o.hvile_s)}`, `${o.rir} i reserve`, o.notat].filter(Boolean).join(" · "))),
+              el("span", { class: "navn" }, el("span", { class: "navn-rad" }, ovelse(o.ovelse).navn, fastMerke(o)), el("small", {}, [`hvile ${hvileTekst(o.hvile_s)}`, `${o.rir} i reserve`, o.notat].filter(Boolean).join(" · "))),
               el("span", { class: "dose" }, `${o.sett} × ${o.reps_min}–${o.reps_maks}`))))),
           el("button", { class: "legg-til", onclick: () => aapneOvelsevelger({ tittel: `Legg til i ${dag.navn}`, utstyrsprofil_id: sted(), ved_valg: (x) => {
             const stor = ["kne", "hofte", "utfall", "press_hor", "press_vert", "trekk_hor", "trekk_vert", "sete"].includes(x.monster);
-            dag.ovelser.push({ ovelse: x.nokkel, sett: 3, reps_min: stor ? 8 : 10, reps_maks: stor ? 12 : 15, hvile_s: stor ? 90 : 60, rir: 2, notat: "" });
+            const hoved = ["kne", "hofte", "press_hor", "press_vert", "trekk_hor", "trekk_vert"].includes(x.monster);
+            dag.ovelser.push({ ovelse: x.nokkel, sett: 3, reps_min: stor ? 8 : 10, reps_maks: stor ? 12 : 15, hvile_s: stor ? 90 : 60, rir: 2, notat: "", fast: hoved ? 1 : 0 });
             lukkArk(); tegn();
           } }) }, ikon("pluss"), "Legg til øvelse")));
       });
       if (kopi.dager.length < 7) v.append(el("button", { class: "legg-til", onclick: () => { kopi.dager.push({ navn: `Økt ${String.fromCharCode(65 + kopi.dager.length)}`, ovelser: [] }); tegn(); } }, ikon("pluss"), "Legg til økt"));
       v.append(el("button", { class: "knapp", onclick: async () => {
         try {
-          if (prid) await put(`api/programmer/${prid}`, { program: kopi, kilde, beskrivelse: beskrivelse || "Redigert" });
+          if (blokk) await post(`api/programmer/${prid}/ny-blokk`, { program: kopi, kilde, beskrivelse: "Ny blokk (tilpasset)" });
+          else if (prid) await put(`api/programmer/${prid}`, { program: kopi, kilde, beskrivelse: beskrivelse || "Redigert" });
           else await post(`api/profiler/${pid}/programmer`, { program: kopi, kilde, beskrivelse: beskrivelse || "Opprettet" });
           visToast("Programmet er lagret");
           visProgram();
@@ -945,9 +1004,11 @@
     const hvile = tallStepper(o.hvile_s, 15, 15, 600, hvileTekst);
     const rir = tallStepper(o.rir, 1, 0, 5, (x) => `${x} reps`);
     const notat = el("input", { value: o.notat || "", placeholder: "F.eks. «rolig tempo ned»" });
+    let fast = !!o.fast;
     aapneArk(el("h3", {}, ovelse(o.ovelse).navn),
       el("div", { class: "skjema" }, felt("Sett", sett_), el("div", { class: "felt-rad" }, felt("Reps fra", rmin), felt("Reps til", rmaks)),
-        felt("Hvile mellom sett", hvile), felt("Reps i reserve (hvor nær utmattelse)", rir, "2 = du kunne klart 2 til. Lavere = tyngre."), felt("Notat", notat)),
+        felt("Hvile mellom sett", hvile), felt("Reps i reserve (hvor nær utmattelse)", rir, "2 = du kunne klart 2 til. Lavere = tyngre."), felt("Notat", notat),
+        el("div", { class: "liste-rad", style: "min-height:0;padding:0" }, el("span", { class: "tekst" }, el("b", {}, "Fast hovedøvelse"), el("small", {}, "Beholdes når det lages ny blokk")), bryter(fast, (x) => { fast = x; }))),
       el("div", { class: "knapperad", style: "margin-top:14px" },
         el("button", { class: "knapp noytral liten", style: "flex:1", onclick: () => ovelseInfoArk(o.ovelse, null, { tilbake: () => doseArk(o, fjern, ferdig) }) }, ikon("info"), "Slik gjør du"),
         el("button", { class: "knapp noytral liten", style: "flex:1", onclick: () => byttOvelseArk({ ovelse: o.ovelse }, { utstyrsprofil_id: sted(), ved_valg: (a) => { o.ovelse = a.nokkel; ferdig(); } }) }, ikon("bytt"), "Bytt øvelse"),
@@ -956,7 +1017,7 @@
         el("button", { class: "knapp", onclick: () => {
           const a = parseInt(rmin.value, 10), b = parseInt(rmaks.value, 10);
           if (!Number.isFinite(a) || !Number.isFinite(b)) { visToast("Skriv inn reps"); return; }
-          Object.assign(o, { sett: sett_.verdi(), reps_min: Math.min(a, b), reps_maks: Math.max(a, b), hvile_s: hvile.verdi(), rir: rir.verdi(), notat: notat.value });
+          Object.assign(o, { sett: sett_.verdi(), reps_min: Math.min(a, b), reps_maks: Math.max(a, b), hvile_s: hvile.verdi(), rir: rir.verdi(), notat: notat.value, fast: fast ? 1 : 0 });
           lukkArk(); ferdig();
         } }, "OK")));
   }

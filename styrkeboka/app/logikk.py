@@ -65,6 +65,15 @@ class Styrkeboka:
         self.db = db
         self.tz = ZoneInfo(tz)
         self._lyttere: list[Callable[[str, dict | None], None]] = []
+        if "programovelser.fast" in self.db.nye_kolonner:
+            # eksisterende programmer: hovedøvelsene står fast, blokken starter da programmet ble laget
+            for r in self.db.alle("SELECT id, ovelse FROM programovelser"):
+                if self.ovelse(r["ovelse"])["monster"] in P.HOVED:
+                    self.db.kjor("UPDATE programovelser SET fast = 1 WHERE id = ?", (r["id"],), commit=False)
+            for r in self.db.alle("SELECT id, opprettet FROM programmer WHERE blokk_start IS NULL"):
+                self.db.kjor("UPDATE programmer SET blokk_start = ? WHERE id = ?",
+                             (self._mandag(fra_iso(r["opprettet"]) or naa()), r["id"]), commit=False)
+            self.db.commit()
         if not self.db.verdi("SELECT COUNT(*) FROM utstyrsprofiler"):
             self.db.sett_inn("utstyrsprofiler", {"navn": "Treningssenter", "utstyr": list(UTSTYR), "rekkefolge": 0})
             self.db.sett_inn("utstyrsprofiler", {"navn": "Hjemme", "utstyr": ["manualer", "strikk"], "rekkefolge": 1})
@@ -265,10 +274,11 @@ class Styrkeboka:
                     continue
                 rmin = _int(o.get("reps_min"), 8, 1, 120)
                 rmaks = max(rmin, _int(o.get("reps_maks"), 12, 1, 120))
+                fast = bool(o["fast"]) if o.get("fast") is not None else self.ovelse(nokkel)["monster"] in P.HOVED
                 ovl.append({
                     "ovelse": nokkel, "sett": _int(o.get("sett"), 3, 1, 8), "reps_min": rmin, "reps_maks": rmaks,
                     "hvile_s": _int(o.get("hvile_s"), 90, 15, 600), "rir": _int(o.get("rir"), 2, 0, 5),
-                    "notat": str(o.get("notat") or "")[:200],
+                    "notat": str(o.get("notat") or "")[:200], "fast": 1 if fast else 0,
                 })
             ut.append({"navn": (str(dag.get("navn") or "").strip() or f"Økt {chr(65 + i)}")[:40], "ovelser": ovl[:12]})
         if not any(d["ovelser"] for d in ut):
@@ -295,13 +305,14 @@ class Styrkeboka:
                 d["ovelser"].append(o)
             d["minutter"] = P.beregn_tid(d["ovelser"])
             p["dager"].append(d)
+        p["blokk"] = self.blokk_status(p)
         return p
 
     def program_data(self, prid: int) -> dict:
         p = self.program(prid)
         return {"navn": p["navn"], "beskrivelse": p["beskrivelse"], "begrunnelse": p["begrunnelse"],
                 "dager": [{"navn": d["navn"], "ovelser": [
-                    {k: o[k] for k in ("ovelse", "sett", "reps_min", "reps_maks", "hvile_s", "rir", "notat")}
+                    {k: o[k] for k in ("ovelse", "sett", "reps_min", "reps_maks", "hvile_s", "rir", "notat", "fast")}
                     for o in d["ovelser"]]} for d in p["dager"]]}
 
     def aktivt_program(self, pid: int) -> dict | None:
@@ -335,9 +346,11 @@ class Styrkeboka:
         t = til_iso(naa())
         with self.db.lås:
             if prid is None:
+                erfaring = self.profil(pid).get("erfaring")
                 prid = self.db.sett_inn("programmer", {
                     "profil_id": pid, "navn": v["navn"], "beskrivelse": v["beskrivelse"], "begrunnelse": v["begrunnelse"],
-                    "kilde": kilde, "aktiv": 0, "opprettet": t, "endret": t}, commit=False)
+                    "kilde": kilde, "aktiv": 0, "opprettet": t, "endret": t, "blokk_nr": 1, "blokk_start": self._mandag(naa()),
+                    "blokk_uker": P.BLOKK_UKER, "lett_uke": 0 if erfaring == "nybegynner" else 1}, commit=False)
             else:
                 gammel = self.db.en("SELECT * FROM programmer WHERE id = ? AND profil_id = ?", (prid, pid))
                 if not gammel:
@@ -366,6 +379,90 @@ class Styrkeboka:
     def arkiver_program(self, pid: int, prid: int) -> None:
         self.db.kjor("UPDATE programmer SET arkivert = 1, aktiv = 0 WHERE id = ? AND profil_id = ?", (prid, pid))
 
+    # ------------------------------------------------------------ blokker
+    def _mandag(self, d: datetime) -> str:
+        lok = self.lokal(d)
+        return (lok - timedelta(days=lok.weekday())).date().isoformat()
+
+    def blokk_status(self, p: dict) -> dict:
+        from datetime import date as _date
+        start = _date.fromisoformat(p.get("blokk_start") or self._mandag(fra_iso(p["opprettet"]) or naa()))
+        denne = _date.fromisoformat(self._mandag(naa()))
+        uke = (denne - start).days // 7 + 1
+        uker = int(p.get("blokk_uker") or P.BLOKK_UKER)
+        lett = bool(p.get("lett_uke")) and uke == uker
+        return {"nr": p.get("blokk_nr") or 1, "uke": max(1, uke), "uker": uker, "lett_uke": bool(p.get("lett_uke")),
+                "lett_naa": lett, "ferdig": uke > uker, "start": start.isoformat()}
+
+    def lagre_blokkinnstillinger(self, prid: int, d: dict) -> dict:
+        p = self.program(prid)
+        rad = {}
+        if "blokk_uker" in d:
+            rad["blokk_uker"] = _int(d["blokk_uker"], P.BLOKK_UKER, 3, 12)
+        if "lett_uke" in d:
+            rad["lett_uke"] = 1 if d["lett_uke"] else 0
+        self.db.oppdater("programmer", prid, rad)
+        self._varsle("program", {"profil_id": p["profil_id"]})
+        return self.program(prid)
+
+    def foreslaa_ny_blokk(self, prid: int) -> dict:
+        """Ny blokk uten AI: faste øvelser beholdes, hjelpeøvelsene byttes."""
+        p = self.program(prid)
+        prof = self.profil(p["profil_id"])
+        data = self.program_data(prid)
+        ny, endringer = P.roter_hjelpeovelser(data, self.ovelser(), self.utstyr_for(prof.get("utstyrsprofil_id")),
+                                               prof.get("erfaring") or "noe", "rehab" in (prof.get("maal") or []))
+        return {**self.berik_forhandsvisning(self._valider_program(ny)),
+                "endringer": endringer or ["Fant ingen gode alternativer – programmet beholdes som det er."]}
+
+    def sikre_faste(self, prid: int, ny: dict) -> dict:
+        """Faste hovedøvelser fra forrige blokk skal være med videre – legg dem inn igjen hvis de mangler."""
+        gammel = self.program_data(prid)
+        for i, gdag in enumerate(gammel["dager"]):
+            if i >= len(ny["dager"]):
+                ny["dager"].append({"navn": gdag["navn"], "ovelser": [o for o in gdag["ovelser"] if o.get("fast")]})
+                continue
+            nokler = {o["ovelse"] for o in ny["dager"][i]["ovelser"]}
+            for j, o in enumerate(gdag["ovelser"]):
+                if o.get("fast") and o["ovelse"] not in nokler:
+                    ny["dager"][i]["ovelser"].insert(min(j, len(ny["dager"][i]["ovelser"])), dict(o))
+            for o in ny["dager"][i]["ovelser"]:
+                if any(g["ovelse"] == o["ovelse"] and g.get("fast") for g in gdag["ovelser"]):
+                    o["fast"] = 1
+        return ny
+
+    def start_ny_blokk(self, prid: int, data: dict | None, kilde: str = "egen", beskrivelse: str = "") -> dict:
+        p = self.program(prid)
+        nr = (p.get("blokk_nr") or 1) + 1
+        if data is not None:
+            self.lagre_program(p["profil_id"], self.sikre_faste(prid, data), kilde=kilde, prid=prid, aktiver=bool(p["aktiv"]),
+                               beskrivelse=beskrivelse or f"Blokk {nr}")
+        self.db.oppdater("programmer", prid, {"blokk_nr": nr, "blokk_start": self._mandag(naa())})
+        self._varsle("program", {"profil_id": p["profil_id"]})
+        return self.program(prid)
+
+    def blokk_oppsummering(self, prid: int) -> str:
+        """Kort tekst om fremgangen per øvelse i inneværende blokk (til AI)."""
+        p = self.program(prid)
+        fra = p["blokk"]["start"]
+        linjer = []
+        for dag in p["dager"]:
+            for o in dag["ovelser"]:
+                okter = self.db.alle(
+                    "SELECT DISTINCT ok.id, ok.startet FROM okter ok JOIN sett s ON s.okt_id = ok.id WHERE ok.profil_id = ? "
+                    "AND s.ovelse = ? AND ok.status = 'fullfort' AND ok.lett = 0 AND s.oppvarming = 0 AND ok.startet >= ? ORDER BY ok.startet",
+                    (p["profil_id"], o["ovelse"], fra))
+                if not okter:
+                    linjer.append(f"- {o['navn']}: ikke trent i blokka")
+                    continue
+
+                def beste(oid):
+                    s = self.db.alle("SELECT vekt, reps FROM sett WHERE okt_id = ? AND ovelse = ? AND oppvarming = 0", (oid, o["ovelse"]))
+                    t = max(s, key=lambda x: ((x["vekt"] or 0), x["reps"] or 0))
+                    return f"{t['vekt']:g}kg×{t['reps']}" if t["vekt"] else f"{t['reps']} reps"
+                linjer.append(f"- {o['navn']}{' (fast)' if o.get('fast') else ''}: {len(okter)} økter, fra {beste(okter[0]['id'])} til {beste(okter[-1]['id'])}")
+        return "\n".join(linjer)
+
     def versjoner(self, prid: int) -> list[dict]:
         return self.db.alle("SELECT id, tid, kilde, beskrivelse, data FROM programversjoner WHERE program_id = ? ORDER BY id DESC", (prid,))
 
@@ -392,7 +489,7 @@ class Styrkeboka:
         okter = self.db.alle(
             "SELECT DISTINCT o.id, o.startet FROM okter o JOIN sett s ON s.okt_id = o.id "
             "WHERE o.profil_id = ? AND s.ovelse = ? AND s.oppvarming = 0 AND o.status = 'fullfort' AND o.id != ? "
-            "ORDER BY o.startet DESC LIMIT ?", (pid, nokkel, for_okt or -1, antall))
+            "AND COALESCE(o.lett, 0) = 0 ORDER BY o.startet DESC LIMIT ?", (pid, nokkel, for_okt or -1, antall))
         return [self.db.alle("SELECT * FROM sett WHERE okt_id = ? AND ovelse = ? AND oppvarming = 0 ORDER BY settnr",
                              (o["id"], nokkel)) for o in okter]
 
@@ -417,11 +514,13 @@ class Styrkeboka:
         dag = None
         if dag_id and prog:
             dag = next((d for d in prog["dager"] if d["id"] == dag_id), None)
+        lett = bool(dag and prog["blokk"]["lett_naa"])
         with self.db.lås:
             oid = self.db.sett_inn("okter", {
                 "profil_id": pid, "program_id": prog["id"] if dag else None, "dag_id": dag["id"] if dag else None,
                 "dag_navn": dag["navn"] if dag else "Fri økt", "utstyrsprofil_id": upid, "startet": til_iso(naa()),
-                "status": "pagar", "av": av}, commit=False)
+                "status": "pagar", "av": av, "lett": 1 if lett else 0,
+                "blokk_nr": prog["blokk"]["nr"] if dag else None}, commit=False)
             brukt: set[str] = set()
             for i, po in enumerate(dag["ovelser"] if dag else []):
                 ov = self.ovelse(po["ovelse"])
@@ -432,19 +531,23 @@ class Styrkeboka:
                     if alt:
                         erstattet, ov = po["ovelse"], alt
                 brukt.add(ov["nokkel"])
-                self._sett_inn_okt_ovelse(oid, i, ov, po, pid, programovelse_id=po["id"], erstattet_fra=erstattet)
+                self._sett_inn_okt_ovelse(oid, i, ov, P.lett_dose(po) if lett else po, pid, programovelse_id=po["id"],
+                                          erstattet_fra=erstattet, lett=lett)
             self.db.commit()
         okt = self.okt(oid)
         self._varsle("okt_startet", {"profil_id": pid, "okt": okt})
         return okt
 
     def _sett_inn_okt_ovelse(self, oid: int, rekkefolge: int, ov: dict, plan: dict, pid: int,
-                             programovelse_id: int | None = None, erstattet_fra: str | None = None) -> int:
+                             programovelse_id: int | None = None, erstattet_fra: str | None = None, lett: bool = False) -> int:
         plan = {"sett_plan": _int(plan.get("sett_plan") or plan.get("sett"), 3, 1, 10),
                 "reps_min": _int(plan.get("reps_min"), 8, 1, 120), "reps_maks": _int(plan.get("reps_maks"), 12, 1, 120),
                 "hvile_s": _int(plan.get("hvile_s"), 90, 15, 600), "rir": _int(plan.get("rir"), 2, 0, 5)}
         plan["reps_maks"] = max(plan["reps_min"], plan["reps_maks"])
-        f = P.foreslaa(ov, plan, self.tidligere_sett(pid, ov["nokkel"], oid))
+        tidl = self.tidligere_sett(pid, ov["nokkel"], oid)
+        f = P.foreslaa(ov, plan, tidl)
+        if lett:
+            f = P.lett_forslag(f, tidl)
         return self.db.sett_inn("okt_ovelser", {
             "okt_id": oid, "rekkefolge": rekkefolge, "ovelse": ov["nokkel"], "programovelse_id": programovelse_id,
             **plan, "forslag_kg": f["kg"], "forslag_reps": f["reps"], "forslag_tekst": f["tekst"],
@@ -805,13 +908,18 @@ class Styrkeboka:
                     if alt:
                         erstatning, ov = ov["navn"], alt
                 brukt.add(ov["nokkel"])
-                f = P.foreslaa(ov, o, self.tidligere_sett(pid, ov["nokkel"], antall=2))
+                tidl = self.tidligere_sett(pid, ov["nokkel"], antall=2)
+                f = P.foreslaa(ov, o, tidl)
+                if prog["blokk"]["lett_naa"]:
+                    f = P.lett_forslag(f, tidl)
+                    o = P.lett_dose(o)
                 ovl.append({"navn": ov["navn"], "sett": o["sett"], "reps_min": o["reps_min"], "reps_maks": o["reps_maks"],
                             "kg": f["kg"], "trend": f["trend"], "erstatter": erstatning, "tilgjengelig": tilgjengelig(ov, utstyr)})
             neste_ut = {"id": neste["id"], "navn": neste["navn"], "minutter": neste["minutter"], "ovelser": ovl}
         st = self.statistikk(pid)
         return {
-            "profil": p, "program": {"id": prog["id"], "navn": prog["navn"], "dager": [{"id": d["id"], "navn": d["navn"]} for d in prog["dager"]]} if prog else None,
+            "profil": p, "program": {"id": prog["id"], "navn": prog["navn"], "blokk": prog["blokk"],
+                                     "dager": [{"id": d["id"], "navn": d["navn"]} for d in prog["dager"]]} if prog else None,
             "neste": neste_ut, "aktiv": aktiv,
             "sist": {"id": sist["id"], "startet": sist["startet"], "dag_navn": sist["dag_navn"]} if sist else None,
             "uke": {"okter": st["denne_uka"], "plan": st["plan_per_uke"], "uker_paa_rad": st["uker_paa_rad"]},

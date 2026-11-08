@@ -105,7 +105,7 @@ def program_tekst(data: dict, sb: Styrkeboka) -> str:
     linjer = [f"Program: {data.get('navn')}"]
     for d in data["dager"]:
         linjer.append(f"- {d['navn']}: " + "; ".join(
-            f"{o['ovelse']} ({sb.ovelse(o['ovelse'])['navn']}) {o['sett']}×{o['reps_min']}-{o['reps_maks']}, hvile {o['hvile_s']}s, RIR {o['rir']}"
+            f"{o['ovelse']} ({sb.ovelse(o['ovelse'])['navn']}){' [FAST]' if o.get('fast') else ''} {o['sett']}×{o['reps_min']}-{o['reps_maks']}, hvile {o['hvile_s']}s, RIR {o['rir']}"
             + (f", notat: {o['notat']}" if o.get("notat") else "") for o in d["ovelser"]))
     return "\n".join(linjer)
 
@@ -148,6 +148,29 @@ def oppgave_juster_program(sb: Styrkeboka, pid: int, prid: int, onske: str) -> s
         "OM BRUKEREN:\n" + profilkontekst(sb, pid),
         "NÅVÆRENDE PROGRAM:\n" + program_tekst(data, sb),
         "SISTE ØKTER:\n" + historikkontekst(sb, pid),
+        "TILGJENGELIGE ØVELSER (nøkkel = navn):\n" + bibliotek_tekst(sb, utstyr),
+        JSON_FORMAT,
+    ])
+
+
+def oppgave_ny_blokk(sb: Styrkeboka, pid: int, prid: int) -> str:
+    p = sb.profil(pid)
+    utstyr = sb.utstyr_for(p.get("utstyrsprofil_id"))
+    prog = sb.program(prid)
+    data = sb.program_data(prid)
+    b = prog["blokk"]
+    return "\n\n".join([
+        ROLLE,
+        f"OPPGAVE: Brukeren har fullført treningsblokk {b['nr']} ({b['uker']} uker). Lag neste blokk for variasjon og fortsatt fremgang.",
+        "REGLER:\n"
+        "- Øvelser merket [FAST] er hovedøvelser og SKAL beholdes med samme nøkkel i samme økt. Du kan justere sett/reps litt "
+        "hvis fremgangen tilsier det (f.eks. stillstand → endre rep-intervall).\n"
+        "- Bytt 1–3 av de andre øvelsene per økt til en annen øvelse med samme bevegelsesmønster, for variasjon.\n"
+        "- Behold antall økter, omtrent samme økttid og ta fortsatt hensyn til oppgitte skader.\n"
+        "- List hver endring kort i \"endringer\" og forklar i \"begrunnelse\" hva blokka fokuserer på.",
+        "OM BRUKEREN:\n" + profilkontekst(sb, pid),
+        "NÅVÆRENDE PROGRAM:\n" + program_tekst(data, sb),
+        "FREMGANG I BLOKKA (første → siste økt):\n" + sb.blokk_oppsummering(prid),
         "TILGJENGELIGE ØVELSER (nøkkel = navn):\n" + bibliotek_tekst(sb, utstyr),
         JSON_FORMAT,
     ])

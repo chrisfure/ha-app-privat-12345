@@ -43,6 +43,14 @@ Progresjonen er **dobbel progresjon**: når alle sett når toppen av rep-interva
 
 Trener du et sted med mindre utstyr (f.eks. **Hjemme**), byttes øvelser som krever annet utstyr automatisk ut med en tilsvarende øvelse for den økta. Fremgangen følger øvelsen du faktisk gjør.
 
+### Treningsblokker
+
+Programmet går i blokker på **6 uker** (anbefalt; kan settes til 4–8 under Program → blokklinja).
+
+* **Faste hovedøvelser** – knebøy, hoftehengsel, press og trekk er merket «Fast» og står uendret fra blokk til blokk, så du kan måle fremgangen over tid. Du kan endre hva som er fast i redigeringen.
+* **Variasjon** – når blokka er ferdig, foreslår appen neste blokk der hjelpeøvelsene byttes med andre øvelser med samme bevegelse. Med AI-treneren ser den også på fremgangen i blokka og kan justere rep-intervaller ved stillstand. Du ser forslaget før noe lagres, og kan også velge «Behold som det er».
+* **Lettere uke** – siste uke i blokka har halvparten av settene og samme vekt som sist (deload), så kroppen henter seg inn. Disse øktene telles ikke med i vektforslagene. Av som standard for nybegynnere, som sjelden trenger det.
+
 Hver endring av programmet lagres som en versjon, så du alltid kan gå tilbake.
 
 ## AI-treneren
@@ -79,6 +87,7 @@ actions:
 * Helsedirektoratet: *Fysisk aktivitet – råd for voksne* – styrketrening for de store muskelgruppene minst 2 dager i uka.
 * ACSM (2009): *Progression models in resistance training for healthy adults* – 8–12 reps for nybegynnere og viderekomne, lettere belastning med 10–15 reps for eldre og ved opptrening.
 * Schoenfeld, Ogborn & Krieger (2017): dose–respons for ukentlig volum og muskelvekst (≈10+ sett per muskelgruppe i uka).
+* Bell m.fl. (2023): konsensus om lettere uker (deload) – redusert volum med omtrent samme belastning.
 * Helms m.fl. (2016): RIR-skalaen («reps in reserve») for å styre hvor nær utmattelse settene går.
 
 Appen og AI-treneren erstatter ikke fysioterapeut eller lege. Trening skal ikke gjøre vondt – stopp ved smerte.

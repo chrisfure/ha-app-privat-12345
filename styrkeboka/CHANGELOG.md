@@ -1,5 +1,13 @@
 # Endringslogg
 
+## 0.3.0
+
+- Treningsblokker: programmet går i blokker på 6 uker (kan settes til 4–8).
+- Hovedøvelsene (knebøy, hoftehengsel, press og trekk) er låst som «Fast» og beholdes fra blokk til blokk; hjelpeøvelsene byttes ut for variasjon.
+- Når en blokk er ferdig, foreslår appen (eller AI-treneren, ut fra fremgangen i blokka) neste blokk – du godkjenner før noe endres.
+- Lettere uke (deload) som siste uke i blokka: halvparten av settene, samme vekt. Teller ikke med i vektforslagene. Av som standard for nybegynnere.
+- «Fast hovedøvelse» kan slås av og på per øvelse i programmet.
+
 ## 0.2.0
 
 - Instruksjoner for alle 80 øvelsene: utgangsstilling, steg for steg, pust og vanlige feil.

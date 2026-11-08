@@ -205,6 +205,30 @@ class API:
             sb.arkiver_program(p["profil_id"], p["id"])
             return {"ok": True}
 
+        # ---- blokker
+        @r("PATCH", "/api/programmer/{prid}/blokk")
+        async def blokk_innst(req):
+            return {"program": sb.lagre_blokkinnstillinger(req.int("prid"), req.data)}
+
+        @r("POST", "/api/programmer/{prid}/blokkforslag")
+        async def blokkforslag(req):
+            prid = req.int("prid")
+            p = sb.program(prid)
+            if not req.data.get("ai"):
+                return {"forslag": sb.foreslaa_ny_blokk(prid), "kilde": "mal"}
+            data = ai.les_json(await self.ai.spor("ny blokk", ai.oppgave_ny_blokk(sb, p["profil_id"], prid)))
+            v = sb._valider_program(sb.sikre_faste(prid, sb._valider_program(data)))  # noqa: SLF001
+            endringer = [str(x)[:300] for x in (data.get("endringer") or []) if str(x).strip()][:12]
+            sb.logg_ai(p["profil_id"], "ny blokk", f"Blokk {p['blokk']['nr'] + 1}", v["begrunnelse"])
+            return {"forslag": {**sb.berik_forhandsvisning(v), "endringer": endringer}, "kilde": "ai"}
+
+        @r("POST", "/api/programmer/{prid}/ny-blokk")
+        async def ny_blokk(req):
+            d = req.data
+            kilde = d.get("kilde") if d.get("kilde") in ("ai", "mal", "egen") else "egen"
+            return {"program": sb.start_ny_blokk(req.int("prid"), d.get("program"), kilde=kilde,
+                                                 beskrivelse=str(d.get("beskrivelse") or "")[:200])}
+
         @r("POST", "/api/versjoner/{vid}/gjenopprett")
         async def gjenopprett(req):
             v = sb.db.en("SELECT program_id FROM programversjoner WHERE id = ?", (req.int("vid"),))

@@ -154,3 +154,59 @@ def test_ai_kontekst_uten_navn(sb):
     tekst = ai.profilkontekst(sb, pid)
     assert "Testperson" not in tekst
     assert "skulder" in tekst
+
+
+def test_blokker(sb):
+    from datetime import timedelta
+    import program as P2
+    pid = sb.profiler()[0]["id"]
+    prog = sb.lagre_program(pid, sb.foreslaa_program(pid), kilde="mal")
+    b = prog["blokk"]
+    assert b["nr"] == 1 and b["uke"] == 1 and b["uker"] == 6 and not b["ferdig"]
+    faste = {o["ovelse"] for d in prog["dager"] for o in d["ovelser"] if o["fast"]}
+    assert faste and all(sb.ovelse(k)["monster"] in P2.HOVED for k in faste)
+    # gjør én vanlig økt
+    o = sb.start_okt(pid, prog["dager"][0]["id"])
+    oo = o["ovelser"][0]
+    sb.logg_sett(o["id"], {"okt_ovelse_id": oo["id"], "vekt": 50, "reps": 10})
+    sb.avslutt_okt(o["id"], {})
+    # spol til uke 6 = lettere uke
+    start = (sb.lokal(sb_naa()) - timedelta(weeks=5)).date()
+    start = start - timedelta(days=start.weekday())
+    sb.db.kjor("UPDATE programmer SET blokk_start = ? WHERE id = ?", (start.isoformat(), prog["id"]))
+    assert sb.program(prog["id"])["blokk"]["lett_naa"]
+    lett = sb.start_okt(pid, prog["dager"][0]["id"])
+    assert lett["lett"] == 1
+    l_oo = lett["ovelser"][0]
+    assert l_oo["sett_plan"] < oo["sett_plan"] and l_oo["forslag_kg"] == 50
+    sb.logg_sett(lett["id"], {"okt_ovelse_id": l_oo["id"], "vekt": 50, "reps": 4})
+    sb.avslutt_okt(lett["id"], {})
+    # lette uker teller ikke i progresjonen
+    assert sb.tidligere_sett(pid, oo["ovelse"])[0][0]["reps"] == 10
+    # blokka ferdig -> ny blokk uten AI beholder faste øvelser
+    sb.db.kjor("UPDATE programmer SET blokk_start = ? WHERE id = ?", ((start - timedelta(weeks=1)).isoformat(), prog["id"]))
+    assert sb.program(prog["id"])["blokk"]["ferdig"]
+    forslag = sb.foreslaa_ny_blokk(prog["id"])
+    assert forslag["endringer"]
+    ny = sb.start_ny_blokk(prog["id"], forslag, kilde="mal")
+    assert ny["blokk"]["nr"] == 2 and ny["blokk"]["uke"] == 1
+    nye_faste = {o["ovelse"] for d in ny["dager"] for o in d["ovelser"] if o["fast"]}
+    assert faste <= nye_faste
+    alle_gamle = {o["ovelse"] for d in prog["dager"] for o in d["ovelser"] if not o["fast"]}
+    alle_nye = {o["ovelse"] for d in ny["dager"] for o in d["ovelser"] if not o["fast"]}
+    assert alle_gamle != alle_nye
+
+
+def test_sikre_faste_legger_tilbake(sb):
+    pid = sb.profiler()[0]["id"]
+    prog = sb.lagre_program(pid, sb.foreslaa_program(pid), kilde="mal")
+    data = sb.program_data(prog["id"])
+    fast = next(o for o in data["dager"][0]["ovelser"] if o["fast"])
+    data["dager"][0]["ovelser"] = [o for o in data["dager"][0]["ovelser"] if o["ovelse"] != fast["ovelse"]]
+    sikret = sb.sikre_faste(prog["id"], data)
+    assert fast["ovelse"] in {o["ovelse"] for o in sikret["dager"][0]["ovelser"]}
+
+
+def sb_naa():
+    from db import naa
+    return naa()

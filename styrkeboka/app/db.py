@@ -104,9 +104,21 @@ class Database:
         self.con.commit()
 
     def _migrer(self) -> None:
-        kolonner = {r[1] for r in self.con.execute("PRAGMA table_info(egne_ovelser)")}
-        if "instruksjon" not in kolonner:
-            self.con.execute("ALTER TABLE egne_ovelser ADD COLUMN instruksjon TEXT DEFAULT ''")
+        """Legger til kolonner som kom i senere versjoner. self.nye_kolonner sier hva som ble lagt til nå."""
+        self.nye_kolonner: set[str] = set()
+        nye = {
+            "egne_ovelser": [("instruksjon", "TEXT DEFAULT ''")],
+            "programmer": [("blokk_nr", "INTEGER DEFAULT 1"), ("blokk_start", "TEXT"), ("blokk_uker", "INTEGER DEFAULT 6"),
+                           ("lett_uke", "INTEGER DEFAULT 1")],
+            "programovelser": [("fast", "INTEGER DEFAULT 0")],
+            "okter": [("lett", "INTEGER DEFAULT 0"), ("blokk_nr", "INTEGER")],
+        }
+        for tabell, kolonner in nye.items():
+            finnes = {r[1] for r in self.con.execute(f"PRAGMA table_info({tabell})")}
+            for navn, typ in kolonner:
+                if navn not in finnes:
+                    self.con.execute(f"ALTER TABLE {tabell} ADD COLUMN {navn} {typ}")
+                    self.nye_kolonner.add(f"{tabell}.{navn}")
 
     # ------------------------------------------------------------ hjelpere
     @staticmethod
