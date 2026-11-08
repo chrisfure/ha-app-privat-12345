@@ -1,0 +1,16 @@
+name: Styrkeboka
+version: "0.1.0"
+slug: styrkeboka
+description: Styrketrening med program, logging av sett og AI-trener – med full historikk.
+url: https://github.com/chrisfure/ha-app-privat-12345
+arch:
+  - aarch64
+  - amd64
+init: false
+ingress: true
+ingress_port: 8099
+panel_icon: mdi:dumbbell
+panel_title: Styrkeboka
+panel_admin: false
+homeassistant_api: true
+# Alle innstillinger gjøres inne i appen (fanen «Innstillinger»).

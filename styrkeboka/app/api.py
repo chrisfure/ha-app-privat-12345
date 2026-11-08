@@ -1,0 +1,353 @@
+"""API-ruter for Styrkeboka – uavhengig av webrammeverk (aiohttp i drift, enkel testserver lokalt)."""
+from __future__ import annotations
+
+import logging
+import re
+from dataclasses import dataclass, field
+from typing import Any, Awaitable, Callable, Protocol
+
+import ai
+import program as P
+from db import naa
+from logikk import FARGER, TYPER, Feil, Styrkeboka
+from ovelser import MONSTER, MUSKLER, UTSTYR
+
+log = logging.getLogger("styrkeboka.api")
+
+
+class AIKlient(Protocol):
+    aktiv: bool
+
+    async def spor(self, oppgave: str, instruksjoner: str) -> Any: ...
+
+    async def ai_entiteter(self) -> list[dict]: ...
+
+
+@dataclass
+class Foresporsel:
+    metode: str
+    sti: str
+    query: dict = field(default_factory=dict)
+    body: Any = None
+    bruker: str | None = None       # visningsnavn
+    brukernavn: str | None = None   # innloggingsnavn
+    params: dict = field(default_factory=dict)
+
+    def int(self, navn: str) -> int:
+        return int(self.params[navn])
+
+    def q_int(self, navn: str) -> int | None:
+        v = self.query.get(navn)
+        return int(v) if v not in (None, "") else None
+
+    @property
+    def data(self) -> dict:
+        return self.body if isinstance(self.body, dict) else {}
+
+
+@dataclass
+class Svar:
+    data: Any = None
+    status: int = 200
+    tekst: str | None = None
+    innholdstype: str = "application/json"
+    hoder: dict = field(default_factory=dict)
+
+
+Handler = Callable[[Foresporsel], Awaitable[Any]]
+
+
+class API:
+    def __init__(self, sb: Styrkeboka, ai_klient: AIKlient):
+        self.sb = sb
+        self.ai = ai_klient
+        self.ruter: list[tuple[str, re.Pattern, Handler]] = []
+        self._registrer()
+
+    def rute(self, metode: str, monster: str):
+        regex = re.compile("^" + re.sub(r"\{(\w+)\}", r"(?P<\1>\\d+)", monster) + "$")
+
+        def dek(fn: Handler) -> Handler:
+            self.ruter.append((metode, regex, fn))
+            return fn
+        return dek
+
+    async def handter(self, req: Foresporsel) -> Svar:
+        for metode, regex, fn in self.ruter:
+            if metode != req.metode:
+                continue
+            m = regex.match(req.sti)
+            if m:
+                req.params = m.groupdict()
+                try:
+                    res = await fn(req)
+                except Feil as e:
+                    return Svar({"feil": str(e)}, 400)
+                except (ValueError, TypeError, KeyError) as e:
+                    log.info("Ugyldig forespørsel %s %s: %s", req.metode, req.sti, e)
+                    return Svar({"feil": "Ugyldig forespørsel"}, 400)
+                return res if isinstance(res, Svar) else Svar(res)
+        return Svar({"feil": "Finnes ikke"}, 404)
+
+    # ------------------------------------------------------------------ ruter
+    def _registrer(self) -> None:  # noqa: C901 – en lang, men flat liste
+        sb = self.sb
+        r = self.rute
+
+        @r("GET", "/api/start")
+        async def start(req):
+            meg = sb.profil_for_bruker(req.bruker, req.brukernavn)
+            return {
+                "bruker": req.bruker, "brukernavn": req.brukernavn, "meg": meg["id"] if meg else None,
+                "profiler": sb.profiler(), "utstyrsprofiler": sb.utstyrsprofiler(), "innstillinger": sb.inn,
+                "ovelser": sb.ovelser(), "monster": MONSTER, "utstyr": UTSTYR, "muskler": MUSKLER, "typer": TYPER,
+                "maal": P.MAAL, "erfaring": P.ERFARING, "farger": FARGER, "ai_tilgjengelig": self.ai.aktiv,
+                "naa": naa().isoformat(),
+            }
+
+        @r("GET", "/api/profiler/{pid}/oversikt")
+        async def oversikt(req):
+            return sb.oversikt(req.int("pid"), req.q_int("sted"))
+
+        # ---- profiler, steder og øvelser
+        @r("POST", "/api/profiler")
+        async def ny_profil(req):
+            return {"profil": sb.lagre_profil(req.data)}
+
+        @r("PATCH", "/api/profiler/{pid}")
+        async def endre_profil(req):
+            return {"profil": sb.lagre_profil(req.data, req.int("pid"))}
+
+        @r("DELETE", "/api/profiler/{pid}")
+        async def slett_profil(req):
+            sb.slett_profil(req.int("pid"))
+            return {"ok": True}
+
+        @r("POST", "/api/utstyrsprofiler")
+        async def nytt_sted(req):
+            return {"utstyrsprofil": sb.lagre_utstyrsprofil(req.data)}
+
+        @r("PATCH", "/api/utstyrsprofiler/{uid}")
+        async def endre_sted(req):
+            return {"utstyrsprofil": sb.lagre_utstyrsprofil(req.data, req.int("uid"))}
+
+        @r("DELETE", "/api/utstyrsprofiler/{uid}")
+        async def slett_sted(req):
+            sb.slett_utstyrsprofil(req.int("uid"))
+            return {"ok": True}
+
+        @r("POST", "/api/ovelser")
+        async def ny_ovelse(req):
+            return {"ovelse": sb.lagre_egen_ovelse(req.data)}
+
+        @r("PATCH", "/api/ovelser/{oid}")
+        async def endre_ovelse(req):
+            return {"ovelse": sb.lagre_egen_ovelse(req.data, req.int("oid"))}
+
+        @r("POST", "/api/alternativer")
+        async def alternativer(req):
+            d = req.data
+            return {"alternativer": sb.alternativer(str(d["ovelse"]), sb.utstyr_for(d.get("utstyrsprofil_id")))}
+
+        # ---- innstillinger
+        @r("PUT", "/api/innstillinger")
+        async def innstillinger(req):
+            return {"innstillinger": sb.lagre_innstillinger(req.data)}
+
+        @r("GET", "/api/ai/entiteter")
+        async def ai_entiteter(_req):
+            try:
+                return {"entiteter": await self.ai.ai_entiteter()}
+            except Exception as e:  # noqa: BLE001
+                log.warning("Klarte ikke hente AI-entiteter: %s", e)
+                return {"entiteter": [], "feil": "Fikk ikke hentet AI-er fra Home Assistant"}
+
+        # ---- program
+        @r("GET", "/api/profiler/{pid}/programmer")
+        async def programmer(req):
+            pid = req.int("pid")
+            aktivt = sb.aktivt_program(pid)
+            return {"aktivt": aktivt, "programmer": sb.programmer(pid)}
+
+        @r("GET", "/api/programmer/{prid}")
+        async def program(req):
+            prid = req.int("prid")
+            return {"program": sb.program(prid), "versjoner": sb.versjoner(prid)}
+
+        @r("POST", "/api/profiler/{pid}/forslag")
+        async def forslag(req):
+            return {"forslag": sb.foreslaa_program(req.int("pid"), req.data.get("utstyrsprofil_id"))}
+
+        @r("POST", "/api/profiler/{pid}/programmer")
+        async def lagre_nytt(req):
+            d = req.data
+            kilde = d.get("kilde") if d.get("kilde") in ("mal", "ai", "egen") else "egen"
+            return {"program": sb.lagre_program(req.int("pid"), d["program"], kilde=kilde,
+                                                beskrivelse=str(d.get("beskrivelse") or "")[:200], aktiver=d.get("aktiver", True))}
+
+        @r("PUT", "/api/programmer/{prid}")
+        async def lagre_program(req):
+            d = req.data
+            p = sb.program(req.int("prid"))
+            kilde = d.get("kilde") if d.get("kilde") in ("ai", "egen") else "egen"
+            return {"program": sb.lagre_program(p["profil_id"], d["program"], kilde=kilde, prid=p["id"],
+                                                beskrivelse=str(d.get("beskrivelse") or "Endret")[:200], aktiver=bool(p["aktiv"]))}
+
+        @r("POST", "/api/programmer/{prid}/aktiver")
+        async def aktiver(req):
+            p = sb.program(req.int("prid"))
+            sb.aktiver_program(p["profil_id"], p["id"])
+            return {"ok": True}
+
+        @r("DELETE", "/api/programmer/{prid}")
+        async def arkiver(req):
+            p = sb.program(req.int("prid"))
+            sb.arkiver_program(p["profil_id"], p["id"])
+            return {"ok": True}
+
+        @r("POST", "/api/versjoner/{vid}/gjenopprett")
+        async def gjenopprett(req):
+            v = sb.db.en("SELECT program_id FROM programversjoner WHERE id = ?", (req.int("vid"),))
+            if not v:
+                raise Feil("Fant ikke versjonen")
+            p = sb.program(v["program_id"])
+            return {"program": sb.gjenopprett_versjon(p["profil_id"], req.int("vid"))}
+
+        # ---- økter
+        @r("POST", "/api/profiler/{pid}/okter")
+        async def start_okt(req):
+            d = req.data
+            return {"okt": sb.start_okt(req.int("pid"), d.get("dag_id"), d.get("utstyrsprofil_id"), av=req.bruker)}
+
+        @r("POST", "/api/profiler/{pid}/tidligere-okt")
+        async def tidligere_okt(req):
+            return {"okt": sb.registrer_tidligere_okt(req.int("pid"), req.data, av=req.bruker)}
+
+        @r("GET", "/api/okter/{oid}")
+        async def okt(req):
+            return {"okt": sb.okt(req.int("oid"))}
+
+        @r("PATCH", "/api/okter/{oid}")
+        async def endre_okt(req):
+            return {"okt": sb.endre_okt(req.int("oid"), req.data)}
+
+        @r("DELETE", "/api/okter/{oid}")
+        async def slett_okt(req):
+            sb.avbryt_okt(req.int("oid"))
+            return {"ok": True}
+
+        @r("POST", "/api/okter/{oid}/sett")
+        async def logg_sett(req):
+            s = sb.logg_sett(req.int("oid"), req.data)
+            return {"sett": s, "okt": sb.okt(req.int("oid"))}
+
+        @r("PATCH", "/api/sett/{sid}")
+        async def endre_sett(req):
+            s = sb.endre_sett(req.int("sid"), req.data)
+            return {"sett": s, "okt": sb.okt(s["okt_id"])}
+
+        @r("DELETE", "/api/sett/{sid}")
+        async def slett_sett(req):
+            s = sb.db.en("SELECT okt_id FROM sett WHERE id = ?", (req.int("sid"),))
+            sb.slett_sett(req.int("sid"))
+            return {"okt": sb.okt(s["okt_id"]) if s else None}
+
+        @r("POST", "/api/okter/{oid}/ovelser")
+        async def legg_til(req):
+            return {"okt": sb.legg_til_ovelse(req.int("oid"), req.data)}
+
+        @r("PATCH", "/api/okt-ovelser/{ooid}")
+        async def endre_oo(req):
+            return {"okt": sb.endre_okt_ovelse(req.int("ooid"), req.data)}
+
+        @r("POST", "/api/okt-ovelser/{ooid}/flytt")
+        async def flytt_oo(req):
+            return {"okt": sb.flytt_okt_ovelse(req.int("ooid"), int(req.data.get("retning") or 1))}
+
+        @r("DELETE", "/api/okt-ovelser/{ooid}")
+        async def slett_oo(req):
+            return {"okt": sb.slett_okt_ovelse(req.int("ooid"))}
+
+        @r("POST", "/api/okter/{oid}/avslutt")
+        async def avslutt(req):
+            res = sb.avslutt_okt(req.int("oid"), req.data)
+            return res
+
+        @r("GET", "/api/okter/{oid}/oppsummering")
+        async def oppsummering(req):
+            return sb.okt_oppsummering(req.int("oid"))
+
+        # ---- historikk
+        @r("GET", "/api/profiler/{pid}/historikk")
+        async def historikk(req):
+            pid = req.int("pid")
+            return {"okter": sb.historikk(pid), "ovelser": sb.ovelser_med_historikk(pid), "statistikk": sb.statistikk(pid)}
+
+        @r("GET", "/api/profiler/{pid}/ovelse")
+        async def ovelse_hist(req):
+            return sb.ovelse_historikk(req.int("pid"), str(req.query["nokkel"]))
+
+        @r("GET", "/api/eksport.csv")
+        async def eksport(req):
+            return Svar(tekst=sb.csv(req.q_int("profil")), innholdstype="text/csv",
+                        hoder={"Content-Disposition": 'attachment; filename="styrkeboka.csv"'})
+
+        # ---- AI
+        @r("POST", "/api/profiler/{pid}/ai/program")
+        async def ai_program(req):
+            pid = req.int("pid")
+            d = req.data
+            if d.get("program_id"):
+                instr = ai.oppgave_juster_program(sb, pid, int(d["program_id"]), str(d.get("onske") or ""))
+                oppg = "juster program"
+            else:
+                instr = ai.oppgave_lag_program(sb, pid, d.get("utstyrsprofil_id"), str(d.get("onske") or ""))
+                oppg = "lag program"
+            data = ai.les_json(await self.ai.spor(oppg, instr))
+            v = sb._valider_program(data)  # noqa: SLF001 – samme validering som ved lagring
+            endringer = [str(x)[:300] for x in (data.get("endringer") or []) if str(x).strip()][:12]
+            sb.logg_ai(pid, oppg, str(d.get("onske") or ""), v["begrunnelse"])
+            return {"forslag": {**sb.berik_forhandsvisning(v), "endringer": endringer}}
+
+        @r("POST", "/api/okter/{oid}/ai/tips")
+        async def ai_tips(req):
+            oid = req.int("oid")
+            o = sb.okt(oid)
+            if o.get("ai_tips") and not req.data.get("ny"):
+                return {"tips": o["ai_tips"]}
+            data = ai.les_json(await self.ai.spor("tips til økt", ai.oppgave_tips(sb, oid)))
+            tips = [str(t)[:300] for t in (data.get("tips") or []) if str(t).strip()][:6]
+            if not tips:
+                raise Feil("AI-en ga ingen tips. Prøv igjen.")
+            sb.lagre_ai(oid, "ai_tips", tips)
+            return {"tips": tips}
+
+        @r("POST", "/api/okter/{oid}/ai/oppsummering")
+        async def ai_oppsummering(req):
+            oid = req.int("oid")
+            o = sb.okt(oid)
+            if o.get("ai_oppsummering") and not req.data.get("ny"):
+                return {"oppsummering": o["ai_oppsummering"]}
+            rek = sb.okt_oppsummering(oid)["rekorder"]
+            data = ai.les_json(await self.ai.spor("oppsummer økt", ai.oppgave_oppsummering(sb, oid, rek)))
+            res = {"oppsummering": str(data.get("oppsummering") or "")[:1500],
+                   "neste_gang": [str(x)[:300] for x in (data.get("neste_gang") or []) if str(x).strip()][:5]}
+            if not res["oppsummering"]:
+                raise Feil("AI-en ga ingen oppsummering. Prøv igjen.")
+            sb.lagre_ai(oid, "ai_oppsummering", res)
+            return {"oppsummering": res}
+
+        @r("POST", "/api/profiler/{pid}/ai/sporsmal")
+        async def ai_sporsmal(req):
+            pid = req.int("pid")
+            d = req.data
+            sp = str(d.get("sporsmal") or "").strip()
+            if not sp:
+                raise Feil("Skriv et spørsmål")
+            svar = ai.rens_tekst(await self.ai.spor("spørsmål", ai.oppgave_sporsmal(
+                sb, pid, sp[:1000], int(d["okt_id"]) if d.get("okt_id") else None, d.get("ovelse"))))
+            return {"svar": sb.logg_ai(pid, "sporsmal", sp, svar, d.get("okt_id"))}
+
+        @r("GET", "/api/profiler/{pid}/ai/logg")
+        async def ai_logg(req):
+            return {"logg": sb.ai_logg(req.int("pid"))}
