@@ -11,6 +11,7 @@ from zoneinfo import ZoneInfo
 
 import program as P
 from db import Database, fra_iso, naa, til_iso
+from instruksjoner import STANDARD_PUST, instruksjon_for
 from ovelser import BIBLIOTEK, MONSTER, MUSKLER, UTSTYR, sekunder, tilgjengelig, vektbasert
 
 log = logging.getLogger("styrkeboka")
@@ -25,6 +26,9 @@ STANDARD_INNSTILLINGER = {
     "ai_auto_tips": False,
     "hviletimer_lyd": True,
 }
+
+
+_BIBLIOTEK_MED_INSTRUKSJON = [{**o, "instruksjon": instruksjon_for(o["nokkel"])} for o in BIBLIOTEK]
 
 
 class Feil(Exception):
@@ -114,11 +118,13 @@ class Styrkeboka:
                 "utstyr": r["utstyr"] or [], "muskler": r["muskler"] or [], "niva": 1, "skansom": True,
                 "sammensatt": r["monster"] in P.STORE, "tips": [t for t in (r["tips"] or "").split("\n") if t.strip()],
                 "egen": True, "id": r["id"], "arkivert": bool(r["arkivert"]),
+                "instruksjon": {"start": "", "steg": [t.strip() for t in (r.get("instruksjon") or "").split("\n") if t.strip()],
+                                "feil": [], "pust": STANDARD_PUST} if (r.get("instruksjon") or "").strip() else None,
             })
-        return [*BIBLIOTEK, *egne]
+        return [*_BIBLIOTEK_MED_INSTRUKSJON, *egne]
 
     def ovelse(self, nokkel: str) -> dict:
-        for o in BIBLIOTEK:
+        for o in _BIBLIOTEK_MED_INSTRUKSJON:
             if o["nokkel"] == nokkel:
                 return o
         if nokkel.startswith("egen-"):
@@ -142,7 +148,8 @@ class Styrkeboka:
         rad = {"navn": navn[:80], "monster": d["monster"], "type": d["type"],
                "utstyr": [u for u in d.get("utstyr") or [] if u in UTSTYR],
                "muskler": [m for m in d.get("muskler") or [] if m in MUSKLER],
-               "tips": str(d.get("tips") or "")[:600], "arkivert": 1 if d.get("arkivert") else 0}
+               "tips": str(d.get("tips") or "")[:600], "instruksjon": str(d.get("instruksjon") or "")[:2000],
+               "arkivert": 1 if d.get("arkivert") else 0}
         if oid is None:
             oid = self.db.sett_inn("egne_ovelser", rad)
         else:
@@ -450,7 +457,7 @@ class Styrkeboka:
         forste_tunge = True
         for oo in self.db.alle("SELECT * FROM okt_ovelser WHERE okt_id = ? ORDER BY rekkefolge, id", (oid,)):
             ov = self.ovelse(oo["ovelse"])
-            oo["info"] = {k: ov.get(k) for k in ("navn", "monster", "type", "utstyr", "muskler", "tips", "egen")}
+            oo["info"] = {k: ov.get(k) for k in ("navn", "monster", "type", "utstyr", "muskler", "tips", "egen", "instruksjon")}
             oo["info"]["monster_navn"] = MONSTER.get(ov["monster"], ov["monster"])
             oo["info"]["vektbasert"] = vektbasert(ov)
             oo["info"]["sekunder"] = sekunder(ov)
@@ -732,7 +739,7 @@ class Styrkeboka:
                 beste["vekt"] = topp["vekt"]
             if beste["reps"] is None or punkt["maks_reps"] > beste["reps"]:
                 beste["reps"] = punkt["maks_reps"]
-        return {"ovelse": {k: ov.get(k) for k in ("nokkel", "navn", "monster", "type", "tips", "muskler")},
+        return {"ovelse": {k: ov.get(k) for k in ("nokkel", "navn", "monster", "type", "tips", "muskler", "instruksjon")},
                 "vektbasert": vektbasert(ov), "sekunder": sekunder(ov), "punkter": punkter, "beste": beste}
 
     def statistikk(self, pid: int) -> dict:

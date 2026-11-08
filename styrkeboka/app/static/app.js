@@ -382,7 +382,7 @@
     kropp.append(tab);
     if (oo.notat) kropp.append(el("div", { class: "ov-notat" }, oo.notat));
     kropp.append(el("div", { class: "ov-verktoy" },
-      el("button", { class: "chip", onclick: () => ovelseInfoArk(oo.ovelse, oo) }, ikon("info"), "Teknikk"),
+      el("button", { class: "chip", onclick: () => ovelseInfoArk(oo.ovelse, oo) }, ikon("info"), "Slik gjør du"),
       el("button", { class: "chip", onclick: () => byttOvelseArk(oo) }, ikon("bytt"), "Bytt"),
       el("button", { class: "chip", onclick: () => ovMeny(oo) }, ikon("prikker"), "Mer")));
     kort.append(kropp);
@@ -512,8 +512,10 @@
       if (ved_valg) { lukkArk(); ved_valg(a); return; }
       try { okt = (await patch(`api/okt-ovelser/${oo.id}`, { ovelse: a.nokkel, ogsa_program: ogsaProgram })).okt; lukkArk(); tegnOkt(); visToast(ogsaProgram ? "Byttet – også i programmet" : "Øvelsen er byttet for i dag"); } catch (e) { feil(e); }
     };
-    const rad = (a) => el("button", { onclick: () => velg(a), class: a.tilgjengelig ? "" : "utilgj" },
-      el("span", { class: "tekst" }, el("b", {}, a.navn), el("small", {}, [a.skansom ? "Skånsom" : null, (a.utstyr || []).map((u) => S.utstyr[u]).join(", ") || "Kroppsvekt"].filter(Boolean).join(" · "))), ikon("hoyre"));
+    const rad = (a) => el("div", { class: `velg-rad ${a.tilgjengelig ? "" : "utilgj"}` },
+      el("button", { onclick: () => velg(a) },
+        el("span", { class: "tekst" }, el("b", {}, a.navn), el("small", {}, [a.skansom ? "Skånsom" : null, (a.utstyr || []).map((u) => S.utstyr[u]).join(", ") || "Kroppsvekt"].filter(Boolean).join(" · "))), ikon("hoyre")),
+      el("button", { class: "ikonknapp", "aria-label": `Slik gjør du ${a.navn}`, onclick: () => ovelseInfoArk(a.nokkel, null, { tilbake: () => byttOvelseArk(oo, { utstyrsprofil_id, ved_valg, i_program }) }) }, ikon("info")));
     const ok = alt.filter((a) => a.tilgjengelig), ikke = alt.filter((a) => !a.tilgjengelig);
     aapneArk(el("h3", {}, ikon("bytt"), `Bytt ${ovelse(oo.ovelse).navn}`),
       el("p", { class: "hint" }, `Øvelser med samme bevegelse (${S.monster[ovelse(oo.ovelse).monster] || "lignende"}). Fremgangen følger øvelsen du faktisk gjør.`),
@@ -524,7 +526,7 @@
       el("button", { class: "legg-til", onclick: () => aapneOvelsevelger({ tittel: "Velg øvelse", utstyrsprofil_id, ved_valg: velg }) }, "Søk blant alle øvelser"));
   }
 
-  function aapneOvelsevelger({ tittel, utstyrsprofil_id = okt?.utstyrsprofil_id ?? sted(), ved_valg }) {
+  function aapneOvelsevelger({ tittel, utstyrsprofil_id = okt?.utstyrsprofil_id ?? sted(), ved_valg, info = false }) {
     const utstyr = new Set(S.utstyrsprofiler.find((u) => u.id === utstyrsprofil_id)?.utstyr || Object.keys(S.utstyr));
     const sok = el("input", { type: "search", placeholder: "Søk etter øvelse", autocomplete: "off" });
     const liste = el("div", { class: "velg-liste" });
@@ -538,8 +540,10 @@
         liste.append(el("div", { class: "gruppe" }, mNavn));
         for (const o of ovl) {
           const tilgj = o.utstyr.every((u) => utstyr.has(u));
-          liste.append(el("button", { class: tilgj ? "" : "utilgj", onclick: () => ved_valg(o) },
-            el("span", { class: "tekst" }, el("b", {}, o.navn), el("small", {}, o.utstyr.map((u) => S.utstyr[u]).join(", ") || "Kroppsvekt")), ikon("pluss")));
+          liste.append(el("div", { class: `velg-rad ${tilgj ? "" : "utilgj"}` },
+            el("button", { onclick: () => ved_valg(o) },
+              el("span", { class: "tekst" }, el("b", {}, o.navn), el("small", {}, o.utstyr.map((u) => S.utstyr[u]).join(", ") || "Kroppsvekt")), ikon(info ? "hoyre" : "pluss")),
+            info ? null : el("button", { class: "ikonknapp", "aria-label": `Slik gjør du ${o.navn}`, onclick: () => ovelseInfoArk(o.nokkel, null, { tilbake: () => aapneOvelsevelger({ tittel, utstyrsprofil_id, ved_valg }) }) }, ikon("info"))));
         }
       }
       if (!liste.children.length) liste.append(el("p", { class: "tom" }, "Ingen treff. Du kan lage egne øvelser under Innstillinger."));
@@ -549,13 +553,35 @@
     tegn();
   }
 
-  function ovelseInfoArk(nokkel, oo = null) {
+  function instruksjonInnhold(o) {
+    const ins = o.instruksjon;
+    const deler = [];
+    if (ins?.start) deler.push(el("div", { class: "ins-del" }, el("h4", {}, "Utgangsstilling"), el("p", {}, ins.start)));
+    if (ins?.steg?.length) deler.push(el("div", { class: "ins-del" }, el("h4", {}, "Slik gjør du"), el("ol", { class: "ins-steg" }, ins.steg.map((t) => el("li", {}, t)))));
+    if (o.tips?.length) deler.push(el("div", { class: "ins-del" }, el("h4", {}, "Husk"), el("ul", { class: "tips-liste" }, o.tips.map((t) => el("li", {}, t)))));
+    if (ins?.pust) deler.push(el("div", { class: "ins-del" }, el("h4", {}, "Pust"), el("p", {}, ins.pust)));
+    if (ins?.feil?.length) deler.push(el("div", { class: "ins-del feil" }, el("h4", {}, ikon("advarsel"), "Vanlige feil"), el("ul", {}, ins.feil.map((t) => el("li", {}, t)))));
+    if (!deler.length) deler.push(el("p", { class: "forklaring" }, o.egen ? "Ingen instruksjon ennå – legg den inn under Innstillinger → Egne øvelser." : "Ingen instruksjon for denne øvelsen."));
+    return deler;
+  }
+
+  const videoLenke = (o) => el("a", { class: "knapp noytral liten", style: "flex:1", target: "_blank", rel: "noopener",
+    href: `https://www.youtube.com/results?search_query=${encodeURIComponent(`${o.navn} øvelse teknikk`)}` }, ikon("play"), "Søk etter video");
+
+  function ovelseInfoArk(nokkel, oo = null, { tilbake = null } = {}) {
     const o = ovelse(nokkel);
-    aapneArk(el("h3", {}, o.navn),
-      el("p", { class: "hint" }, [S.monster[o.monster], (o.muskler || []).map((m) => S.muskler[m]).join(", "), (o.utstyr || []).map((u) => S.utstyr[u]).join(", ") || "Kroppsvekt"].filter(Boolean).join(" · ")),
-      o.tips?.length ? el("div", { class: "kort", style: "box-shadow:none;background:var(--flate-2)" }, el("ul", { class: "tips-liste" }, o.tips.map((t) => el("li", {}, t)))) : null,
-      el("div", { class: "info-boks", style: "margin-top:12px" }, ikon("info"), "Det skal ikke gjøre vondt. Stopp øvelsen ved smerte og vurder å snakke med fysioterapeut."),
-      aiPaa() ? el("div", { class: "ark-knapper" }, el("button", { class: "knapp ai", onclick: () => { lukkArk(); sporTreneren({ ovelse: nokkel, okt_id: oo ? okt?.id : null, forslag: `Hvordan gjør jeg ${o.navn.toLowerCase()} riktig, og hva bør jeg tenke på?` }); } }, ikon("gnist"), "Spør treneren om øvelsen")) : null);
+    const meta = [S.monster[o.monster], (o.muskler || []).map((m) => S.muskler[m]).join(", "), (o.utstyr || []).map((u) => S.utstyr[u]).join(", ") || "Kroppsvekt"].filter(Boolean).join(" · ");
+    aapneArk(
+      tilbake ? el("button", { class: "tilbake", onclick: tilbake }, ikon("venstre"), "Alle øvelser") : null,
+      el("h3", {}, o.navn), el("p", { class: "hint" }, meta),
+      el("div", { class: "instruksjon" }, instruksjonInnhold(o)),
+      el("div", { class: "info-boks", style: "margin-top:14px" }, ikon("info"), "Det skal ikke gjøre vondt. Stopp ved smerte, og snakk med fysioterapeut eller lege ved skader."),
+      el("div", { class: "knapperad", style: "margin-top:14px" }, videoLenke(o),
+        aiPaa() ? el("button", { class: "knapp ai liten", style: "flex:1", onclick: () => { lukkArk(); sporTreneren({ ovelse: nokkel, okt_id: oo ? okt?.id : null, forslag: `Hvordan gjør jeg ${o.navn.toLowerCase()} riktig, og hva bør jeg tenke på?` }); } }, ikon("gnist"), "Spør treneren") : null));
+  }
+
+  function ovelsesbibliotek() {
+    aapneOvelsevelger({ tittel: "Øvelsesbibliotek", info: true, ved_valg: (o) => ovelseInfoArk(o.nokkel, null, { tilbake: ovelsesbibliotek }) });
   }
 
   // ---- hviletimer
@@ -765,6 +791,7 @@
       v.append(el("div", { class: "knapperad" },
         el("button", { class: "knapp noytral liten", style: "flex:1", onclick: () => versjonerArk(p.id) }, ikon("klokke"), "Tidligere versjoner"),
         el("button", { class: "knapp noytral liten", style: "flex:1", onclick: () => nyttProgramArk(aiPaa()) }, ikon("pluss"), "Nytt program")));
+      v.append(el("button", { class: "knapp noytral liten", style: "width:100%", onclick: ovelsesbibliotek }, ikon("info"), "Øvelsesbibliotek – slik gjør du øvelsene"));
     }
     const andre = d.programmer.filter((x) => !x.aktiv);
     if (andre.length) {
@@ -922,6 +949,7 @@
       el("div", { class: "skjema" }, felt("Sett", sett_), el("div", { class: "felt-rad" }, felt("Reps fra", rmin), felt("Reps til", rmaks)),
         felt("Hvile mellom sett", hvile), felt("Reps i reserve (hvor nær utmattelse)", rir, "2 = du kunne klart 2 til. Lavere = tyngre."), felt("Notat", notat)),
       el("div", { class: "knapperad", style: "margin-top:14px" },
+        el("button", { class: "knapp noytral liten", style: "flex:1", onclick: () => ovelseInfoArk(o.ovelse, null, { tilbake: () => doseArk(o, fjern, ferdig) }) }, ikon("info"), "Slik gjør du"),
         el("button", { class: "knapp noytral liten", style: "flex:1", onclick: () => byttOvelseArk({ ovelse: o.ovelse }, { utstyrsprofil_id: sted(), ved_valg: (a) => { o.ovelse = a.nokkel; ferdig(); } }) }, ikon("bytt"), "Bytt øvelse"),
         el("button", { class: "knapp fare liten", onclick: () => { lukkArk(); fjern(); } }, ikon("soppel"), "Fjern")),
       el("div", { class: "ark-knapper" }, el("button", { class: "knapp noytral", onclick: lukkArk }, "Avbryt"),
@@ -1120,7 +1148,8 @@
           el("td", {}, dato(x.startet, true)),
           el("td", {}, x.sett.map((s) => s.vekt != null ? `${tall(s.vekt)}×${s.reps}` : `${s.reps}`).join(", ")),
           h.vektbasert ? el("td", {}, x.e1rm ? tall(x.e1rm) : "–") : null))))) : el("p", { class: "tom" }, "Ingen data")));
-    if (h.ovelse.tips?.length) v.append(el("div", { class: "kort" }, el("h2", {}, "Teknikk"), el("ul", { class: "tips-liste" }, h.ovelse.tips.map((t) => el("li", {}, t)))));
+    v.append(el("div", { class: "kort" }, el("h2", {}, "Slik gjør du øvelsen"), el("div", { class: "instruksjon" }, instruksjonInnhold({ ...ovelse(nokkel), ...h.ovelse })),
+      el("div", { class: "knapperad" }, videoLenke(h.ovelse))));
   }
 
   function linjegraf(serie, enhet = "") {
@@ -1311,7 +1340,7 @@
 
   function egenOvelseArk(o) {
     const ny = !o;
-    const d = o ? { navn: o.navn, monster: o.monster, type: o.type, utstyr: [...o.utstyr], muskler: [...o.muskler], tips: (o.tips || []).join("\n"), arkivert: o.arkivert } : { navn: "", monster: "kne", type: "manualer", utstyr: ["manualer"], muskler: [], tips: "", arkivert: false };
+    const d = o ? { navn: o.navn, monster: o.monster, type: o.type, utstyr: [...o.utstyr], muskler: [...o.muskler], tips: (o.tips || []).join("\n"), instruksjon: (o.instruksjon?.steg || []).join("\n"), arkivert: o.arkivert } : { navn: "", monster: "kne", type: "manualer", utstyr: ["manualer"], muskler: [], tips: "", instruksjon: "", arkivert: false };
     const navn = el("input", { value: d.navn, oninput: (e) => { d.navn = e.target.value; } });
     const monster = el("select", { onchange: () => { d.monster = monster.value; } }, Object.entries(S.monster).map(([k, n]) => el("option", { value: k }, n)));
     monster.value = d.monster;
@@ -1323,10 +1352,11 @@
     const muskler = el("div", { class: "chips" }, Object.entries(S.muskler).map(([k, n]) => el("button", { class: `chip liten ${d.muskler.includes(k) ? "valgt" : ""}`, onclick: (e) => {
       d.muskler = d.muskler.includes(k) ? d.muskler.filter((x) => x !== k) : [...d.muskler, k]; e.currentTarget.classList.toggle("valgt", d.muskler.includes(k));
     } }, n)));
-    const tips = el("textarea", { placeholder: "Ett teknikkpunkt per linje", oninput: (e) => { d.tips = e.target.value; } }, d.tips);
+    const tips = el("textarea", { placeholder: "Ett kort punkt per linje", oninput: (e) => { d.tips = e.target.value; } }, d.tips);
+    const instruksjon = el("textarea", { rows: 5, placeholder: "Ett steg per linje, f.eks.\nStå med føttene i hoftebredde\nSenk deg rolig ned\nPress opp igjen", oninput: (e) => { d.instruksjon = e.target.value; } }, d.instruksjon);
     aapneArk(el("h3", {}, ny ? "Ny øvelse" : o.navn),
       el("div", { class: "skjema" }, felt("Navn", navn), el("div", { class: "felt-rad" }, felt("Bevegelse", monster), felt("Type (styrer vektsteg)", typ)),
-        el("div", { class: "felt" }, el("span", {}, "Utstyr som trengs"), utstyr), el("div", { class: "felt" }, el("span", {}, "Muskler (hovedmuskel først)"), muskler), felt("Teknikk", tips),
+        el("div", { class: "felt" }, el("span", {}, "Utstyr som trengs"), utstyr), el("div", { class: "felt" }, el("span", {}, "Muskler (hovedmuskel først)"), muskler), felt("Slik gjør du (ett steg per linje)", instruksjon), felt("Husk (korte teknikkpunkter)", tips),
         !ny ? el("div", { class: "liste-rad", style: "min-height:0;padding:0" }, el("span", { class: "tekst" }, el("b", {}, "Skjul øvelsen"), el("small", {}, "Historikken beholdes")), bryter(d.arkivert, (x) => { d.arkivert = x; })) : null),
       el("div", { class: "ark-knapper" }, el("button", { class: "knapp noytral", onclick: lukkArk }, "Avbryt"),
         el("button", { class: "knapp", onclick: async () => {

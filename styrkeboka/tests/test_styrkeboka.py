@@ -22,6 +22,20 @@ def sb(tmp_path):
     return s
 
 
+def test_alle_ovelser_har_instruksjon():
+    from instruksjoner import INSTRUKSJONER
+    nokler = {o["nokkel"] for o in BIBLIOTEK}
+    assert nokler == set(INSTRUKSJONER), nokler ^ set(INSTRUKSJONER)
+    for k, i in INSTRUKSJONER.items():
+        assert i["start"] and len(i["steg"]) >= 2 and i["feil"] and i["pust"], k
+
+
+def test_egen_ovelse_med_instruksjon(sb):
+    o = sb.lagre_egen_ovelse({"navn": "Min øvelse", "monster": "kjerne", "type": "kroppsvekt", "instruksjon": "Steg en\nSteg to"})
+    assert o["instruksjon"]["steg"] == ["Steg en", "Steg to"]
+    assert sb.ovelse("planke")["instruksjon"]["steg"]
+
+
 def test_bibliotek_gyldig():
     for o in BIBLIOTEK:
         assert o["monster"] in MONSTER, o["nokkel"]

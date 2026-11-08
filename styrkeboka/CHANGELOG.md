@@ -1,5 +1,13 @@
 # Endringslogg
 
+## 0.2.0
+
+- Instruksjoner for alle 80 øvelsene: utgangsstilling, steg for steg, pust og vanlige feil.
+- «Slik gjør du» fra økta, programmet, øvelsesvelgeren, bytte-listen og fremgangen per øvelse.
+- Øvelsesbibliotek under Program, med søk.
+- Egne øvelser kan få sin egen steg-for-steg-instruksjon.
+- Lenke for å søke etter video av øvelsen.
+
 ## 0.1.0
 
 - Første versjon: profiler med mål, erfaring, tid, treningssted og hensyn – koblet til Home Assistant-brukeren.

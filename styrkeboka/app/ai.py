@@ -210,7 +210,10 @@ def oppgave_sporsmal(sb: Styrkeboka, pid: int, sporsmal: str, oid: int | None = 
             for oo in o["ovelser"]))
     if ovelse:
         ov = sb.ovelse(ovelse)
-        deler.append(f"SPØRSMÅLET GJELDER ØVELSEN: {ov['navn']} ({MONSTER.get(ov['monster'], '')}). Appens teknikkpunkter: {'; '.join(ov.get('tips') or [])}")
+        ins = ov.get("instruksjon") or {}
+        deler.append(f"SPØRSMÅLET GJELDER ØVELSEN: {ov['navn']} ({MONSTER.get(ov['monster'], '')}). "
+                     f"Appens instruksjon – start: {ins.get('start', '')} Steg: {' '.join(ins.get('steg') or [])} "
+                     f"Vanlige feil: {'; '.join(ins.get('feil') or [])}. Teknikkpunkter: {'; '.join(ov.get('tips') or [])}")
     deler.append("SISTE ØKTER:\n" + historikkontekst(sb, pid, 4))
     tidligere = sb.db.alle("SELECT sporsmal, svar FROM ai_logg WHERE profil_id = ? AND type = 'sporsmal' AND tid >= ? ORDER BY id DESC LIMIT 3",
                            (pid, til_iso(naa() - timedelta(hours=3))))

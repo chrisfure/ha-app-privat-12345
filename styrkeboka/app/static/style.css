@@ -460,6 +460,20 @@ body.har-hvile .app { padding-bottom: calc(180px + env(safe-area-inset-bottom));
 .boble { border-radius: 18px; padding: 10px 14px; font-weight: 700; line-height: 1.45; white-space: pre-wrap; max-width: 92%; }
 .boble.meg { align-self: flex-end; background: var(--aksent); color: #fff; border-bottom-right-radius: 6px; }
 .boble.ai { align-self: flex-start; background: var(--ai-lys); color: var(--ai-blekk); border-bottom-left-radius: 6px; }
+.instruksjon { display: flex; flex-direction: column; gap: 14px; margin-top: 6px; }
+.ins-del h4 { margin: 0 0 6px; font-size: 13px; font-weight: 900; color: var(--dempet); text-transform: uppercase; letter-spacing: .05em; display: flex; align-items: center; gap: 6px; }
+.ins-del h4 svg { width: 16px; height: 16px; }
+.ins-del p { margin: 0; font-weight: 600; line-height: 1.5; }
+.ins-steg { margin: 0; padding: 0; list-style: none; counter-reset: steg; display: flex; flex-direction: column; gap: 8px; }
+.ins-steg li { counter-increment: steg; display: grid; grid-template-columns: 28px 1fr; gap: 10px; font-weight: 700; line-height: 1.45; }
+.ins-steg li::before { content: counter(steg); width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; background: var(--aksent-lys); color: var(--aksent-blekk); font-weight: 900; font-size: 14px; }
+.ins-del.feil { background: var(--ned-lys); color: var(--ned-blekk); border-radius: 18px; padding: 12px 14px; }
+.ins-del.feil h4 { color: var(--ned-blekk); }
+.ins-del.feil ul { margin: 0; padding-left: 20px; font-weight: 700; display: flex; flex-direction: column; gap: 4px; }
+.velg-liste .velg-rad { display: flex; align-items: center; gap: 8px; border-top: 1px solid var(--linje); }
+.velg-liste .velg-rad:first-child, .velg-liste .gruppe + .velg-rad { border-top: 0; }
+.velg-liste .velg-rad > button:first-child { flex: 1; min-width: 0; border-top: 0; }
+.velg-liste .velg-rad .ikonknapp { border-top: 0; padding: 0; }
 .tips-liste { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 6px; font-weight: 700; }
 
 /* ---- toast ---- */

@@ -100,7 +100,13 @@ class Database:
         self.con.execute("PRAGMA journal_mode=WAL")
         self.con.execute("PRAGMA foreign_keys=ON")
         self.con.executescript(SKJEMA)
+        self._migrer()
         self.con.commit()
+
+    def _migrer(self) -> None:
+        kolonner = {r[1] for r in self.con.execute("PRAGMA table_info(egne_ovelser)")}
+        if "instruksjon" not in kolonner:
+            self.con.execute("ALTER TABLE egne_ovelser ADD COLUMN instruksjon TEXT DEFAULT ''")
 
     # ------------------------------------------------------------ hjelpere
     @staticmethod

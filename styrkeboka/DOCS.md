@@ -23,6 +23,7 @@ Alt lagres lokalt i appens egen database. Ingen navn eller treningsdata ligger i
 * Én rad per sett: **kg**, **reps** og (valgfritt) **reps i reserve** – hvor mange reps du kunne klart til. Trykk ✓.
 * Vekt og reps er forhåndsutfylt fra forrige sett eller fra forslaget. Manualvekt er per manual.
 * Hviletimeren starter automatisk etter hvert sett (vibrasjon og valgfri lyd). Juster med −15/+15.
+* **Slik gjør du** viser utgangsstilling, steg for steg, pust og vanlige feil for øvelsen. Hele biblioteket finner du under Program → Øvelsesbibliotek.
 * **Bytt** gir øvelser med samme bevegelse. Velg om byttet bare gjelder i dag eller også i programmet.
 * **Mer**: endre mål for dagen (sett, reps, hvile), notat, flytt eller fjern øvelsen. Legg til øvelser underveis.
 * Oppvarmingssett foreslås for den første tunge øvelsen – trykk på dem for å logge.
