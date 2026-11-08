@@ -4,7 +4,7 @@ Prinsipper (se DOCS.md for kilder):
 * Muskelstyrkende trening minst 2 dager i uka for alle store muskelgrupper (WHO 2020, Helsedirektoratet).
 * Muskelvekst: ca. 10+ harde sett per muskelgruppe per uke, 6–15 reps nær utmattelse (Schoenfeld m.fl.).
 * Generell form: 8–15 reps, 2–3 sett, 1–3 reps i reserve (ACSM).
-* Rehab/forebygging: lettere belastning, 12–15 reps, rolig tempo, smertefritt – stopp ved smerte.
+* Rehab/forebygging: lettere belastning, 12–15 reps, rolig tempo.
 * Progresjon: «dobbel progresjon» – flere reps innen et intervall, deretter mer vekt.
 """
 from __future__ import annotations
@@ -173,7 +173,7 @@ def _begrunnelse(dager: int, maal: list[str], erfaring: str) -> str:
     if "styrke" in maal:
         deler.append("For styrke ligger de store løftene på 5–8 reps med god hvile.")
     if "rehab" in maal:
-        deler.append("Rehab/forebygging: skånsomme øvelsesvalg, 12–15 reps og 3 reps i reserve. Det skal ikke gjøre vondt – stopp ved smerte.")
+        deler.append("Rehab/forebygging: skånsomme øvelsesvalg, 12–15 reps og 3 reps i reserve.")
     if "generell" in maal:
         deler.append("Generell form: balansert program for hele kroppen, i tråd med anbefalingen om styrketrening minst to dager i uka.")
     if erfaring == "nybegynner":

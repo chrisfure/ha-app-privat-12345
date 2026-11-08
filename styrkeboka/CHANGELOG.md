@@ -1,5 +1,10 @@
 # Endringslogg
 
+## 0.3.1
+
+- AI-treneren gir praktiske tips ved plager i stedet for standardforbehold, og henviser ikke til lege/fysioterapeut uten at du spør.
+- Fjernet faste forbehold om smerte fra øvelsesinstruksjonene og appen.
+
 ## 0.3.0
 
 - Treningsblokker: programmet går i blokker på 6 uker (kan settes til 4–8).

@@ -89,5 +89,3 @@ actions:
 * Schoenfeld, Ogborn & Krieger (2017): dose–respons for ukentlig volum og muskelvekst (≈10+ sett per muskelgruppe i uka).
 * Bell m.fl. (2023): konsensus om lettere uker (deload) – redusert volum med omtrent samme belastning.
 * Helms m.fl. (2016): RIR-skalaen («reps in reserve») for å styre hvor nær utmattelse settene går.
-
-Appen og AI-treneren erstatter ikke fysioterapeut eller lege. Trening skal ikke gjøre vondt – stopp ved smerte.

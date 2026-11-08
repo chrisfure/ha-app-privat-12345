@@ -581,7 +581,6 @@
       tilbake ? el("button", { class: "tilbake", onclick: tilbake }, ikon("venstre"), "Alle øvelser") : null,
       el("h3", {}, o.navn), el("p", { class: "hint" }, meta),
       el("div", { class: "instruksjon" }, instruksjonInnhold(o)),
-      el("div", { class: "info-boks", style: "margin-top:14px" }, ikon("info"), "Det skal ikke gjøre vondt. Stopp ved smerte, og snakk med fysioterapeut eller lege ved skader."),
       el("div", { class: "knapperad", style: "margin-top:14px" }, videoLenke(o),
         aiPaa() ? el("button", { class: "knapp ai liten", style: "flex:1", onclick: () => { lukkArk(); sporTreneren({ ovelse: nokkel, okt_id: oo ? okt?.id : null, forslag: `Hvordan gjør jeg ${o.navn.toLowerCase()} riktig, og hva bør jeg tenke på?` }); } }, ikon("gnist"), "Spør treneren") : null));
   }
@@ -687,7 +686,7 @@
       send.disabled = false;
     });
     aapneArk(el("h3", {}, ikon("snakk"), "Spør treneren"),
-      el("p", { class: "hint" }, "Treneren kjenner programmet, målene og de siste øktene dine. Navnet ditt sendes ikke. Ved smerte: snakk med fysioterapeut eller lege."),
+      el("p", { class: "hint" }, "Treneren kjenner programmet, målene og de siste øktene dine. Navnet ditt sendes ikke."),
       samtale, el("div", { class: "skjema", style: "margin-top:12px" }, el("label", { class: "felt" }, t)),
       el("div", { class: "ark-knapper" }, el("button", { class: "knapp noytral", onclick: lukkArk }, "Lukk"), send));
   }
@@ -1318,7 +1317,7 @@
 
     v.append(el("div", { class: "seksjon-tittel" }, "Om rådene"));
     v.append(el("div", { class: "kort" }, el("p", { class: "forklaring" },
-      "Programforslagene følger etablerte anbefalinger: muskelstyrkende trening minst 2 dager i uka (WHO og Helsedirektoratet), 8–15 reps med 1–3 reps i reserve for generell form og muskelvekst (ACSM), og rundt 10+ sett per muskelgruppe i uka for muskelvekst. Progresjonen er «dobbel progresjon»: flere reps til toppen av intervallet, så mer vekt. Ved rehab og skader: skånsomme valg, lettere belastning – og det skal ikke gjøre vondt. Appen og AI-treneren erstatter ikke fysioterapeut eller lege.")));
+      "Programforslagene følger etablerte anbefalinger: muskelstyrkende trening minst 2 dager i uka (WHO og Helsedirektoratet), 8–15 reps med 1–3 reps i reserve for generell form og muskelvekst (ACSM), og rundt 10+ sett per muskelgruppe i uka for muskelvekst. Progresjonen er «dobbel progresjon»: flere reps til toppen av intervallet, så mer vekt. Ved rehab og skader: skånsomme øvelsesvalg og lettere belastning.")));
   }
 
   function profilArk(p) {
