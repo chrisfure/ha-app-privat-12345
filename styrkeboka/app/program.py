@@ -183,8 +183,17 @@ def _begrunnelse(dager: int, maal: list[str], erfaring: str) -> str:
 
 # --------------------------------------------------------------------------- progresjon
 def avrund(vekt: float, steg: float) -> float:
-    fin = 0.5 if steg < 2.5 else 1.25 if steg == 2.5 else 0.5
-    return round(round(vekt / fin) * fin, 2)
+    """Rund til nærmeste vekt som faktisk finnes (multiplum av vektsteget)."""
+    if not steg:
+        return round(vekt, 1)
+    return round(round(vekt / steg) * steg, 2)
+
+
+def rund_til_utstyr(ovelse: dict, kg: float) -> float:
+    v = avrund(kg, steg_for(ovelse, kg))
+    if ovelse.get("type") == "stang":
+        v = max(v, 20.0)
+    return v
 
 
 def foreslaa(ovelse: dict, plan: dict, tidligere: list[list[dict]]) -> dict:
@@ -320,3 +329,71 @@ def roter_hjelpeovelser(data: dict, ovelser: list[dict], utstyr: set[str] | None
                 nye.append(dict(o))
         ny["dager"].append({**dag, "ovelser": nye})
     return ny, endringer
+
+
+# --------------------------------------------------------------------------- startvekter
+# Omtrentlige styrkeforhold mellom øvelser, uttrykt som andel av estimert 1RM i en referanseøvelse:
+#   B = benkpress (overkropp), K = knebøy med stang (underkropp).
+# For manualøvelser gjelder tallet per manual. Tallene er grove tommelfingerregler fra trenings-
+# praksis – bra nok til et forsiktig første forslag som justeres etter første økt.
+FORHOLD: dict[str, tuple[str, float]] = {
+    # press
+    "benkpress": ("B", 1.0), "benkpress-manualer": ("B", 0.38), "skrå-benk-manualer": ("B", 0.33),
+    "brystpress-maskin": ("B", 0.9), "stående-press": ("B", 0.62), "skulderpress-manualer": ("B", 0.26),
+    "landmine-press": ("B", 0.28), "skulderpress-maskin": ("B", 0.6), "flyes-manualer": ("B", 0.16),
+    "kabelkryss": ("B", 0.15),
+    # trekk
+    "roing-stang": ("B", 0.8), "ettarms-roing": ("B", 0.38), "sittende-roing": ("B", 0.8),
+    "roing-brystsupport": ("B", 0.28), "nedtrekk": ("B", 0.8), "pullover-manual": ("B", 0.28),
+    "face-pull": ("B", 0.25), "omvendt-flyes": ("B", 0.07),
+    # armer og skuldre
+    "bicepscurl": ("B", 0.14), "hammercurl": ("B", 0.16), "bicepscurl-kabel": ("B", 0.32),
+    "triceps-pushdown": ("B", 0.35), "fransk-press": ("B", 0.11), "triceps-over-hodet": ("B", 0.28),
+    "sidehev": ("B", 0.07), "sidehev-kabel": ("B", 0.05),
+    # bein
+    "knebøy-stang": ("K", 1.0), "frontknebøy": ("K", 0.8), "goblet-knebøy": ("K", 0.38),
+    "goblet-knebøy-kb": ("K", 0.38), "beinpress": ("K", 1.9), "markløft": ("K", 1.2),
+    "rumensk-markløft": ("K", 0.85), "rumensk-markløft-man": ("K", 0.33), "kettlebell-sving": ("K", 0.28),
+    "kettlebell-markløft": ("K", 0.5), "bulgarsk-utfall": ("K", 0.18), "utfall-manualer": ("K", 0.2),
+    "step-up": ("K", 0.18), "bakoverutfall": ("K", 0.2), "hoftehev-stang": ("K", 1.1),
+    "hoftehev-manual": ("K", 0.5), "beincurl": ("K", 0.35), "beinspark": ("K", 0.5),
+    "tåhev-maskin": ("K", 0.9), "bondegange": ("K", 0.3),
+}
+# Uten kjente løft: grovt anslag på 1RM som andel av kroppsvekt (forsiktig satt).
+KROPPSVEKT_FAKTOR = {"nybegynner": {"B": 0.5, "K": 0.65}, "noe": {"B": 0.75, "K": 1.0}, "erfaren": {"B": 1.05, "K": 1.4}}
+
+
+def referanser(kjente: list[dict], kroppsvekt: float | None = None, erfaring: str = "noe") -> dict:
+    """Regner ut referanse-1RM (B og K) fra kjente løft [{ovelse, kg, reps}] eller kroppsvekt."""
+    anslag: dict[str, list[float]] = {"B": [], "K": []}
+    for k in kjente or []:
+        f = FORHOLD.get(str(k.get("ovelse")))
+        e = e1rm(k.get("kg"), int(k.get("reps") or 0)) if k.get("kg") else None
+        if f and e:
+            anslag[f[0]].append(e / f[1])
+    ref = {r: sum(v) / len(v) for r, v in anslag.items() if v}
+    if "B" in ref and "K" not in ref:
+        ref["K"] = ref["B"] * 1.3
+    if "K" in ref and "B" not in ref:
+        ref["B"] = ref["K"] * 0.75
+    if not ref and kroppsvekt:
+        fak = KROPPSVEKT_FAKTOR.get(erfaring, KROPPSVEKT_FAKTOR["noe"])
+        ref = {"B": kroppsvekt * fak["B"], "K": kroppsvekt * fak["K"]}
+    return ref
+
+
+def anslaa_vekt(ovelse: dict, plan: dict, ref: dict) -> float | None:
+    """Arbeidsvekt for planlagte reps med ønsket reps i reserve, ut fra referanse-1RM. Rundes forsiktig ned."""
+    f = FORHOLD.get(ovelse.get("nokkel"))
+    if not f or f[0] not in ref or not vektbasert(ovelse) or sekunder(ovelse):
+        return None
+    mal_1rm = ref[f[0]] * f[1]
+    rmin, rmaks = int(plan.get("reps_min") or 8), int(plan.get("reps_maks") or 12)
+    rir = int(plan.get("rir") if plan.get("rir") is not None else 2)
+    reps = min(25, round((rmin + rmaks) / 2) + rir)
+    vekt = mal_1rm / (1 + reps / 30) * 0.95  # litt under for første økt
+    steg = steg_for(ovelse, vekt)
+    vekt = math.floor(vekt / steg) * steg if steg else vekt
+    if ovelse.get("type") == "stang":
+        vekt = max(vekt, 20.0)
+    return round(vekt, 2) if vekt > 0 else None

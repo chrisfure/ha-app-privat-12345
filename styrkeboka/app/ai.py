@@ -178,6 +178,29 @@ def oppgave_ny_blokk(sb: Styrkeboka, pid: int, prid: int) -> str:
     ])
 
 
+def oppgave_startvekter(sb: Styrkeboka, pid: int, lokalt: dict) -> str:
+    p = sb.profil(pid)
+    kjente = "; ".join(f"{sb.ovelse(k['ovelse'])['navn']}: {k['kg']:g} kg × {k['reps']}" for k in lokalt["kjente"]) or "ingen oppgitt"
+    linjer = []
+    for f in lokalt["forslag"]:
+        ov = sb.ovelse(f["ovelse"])
+        linjer.append(f"- {f['ovelse']} ({f['navn']}, {ov['type']}{', vekt per manual' if ov['type'] == 'manualer' else ''}): "
+                      f"mål {f['reps_min']}-{f['reps_maks']} reps med {f['rir']} i reserve; appens anslag: "
+                      f"{str(f['kg']) + ' kg' if f['kg'] else 'mangler'}{' (har allerede historikk)' if f['har_historikk'] else ''}")
+    return "\n\n".join([
+        ROLLE,
+        "OPPGAVE: Foreslå startvekt (kg) for hver øvelse under, slik at brukeren treffer rep-målet med ønsket antall reps i reserve "
+        "i første økt. Bruk løftene brukeren kjenner, kroppsvekt, erfaring og vanlige styrkeforhold mellom øvelser "
+        "(f.eks. manualpress per manual ≈ 35–40 % av benkpress med stang). Vær heller litt forsiktig enn for tung. "
+        "Rund av til vekter som finnes: stang/skiver 2,5 kg, manualer 1–2 kg, apparat 2,5–5 kg, kettlebell 4 kg.",
+        "OM BRUKEREN:\n" + profilkontekst(sb, pid) + (f"\nKroppsvekt: {p['kroppsvekt']:g} kg" if p.get("kroppsvekt") else ""),
+        f"LØFT BRUKEREN KJENNER: {kjente}",
+        "SISTE ØKTER:\n" + historikkontekst(sb, pid, 4),
+        "ØVELSER:\n" + "\n".join(linjer),
+        'Svar KUN med JSON: {"vekter": {"<nøkkel>": kg, ...}, "kommentar": "1-2 setninger om hvordan du har tenkt"}',
+    ])
+
+
 def oppgave_tips(sb: Styrkeboka, oid: int) -> str:
     o = sb.okt(oid)
     plan = []

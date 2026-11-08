@@ -43,6 +43,16 @@ Progresjonen er **dobbel progresjon**: når alle sett når toppen av rep-interva
 
 Trener du et sted med mindre utstyr (f.eks. **Hjemme**), byttes øvelser som krever annet utstyr automatisk ut med en tilsvarende øvelse for den økta. Fremgangen følger øvelsen du faktisk gjør.
 
+### Startvekter
+
+Første gang du gjør en øvelse, foreslår appen vekt i denne rekkefølgen:
+
+1. **Startvekt du har lagret** – under Trening («Finn startvekter»), Program → Startvekter eller i økt-menyen. Oppgi kroppsvekt og ett–to løft du kjenner (vekt × reps), så anslår AI-treneren (eller appen) vekt på alle øvelsene. Du justerer før du lagrer.
+2. **Anslag fra andre øvelser du har logget** – f.eks. benkpress med stang → skråbenk med manualer, ut fra vanlige styrkeforhold mellom øvelser.
+3. **Løftene eller kroppsvekten du har oppgitt.**
+
+Anslagene er litt forsiktige med vilje. Etter første økt er det din egen fremgang som styrer forslagene.
+
 ### Treningsblokker
 
 Programmet går i blokker på **6 uker** (anbefalt; kan settes til 4–8 under Program → blokklinja).

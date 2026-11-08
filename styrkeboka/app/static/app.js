@@ -252,6 +252,12 @@
         el("button", { class: "chip liten", onclick: () => startOkt(null) }, ikon("pluss"), "Fri økt")));
     }
 
+    if (ov.mangler_startvekt && !ov.aktiv) {
+      v.append(el("div", { class: "ai-kort" },
+        el("h3", {}, ikon("manual"), "Hvor tungt skal du løfte?"),
+        el("p", {}, `${ov.mangler_startvekt} øvelser i programmet mangler startvekt. Svar på et par spørsmål, så ${aiPaa() ? "foreslår treneren" : "regner appen ut"} vekt på alle.`),
+        el("button", { class: "knapp ai", style: "flex:none", onclick: startvekterArk }, ikon("gnist"), "Finn startvekter")));
+    }
     // uke
     const u = ov.uke;
     v.append(el("div", { class: "kort" },
@@ -438,6 +444,7 @@
         aiPaa() ? el("button", { onclick: () => { lukkArk(); hentTips(!!okt.ai_tips); } }, ikon("gnist"), okt.ai_tips ? "Nye tips fra treneren" : "Tips fra treneren") : null,
         aiPaa() ? el("button", { onclick: () => { lukkArk(); sporTreneren({ okt_id: okt.id }); } }, ikon("snakk"), "Spør treneren") : null,
         el("button", { onclick: () => { lukkArk(); aapneOvelsevelger({ tittel: "Legg til øvelse", ved_valg: leggTilOvelse }); } }, ikon("pluss"), "Legg til øvelse"),
+        el("button", { onclick: () => { lukkArk(); startvekterArk(); } }, ikon("manual"), "Finn startvekter"),
         el("button", { onclick: () => { lukkArk(); avsluttArk(); } }, ikon("sjekk"), "Fullfør økten"),
         el("button", { class: "fare", onclick: async () => {
           lukkArk();
@@ -610,13 +617,28 @@
     if (S.innstillinger.hviletimer_lyd && !lydKontekst) { try { lydKontekst = new (window.AudioContext || window.webkitAudioContext)(); } catch (_) { /* */ } }
     hvile = { slutt: Date.now() + sek * 1000, total: sek, etikett, ferdig: false };
     clearInterval(hvileTimer);
-    hvileTimer = setInterval(tegnHvile, 250);
+    hvileTimer = setInterval(tegnHvile, 500);
     tegnHvile();
   }
-  function stoppHvile() { hvile = null; clearInterval(hvileTimer); $("hvile-rot").innerHTML = ""; document.body.classList.remove("har-hvile"); }
+  let hvileEl = null;
+  function stoppHvile() { hvile = null; hvileEl = null; clearInterval(hvileTimer); $("hvile-rot").innerHTML = ""; document.body.classList.remove("har-hvile"); }
+  function byggHvile() {
+    // Bygges én gang per hvile – bare tekst og linje oppdateres, så knappene står stille og er lette å treffe.
+    const tid = el("span", { class: "tid" });
+    const tittel = el("span", {});
+    const etikett = el("span", { class: "etikett" }, tittel, el("br"), el("span", { class: "neste" }));
+    const minus = el("button", { "aria-label": "15 sekunder kortere", onclick: () => { if (!hvile) return; hvile.slutt -= 15e3; tegnHvile(); } }, "−15");
+    const pluss = el("button", { "aria-label": "15 sekunder lengre", onclick: () => { if (!hvile) return; hvile.slutt += 15e3; hvile.total += 15; tegnHvile(); } }, "+15");
+    const lukk = el("button", { "aria-label": "Lukk hviletimer", onclick: stoppHvile }, ikon("kryss"));
+    const linje = el("span", { class: "linje" });
+    const boks = el("div", { class: "hvile", role: "timer" }, tid, etikett, minus, pluss, lukk, linje);
+    $("hvile-rot").innerHTML = "";
+    $("hvile-rot").append(boks);
+    hvileEl = { boks, tid, tittel, neste: etikett.querySelector(".neste"), minus, pluss, linje };
+  }
   function tegnHvile() {
-    const rot = $("hvile-rot");
     if (!hvile) { stoppHvile(); return; }
+    if (!hvileEl || !hvileEl.boks.isConnected) byggHvile();
     const igjen = (hvile.slutt - Date.now()) / 1000;
     if (igjen <= 0 && !hvile.ferdig) {
       hvile.ferdig = true;
@@ -625,14 +647,14 @@
       setTimeout(() => { if (hvile?.ferdig) stoppHvile(); }, 8000);
     }
     document.body.classList.add("har-hvile");
-    rot.innerHTML = "";
-    rot.append(el("div", { class: `hvile ${hvile.ferdig ? "ferdig" : ""}`, role: "timer" },
-      el("span", { class: "tid" }, hvile.ferdig ? "Klar!" : mmss(igjen)),
-      el("span", { class: "etikett" }, hvile.ferdig ? "Tid for neste sett" : "Hvile", el("br"), hvile.etikett || ""),
-      hvile.ferdig ? null : el("button", { "aria-label": "15 sekunder kortere", onclick: () => { hvile.slutt -= 15e3; tegnHvile(); } }, "−15"),
-      hvile.ferdig ? null : el("button", { "aria-label": "15 sekunder lengre", onclick: () => { hvile.slutt += 15e3; hvile.total += 15; tegnHvile(); } }, "+15"),
-      el("button", { "aria-label": "Lukk hviletimer", onclick: stoppHvile }, ikon("kryss")),
-      el("span", { class: "linje", style: `width:${Math.max(0, Math.min(100, 100 * igjen / hvile.total))}%` })));
+    const e = hvileEl;
+    e.boks.classList.toggle("ferdig", hvile.ferdig);
+    const tekst = hvile.ferdig ? "Klar!" : mmss(igjen);
+    if (e.tid.textContent !== tekst) e.tid.textContent = tekst;
+    e.tittel.textContent = hvile.ferdig ? "Tid for neste sett" : "Hvile";
+    e.neste.textContent = hvile.etikett || "";
+    e.minus.hidden = e.pluss.hidden = hvile.ferdig;
+    e.linje.style.width = `${Math.max(0, Math.min(100, 100 * igjen / hvile.total))}%`;
   }
 
   // ---- AI i økta
@@ -759,6 +781,78 @@
     }
   }
 
+  // ================================================================ STARTVEKTER
+  async function startvekterArk() {
+    let d;
+    try { d = await api(`api/profiler/${pid}/startvekter`); } catch (e) { feil(e); return; }
+    const kandidater = S.kan_anslaas.map((k) => ovelse(k)).sort((a, b) => a.navn.localeCompare(b.navn, "nb"));
+    const vanlige = ["benkpress", "benkpress-manualer", "knebøy-stang", "markløft", "skulderpress-manualer", "nedtrekk", "beinpress", "goblet-knebøy"];
+    const kjente = (d.kjente?.length ? d.kjente : [{ ovelse: "benkpress", kg: "", reps: "" }]).map((k) => ({ ...k }));
+    const kv = el("input", { type: "text", inputmode: "decimal", placeholder: "kg", value: d.kroppsvekt != null ? tall(d.kroppsvekt) : "" });
+    const rader = el("div", { class: "kjente" });
+    const tegnRader = () => {
+      rader.innerHTML = "";
+      kjente.forEach((k, i) => {
+        const velg = el("select", { onchange: () => { k.ovelse = velg.value; } },
+          el("optgroup", { label: "Vanlige" }, vanlige.map((n) => el("option", { value: n }, ovelse(n).navn))),
+          el("optgroup", { label: "Alle" }, kandidater.filter((o) => !vanlige.includes(o.nokkel)).map((o) => el("option", { value: o.nokkel }, o.navn))));
+        velg.value = k.ovelse;
+        rader.append(el("div", { class: "kjent-rad" }, velg,
+          el("input", { type: "text", inputmode: "decimal", placeholder: "kg", "aria-label": "kg", value: k.kg !== "" && k.kg != null ? tall(k.kg) : "", oninput: (e) => { k.kg = e.target.value; } }),
+          el("span", {}, "×"),
+          el("input", { type: "text", inputmode: "numeric", placeholder: "reps", "aria-label": "reps", value: k.reps ?? "", oninput: (e) => { k.reps = e.target.value; } }),
+          el("button", { class: "ikonknapp", "aria-label": "Fjern", onclick: () => { kjente.splice(i, 1); tegnRader(); } }, ikon("kryss"))));
+      });
+    };
+    tegnRader();
+    const status = el("div");
+    const beregn = async (medAI) => {
+      status.innerHTML = "";
+      if (medAI) status.append(el("div", { style: "margin-top:12px" }, aiLaster("Treneren regner ut startvekter …")));
+      try {
+        const r = await post(`api/profiler/${pid}/startvekter/beregn`, { ai: medAI, kroppsvekt: kv.value, kjente: kjente.filter((k) => k.kg && k.reps) });
+        visResultat(r);
+      } catch (e) { status.innerHTML = ""; feil(e); }
+    };
+    aapneArk(el("h3", {}, ikon("manual"), "Startvekter"),
+      el("p", { class: "hint" }, "Fortell hva du klarer i ett eller to løft du kjenner, så anslår treneren vekt på resten av øvelsene i programmet. Har du ikke løftet før, holder det med kroppsvekt."),
+      el("div", { class: "skjema" }, felt("Kroppsvekt (valgfritt)", kv)),
+      el("div", { class: "ark-etikett" }, "Løft du vet hva du klarer"),
+      el("p", { class: "forklaring", style: "font-size:13px;margin-bottom:8px" }, "Vekt og antall reps du klarer med god teknikk, f.eks. benkpress 60 kg × 8. Manualer: vekt per manual."),
+      rader,
+      el("button", { class: "legg-til", style: "margin-top:8px", onclick: () => { kjente.push({ ovelse: "benkpress-manualer", kg: "", reps: "" }); tegnRader(); } }, ikon("pluss"), "Legg til løft"),
+      status,
+      el("div", { class: "ark-knapper" },
+        el("button", { class: `knapp ${aiPaa() ? "noytral" : ""}`, onclick: () => beregn(false) }, "Beregn"),
+        aiPaa() ? el("button", { class: "knapp ai", onclick: () => beregn(true) }, ikon("gnist"), "Anslå med AI") : null));
+  }
+
+  function visResultat(r) {
+    const vekter = {};
+    const liste = el("div", { class: "velg-liste" });
+    const ovl = r.forslag;
+    for (const f of ovl) {
+      vekter[f.ovelse] = f.kg;
+      const inp = el("input", { type: "text", inputmode: "decimal", placeholder: "–", value: f.kg != null ? tall(f.kg) : "", oninput: (e) => { vekter[f.ovelse] = lesTall(e.target.value); } });
+      liste.append(el("div", { class: "vekt-rad" },
+        el("span", { class: "tekst" }, el("b", {}, f.navn),
+          el("small", {}, [`${f.reps_min}–${f.reps_maks} reps`, f.type === "manualer" ? "per manual" : null, f.har_historikk ? "har historikk – den brukes først" : f.grunnlag ? `fra ${f.grunnlag}` : "fyll inn selv"].filter(Boolean).join(" · "))),
+        el("span", { class: "vekt-inp" }, inp, el("span", {}, "kg"))));
+    }
+    aapneArk(el("h3", {}, r.kilde === "ai" ? ikon("gnist") : ikon("manual"), "Foreslåtte startvekter"),
+      r.kommentar ? el("div", { class: "ai-kort", style: "margin:6px 0" }, el("p", {}, r.kommentar)) : null,
+      el("p", { class: "hint" }, "Juster det som ikke stemmer. Vektene brukes som forslag første gang du gjør øvelsen – etter det tar fremgangen din over."),
+      ovl.length ? liste : el("p", { class: "tom" }, "Programmet har ingen vektøvelser."),
+      el("div", { class: "ark-knapper" }, el("button", { class: "knapp noytral", onclick: startvekterArk }, ikon("venstre"), "Tilbake"),
+        el("button", { class: "knapp", onclick: async () => {
+          try {
+            const n = (await put(`api/profiler/${pid}/startvekter`, { vekter, kilde: r.kilde })).lagret;
+            lukkArk(); visToast(`${n} startvekter lagret`);
+            if (!$("v-okt").hidden && okt) visOkt(okt.id); else if (fane === "program") visProgram(); else visTrening();
+          } catch (e) { feil(e); }
+        } }, ikon("sjekk"), "Lagre")));
+  }
+
   // ================================================================ BLOKKER
   function blokkBanner(prid, b) {
     return el("div", { class: "velkommen" },
@@ -846,7 +940,9 @@
       v.append(el("div", { class: "knapperad" },
         el("button", { class: "knapp noytral liten", style: "flex:1", onclick: () => versjonerArk(p.id) }, ikon("klokke"), "Tidligere versjoner"),
         el("button", { class: "knapp noytral liten", style: "flex:1", onclick: () => nyttProgramArk(aiPaa()) }, ikon("pluss"), "Nytt program")));
-      v.append(el("button", { class: "knapp noytral liten", style: "width:100%", onclick: ovelsesbibliotek }, ikon("info"), "Øvelsesbibliotek – slik gjør du øvelsene"));
+      v.append(el("div", { class: "knapperad" },
+        el("button", { class: "knapp noytral liten", style: "flex:1", onclick: startvekterArk }, ikon("manual"), "Startvekter"),
+        el("button", { class: "knapp noytral liten", style: "flex:1", onclick: ovelsesbibliotek }, ikon("info"), "Øvelsesbibliotek")));
     }
     const andre = d.programmer.filter((x) => !x.aktiv);
     if (andre.length) {

@@ -210,3 +210,37 @@ def test_sikre_faste_legger_tilbake(sb):
 def sb_naa():
     from db import naa
     return naa()
+
+
+def test_startvekter(sb):
+    pid = sb.profiler()[0]["id"]
+    sb.lagre_program(pid, sb.foreslaa_program(pid), kilde="mal")
+    assert sb.mangler_startvekt(pid) > 0
+    r = sb.beregn_startvekter(pid, [{"ovelse": "benkpress", "kg": "80", "reps": 5}], "82")
+    assert sb.profil(pid)["kroppsvekt"] == 82 and sb.mangler_startvekt(pid) == 0
+    vekter = {f["ovelse"]: f["kg"] for f in r["forslag"] if f["kg"]}
+    assert vekter
+    # benkpress med manualer per manual skal være godt under stang
+    import program as P2, ovelser as O2
+    idx = {o["nokkel"]: o for o in O2.BIBLIOTEK}
+    ref = P2.referanser([{"ovelse": "benkpress", "kg": 80, "reps": 5}])
+    plan = {"reps_min": 8, "reps_maks": 12, "rir": 2}
+    assert P2.anslaa_vekt(idx["benkpress-manualer"], plan, ref) < P2.anslaa_vekt(idx["benkpress"], plan, ref) / 2
+    sb.lagre_startvekter(pid, vekter, "ai")
+    prog = sb.aktivt_program(pid)
+    okt = sb.start_okt(pid, prog["dager"][0]["id"])
+    med_vekt = [oo for oo in okt["ovelser"] if oo["ovelse"] in vekter]
+    assert med_vekt and all(oo["forslag_kg"] == vekter[oo["ovelse"]] for oo in med_vekt)
+    assert "AI-treneren" in med_vekt[0]["forslag_tekst"]
+
+
+def test_anslag_fra_logget_ovelse(sb):
+    pid = sb.profiler()[0]["id"]
+    sb.lagre_profil({"maal": ["muskelvekst"]}, pid)
+    o = sb.start_okt(pid, None)
+    sb.legg_til_ovelse(o["id"], {"ovelse": "benkpress"})
+    oo = sb.okt(o["id"])["ovelser"][0]
+    sb.logg_sett(o["id"], {"okt_ovelse_id": oo["id"], "vekt": 70, "reps": 8})
+    sb.avslutt_okt(o["id"], {})
+    f = sb.forslag(pid, sb.ovelse("skrå-benk-manualer"), {"reps_min": 8, "reps_maks": 12, "rir": 2}, [])
+    assert f["kg"] and 10 <= f["kg"] <= 30 and "benkpress" in f["tekst"]

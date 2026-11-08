@@ -232,6 +232,9 @@ class Styrkeboka:
             rad["okt_minutter"] = _int(d["okt_minutter"], 60, 20, 120)
         if "hensyn" in d:
             rad["hensyn"] = str(d["hensyn"] or "")[:1000]
+        if "kroppsvekt" in d:
+            kv = _float(d["kroppsvekt"])
+            rad["kroppsvekt"] = kv if kv and 25 <= kv <= 300 else None
         if "utstyrsprofil_id" in d:
             rad["utstyrsprofil_id"] = _int(d["utstyrsprofil_id"])
         if pid is None:
@@ -493,6 +496,132 @@ class Styrkeboka:
         return [self.db.alle("SELECT * FROM sett WHERE okt_id = ? AND ovelse = ? AND oppvarming = 0 ORDER BY settnr",
                              (o["id"], nokkel)) for o in okter]
 
+    # ------------------------------------------------------------ startvekter
+    def forslag(self, pid: int, ov: dict, plan: dict, tidl: list[list[dict]]) -> dict:
+        """Vektforslag: egen historikk først, så lagret startvekt, så anslag fra andre løft du har logget."""
+        f = P.foreslaa(ov, plan, tidl)
+        if f["trend"] != "ny" or not vektbasert(ov):
+            return f
+        lagret = self.db.en("SELECT kg, kilde FROM startvekter WHERE profil_id = ? AND ovelse = ?", (pid, ov["nokkel"]))
+        if lagret:
+            kilde = {"ai": "fra AI-treneren", "manuell": "som du la inn"}.get(lagret["kilde"], "anslått")
+            return {**f, "kg": lagret["kg"], "tekst": f"Startvekt {kilde}: {P._kg(lagret['kg'])}. Juster etter første sett – "
+                    f"målet er {plan.get('reps_min')}–{plan.get('reps_maks')} reps med {plan.get('rir', 2)} i reserve."}
+        est = self.anslag_fra_historikk(pid, ov, plan)
+        if est:
+            kg, grunnlag = est
+            return {**f, "kg": kg, "tekst": f"Anslått ut fra {grunnlag}: {P._kg(kg)}. Juster etter første sett."}
+        return f
+
+    def _referanser_fra_historikk(self, pid: int) -> tuple[dict, list[str]]:
+        rader = self.db.alle(
+            "SELECT s.ovelse, s.vekt, s.reps FROM sett s JOIN okter o ON o.id = s.okt_id WHERE o.profil_id = ? "
+            "AND o.status = 'fullfort' AND COALESCE(o.lett, 0) = 0 AND s.oppvarming = 0 AND s.vekt > 0 AND o.startet >= ?",
+            (pid, til_iso(naa() - timedelta(days=120))))
+        beste: dict[str, float] = {}
+        for r in rader:
+            e = P.e1rm(r["vekt"], r["reps"])
+            if e and r["ovelse"] in P.FORHOLD:
+                beste[r["ovelse"]] = max(beste.get(r["ovelse"], 0), e)
+        kjente = [{"ovelse": k, "kg": e, "reps": 1} for k, e in beste.items()]
+        return P.referanser(kjente), [self.ovelse(k)["navn"].lower() for k in beste]
+
+    def anslag_fra_historikk(self, pid: int, ov: dict, plan: dict) -> tuple[float, str] | None:
+        ref, navn = self._referanser_fra_historikk(pid)
+        if ref and navn:
+            kg = P.anslaa_vekt(ov, plan, ref)
+            if kg:
+                return kg, "det du løfter i " + ", ".join(navn[:2])
+        p = self.profil(pid)
+        ref = P.referanser(p.get("kjente_loft") or [], p.get("kroppsvekt"), p.get("erfaring") or "noe")
+        kg = P.anslaa_vekt(ov, plan, ref) if ref else None
+        if kg:
+            return kg, "løftene du har oppgitt" if p.get("kjente_loft") else "kroppsvekt og erfaring"
+        return None
+
+    def beregn_startvekter(self, pid: int, kjente: list[dict] | None = None, kroppsvekt=None) -> dict:
+        """Lokalt anslag for alle vektøvelser i aktivt program. Lagrer svarene på profilen."""
+        p = self.profil(pid)
+        if kjente is not None:
+            rene = []
+            for k in kjente[:10]:
+                kg, reps = _float(k.get("kg")), _int(k.get("reps"), None, 1, 30)
+                if self.finnes(str(k.get("ovelse") or "")) and kg and reps:
+                    rene.append({"ovelse": k["ovelse"], "kg": kg, "reps": reps})
+            self.db.oppdater("profiler", pid, {"kjente_loft": rene})
+            if kroppsvekt not in (None, ""):
+                self.lagre_profil({"kroppsvekt": kroppsvekt}, pid)
+            p = self.profil(pid)
+        kjente = p.get("kjente_loft") or []
+        ref_hist, hist_navn = self._referanser_fra_historikk(pid)
+        ref = P.referanser(kjente, p.get("kroppsvekt"), p.get("erfaring") or "noe")
+        prog = self.aktivt_program(pid)
+        ut, sett_ = [], set()
+        for dag in (prog["dager"] if prog else []):
+            for o in dag["ovelser"]:
+                ov = self.ovelse(o["ovelse"])
+                if o["ovelse"] in sett_ or not vektbasert(ov) or sekunder(ov):
+                    continue
+                sett_.add(o["ovelse"])
+                har_hist = bool(self.tidligere_sett(pid, o["ovelse"], antall=1))
+                kg = P.anslaa_vekt(ov, o, ref) if ref else None
+                grunnlag = "løftene du oppga" if kjente else "kroppsvekt og erfaring" if ref else ""
+                if not kg and ref_hist:
+                    kg, grunnlag = P.anslaa_vekt(ov, o, ref_hist), "det du har logget"
+                ut.append({"ovelse": o["ovelse"], "navn": ov["navn"], "type": ov["type"], "kg": kg, "grunnlag": grunnlag,
+                           "reps_min": o["reps_min"], "reps_maks": o["reps_maks"], "rir": o["rir"], "har_historikk": har_hist,
+                           "kan_anslaas": o["ovelse"] in P.FORHOLD})
+        return {"forslag": ut, "referanser": {k: round(v, 1) for k, v in ref.items()}, "kjente": kjente,
+                "kroppsvekt": p.get("kroppsvekt")}
+
+    def lagre_startvekter(self, pid: int, vekter: dict, kilde: str = "manuell") -> int:
+        self.profil(pid)
+        t = til_iso(naa())
+        n = 0
+        with self.db.lås:
+            for nokkel, kg in (vekter or {}).items():
+                if not self.finnes(str(nokkel)):
+                    continue
+                v = _float(kg)
+                if v:
+                    v = P.rund_til_utstyr(self.ovelse(str(nokkel)), v)
+                if v is None or v <= 0:
+                    self.db.kjor("DELETE FROM startvekter WHERE profil_id = ? AND ovelse = ?", (pid, nokkel), commit=False)
+                    continue
+                self.db.kjor("INSERT INTO startvekter (profil_id, ovelse, kg, kilde, tid) VALUES (?, ?, ?, ?, ?) "
+                             "ON CONFLICT(profil_id, ovelse) DO UPDATE SET kg = excluded.kg, kilde = excluded.kilde, tid = excluded.tid",
+                             (pid, nokkel, v, kilde, t), commit=False)
+                n += 1
+            # oppdater forslag i en pågående økt for øvelser uten logget sett
+            aktiv = self.db.en("SELECT id FROM okter WHERE profil_id = ? AND status = 'pagar'", (pid,))
+            self.db.commit()
+        if aktiv:
+            for oo in self.db.alle("SELECT * FROM okt_ovelser WHERE okt_id = ?", (aktiv["id"],)):
+                if self.db.verdi("SELECT COUNT(*) FROM sett WHERE okt_ovelse_id = ?", (oo["id"],)):
+                    continue
+                ov = self.ovelse(oo["ovelse"])
+                f = self.forslag(pid, ov, oo, self.tidligere_sett(pid, ov["nokkel"], aktiv["id"]))
+                self.db.oppdater("okt_ovelser", oo["id"], {"forslag_kg": f["kg"], "forslag_tekst": f["tekst"]})
+        return n
+
+    def startvekter(self, pid: int) -> dict:
+        return {r["ovelse"]: r for r in self.db.alle("SELECT * FROM startvekter WHERE profil_id = ?", (pid,))}
+
+    def mangler_startvekt(self, pid: int) -> int:
+        """Antall vektøvelser i programmet uten historikk, lagret startvekt eller anslag."""
+        prog = self.aktivt_program(pid)
+        p = self.profil(pid)
+        if not prog or p.get("kjente_loft") or p.get("kroppsvekt"):
+            return 0
+        lagret = self.startvekter(pid)
+        n = 0
+        for dag in prog["dager"]:
+            for o in dag["ovelser"]:
+                ov = self.ovelse(o["ovelse"])
+                if vektbasert(ov) and not sekunder(ov) and o["ovelse"] not in lagret and not self.tidligere_sett(pid, o["ovelse"], antall=1):
+                    n += 1
+        return n
+
     # ------------------------------------------------------------ økter
     def aktiv_okt(self, pid: int) -> dict | None:
         r = self.db.en("SELECT id FROM okter WHERE profil_id = ? AND status = 'pagar' ORDER BY startet DESC LIMIT 1", (pid,))
@@ -545,7 +674,7 @@ class Styrkeboka:
                 "hvile_s": _int(plan.get("hvile_s"), 90, 15, 600), "rir": _int(plan.get("rir"), 2, 0, 5)}
         plan["reps_maks"] = max(plan["reps_min"], plan["reps_maks"])
         tidl = self.tidligere_sett(pid, ov["nokkel"], oid)
-        f = P.foreslaa(ov, plan, tidl)
+        f = self.forslag(pid, ov, plan, tidl)
         if lett:
             f = P.lett_forslag(f, tidl)
         return self.db.sett_inn("okt_ovelser", {
@@ -662,7 +791,7 @@ class Styrkeboka:
             if not self.finnes(d["ovelse"]):
                 raise Feil("Ukjent øvelse")
             ny = self.ovelse(d["ovelse"])
-            f = P.foreslaa(ny, oo, self.tidligere_sett(o["profil_id"], ny["nokkel"], o["id"]))
+            f = self.forslag(o["profil_id"], ny, oo, self.tidligere_sett(o["profil_id"], ny["nokkel"], o["id"]))
             rad.update(ovelse=ny["nokkel"], forslag_kg=f["kg"], forslag_reps=f["reps"], forslag_tekst=f["tekst"],
                        erstattet_fra=oo["erstattet_fra"] or oo["ovelse"])
             self.db.kjor("UPDATE sett SET ovelse = ? WHERE okt_ovelse_id = ?", (ny["nokkel"], ooid), commit=False)
@@ -909,7 +1038,7 @@ class Styrkeboka:
                         erstatning, ov = ov["navn"], alt
                 brukt.add(ov["nokkel"])
                 tidl = self.tidligere_sett(pid, ov["nokkel"], antall=2)
-                f = P.foreslaa(ov, o, tidl)
+                f = self.forslag(pid, ov, o, tidl)
                 if prog["blokk"]["lett_naa"]:
                     f = P.lett_forslag(f, tidl)
                     o = P.lett_dose(o)
@@ -920,7 +1049,7 @@ class Styrkeboka:
         return {
             "profil": p, "program": {"id": prog["id"], "navn": prog["navn"], "blokk": prog["blokk"],
                                      "dager": [{"id": d["id"], "navn": d["navn"]} for d in prog["dager"]]} if prog else None,
-            "neste": neste_ut, "aktiv": aktiv,
+            "neste": neste_ut, "aktiv": aktiv, "mangler_startvekt": self.mangler_startvekt(pid) if prog else 0,
             "sist": {"id": sist["id"], "startet": sist["startet"], "dag_navn": sist["dag_navn"]} if sist else None,
             "uke": {"okter": st["denne_uka"], "plan": st["plan_per_uke"], "uker_paa_rad": st["uker_paa_rad"]},
         }

@@ -275,11 +275,11 @@ body.har-hvile .app { padding-bottom: calc(180px + env(safe-area-inset-bottom));
   background: var(--blekk); color: var(--bg); display: flex; align-items: center; gap: 8px;
   box-shadow: 0 10px 30px rgba(0,0,0,.25); animation: toastinn .25s cubic-bezier(.2,.9,.3,1.2); overflow: hidden;
 }
-.hvile .tid { font-size: 28px; font-weight: 900; font-variant-numeric: tabular-nums; letter-spacing: -.02em; min-width: 70px; }
+.hvile .tid { flex: none; width: 76px; font-size: 28px; font-weight: 900; font-variant-numeric: tabular-nums; letter-spacing: -.02em; min-width: 70px; }
 .hvile .etikett { flex: 1; min-width: 0; font-weight: 800; font-size: 12px; opacity: .75; line-height: 1.25; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
 .hvile button { flex: none; min-width: 44px; height: 44px; border-radius: 14px; background: rgba(255,255,255,.14); color: inherit; font-weight: 900; padding: 0 8px; display: grid; place-items: center; }
 .hvile button svg { width: 20px; height: 20px; }
-.hvile .linje { position: absolute; left: 0; bottom: 0; height: 4px; background: var(--b); transition: width 1s linear; }
+.hvile .linje { position: absolute; left: 0; bottom: 0; height: 4px; background: var(--b); transition: width .5s linear; }
 .hvile.ferdig { background: var(--b); color: #fff; }
 .hvile.ferdig .linje { display: none; }
 
@@ -508,3 +508,20 @@ body.har-hvile .toast { bottom: calc(166px + env(safe-area-inset-bottom)); }
 .blokk-prikker i.gjort { background: var(--aksent); }
 .blokk-prikker i.naa { background: var(--aksent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--aksent) 30%, transparent); }
 .blokk-prikker i.lett { border-radius: 3px; }
+
+/* ---- startvekter ---- */
+.kjente { display: flex; flex-direction: column; gap: 8px; }
+.kjent-rad { display: grid; grid-template-columns: 1fr 62px 12px 58px 40px; gap: 6px; align-items: center; }
+.kjent-rad select, .kjent-rad input { min-width: 0; width: 100%; min-height: 46px; border-radius: 12px; border: 2px solid transparent; background: var(--flate-2); color: var(--blekk); font-weight: 800; font-size: 15px; padding: 0 8px; }
+.kjent-rad input { text-align: center; font-size: 17px; }
+.kjent-rad select:focus, .kjent-rad input:focus { outline: none; border-color: var(--aksent); }
+.kjent-rad > span { text-align: center; font-weight: 900; color: var(--dempet); }
+.kjent-rad .ikonknapp { width: 40px; height: 40px; }
+.vekt-rad { display: flex; align-items: center; gap: 12px; padding: 10px 2px; border-top: 1px solid var(--linje); }
+.vekt-rad:first-child { border-top: 0; }
+.vekt-rad .tekst { flex: 1; min-width: 0; }
+.vekt-rad b { display: block; font-weight: 800; }
+.vekt-rad small { color: var(--dempet); font-weight: 700; font-size: 12.5px; }
+.vekt-inp { display: flex; align-items: center; gap: 4px; font-weight: 800; color: var(--dempet); }
+.vekt-inp input { width: 74px; min-height: 46px; border-radius: 12px; border: 2px solid transparent; background: var(--flate-2); color: var(--blekk); font-weight: 900; font-size: 18px; text-align: center; }
+.vekt-inp input:focus { outline: none; border-color: var(--aksent); }

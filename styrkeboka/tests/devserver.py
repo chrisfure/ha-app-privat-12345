@@ -30,6 +30,10 @@ class FalskAI:
 
     async def spor(self, oppgave, instruksjoner):
         await asyncio.sleep(0.4)
+        if "startvekter" in oppgave:
+            import re as _re
+            vekter = {m.group(1): float(m.group(2)) * 1.05 for m in _re.finditer(r"- (\S+) \(.*?appens anslag: ([\d.]+) kg", instruksjoner)}
+            return json.dumps({"vekter": vekter, "kommentar": "Jeg tok utgangspunkt i benkpressen din og la meg litt forsiktig på manualøvelsene."}, ensure_ascii=False)
         if "blokk" in oppgave:
             p = self.sb.aktivt_program(self.sb.profiler()[0]["id"])
             data = self.sb.foreslaa_ny_blokk(p["id"])

@@ -1,5 +1,12 @@
 # Endringslogg
 
+## 0.4.0
+
+- Hviletimeren står stille: knappene tegnes ikke lenger på nytt hvert kvarter sekund, så de er lette å treffe.
+- Startvekter: oppgi kroppsvekt og ett–to løft du kjenner (f.eks. benkpress 80 × 5), så anslår AI-treneren – eller appen selv – vekt på alle øvelsene i programmet. Du kan justere før du lagrer.
+- Øvelser du ikke har gjort før får automatisk et vektforslag ut fra det du løfter i andre øvelser (styrkeforhold mellom øvelser).
+- Alle vektforslag rundes til vekter som finnes (stang 2,5 kg, manualer 1–2 kg, apparat 2,5–5 kg).
+
 ## 0.3.1
 
 - AI-treneren gir praktiske tips ved plager i stedet for standardforbehold, og henviser ikke til lege/fysioterapeut uten at du spør.

@@ -101,7 +101,7 @@ class API:
                 "bruker": req.bruker, "brukernavn": req.brukernavn, "meg": meg["id"] if meg else None,
                 "profiler": sb.profiler(), "utstyrsprofiler": sb.utstyrsprofiler(), "innstillinger": sb.inn,
                 "ovelser": sb.ovelser(), "monster": MONSTER, "utstyr": UTSTYR, "muskler": MUSKLER, "typer": TYPER,
-                "maal": P.MAAL, "erfaring": P.ERFARING, "farger": FARGER, "ai_tilgjengelig": self.ai.aktiv,
+                "maal": P.MAAL, "erfaring": P.ERFARING, "kan_anslaas": sorted(P.FORHOLD), "farger": FARGER, "ai_tilgjengelig": self.ai.aktiv,
                 "naa": naa().isoformat(),
             }
 
@@ -204,6 +204,39 @@ class API:
             p = sb.program(req.int("prid"))
             sb.arkiver_program(p["profil_id"], p["id"])
             return {"ok": True}
+
+        # ---- startvekter
+        @r("GET", "/api/profiler/{pid}/startvekter")
+        async def startvekter(req):
+            pid = req.int("pid")
+            return {**sb.beregn_startvekter(pid), "lagret": sb.startvekter(pid)}
+
+        @r("POST", "/api/profiler/{pid}/startvekter/beregn")
+        async def beregn_startvekter(req):
+            pid = req.int("pid")
+            d = req.data
+            lokalt = sb.beregn_startvekter(pid, d.get("kjente") or [], d.get("kroppsvekt"))
+            kommentar, kilde = "", "beregnet"
+            if d.get("ai"):
+                svar = ai.les_json(await self.ai.spor("startvekter", ai.oppgave_startvekter(sb, pid, lokalt)))
+                vekter = svar.get("vekter") or {}
+                for f in lokalt["forslag"]:
+                    v = vekter.get(f["ovelse"])
+                    try:
+                        v = float(str(v).replace(",", ".")) if v not in (None, "") else None
+                    except ValueError:
+                        v = None
+                    if v and 0 < v < 500:
+                        f["kg"], f["grunnlag"] = P.rund_til_utstyr(sb.ovelse(f["ovelse"]), v), "AI-treneren"
+                kommentar, kilde = str(svar.get("kommentar") or "")[:600], "ai"
+                sb.logg_ai(pid, "startvekter", "", kommentar)
+            return {**lokalt, "kommentar": kommentar, "kilde": kilde}
+
+        @r("PUT", "/api/profiler/{pid}/startvekter")
+        async def lagre_startvekter(req):
+            d = req.data
+            kilde = d.get("kilde") if d.get("kilde") in ("ai", "beregnet", "manuell") else "manuell"
+            return {"lagret": sb.lagre_startvekter(req.int("pid"), d.get("vekter") or {}, kilde)}
 
         # ---- blokker
         @r("PATCH", "/api/programmer/{prid}/blokk")

@@ -83,13 +83,18 @@ CREATE TABLE IF NOT EXISTS sett (
 );
 CREATE INDEX IF NOT EXISTS ix_sett_ovelse ON sett(ovelse, tid);
 
+CREATE TABLE IF NOT EXISTS startvekter (
+  profil_id INTEGER NOT NULL, ovelse TEXT NOT NULL, kg REAL NOT NULL, kilde TEXT, tid TEXT,
+  PRIMARY KEY (profil_id, ovelse)
+);
+
 CREATE TABLE IF NOT EXISTS ai_logg (
   id INTEGER PRIMARY KEY, profil_id INTEGER, okt_id INTEGER, tid TEXT NOT NULL, type TEXT,
   sporsmal TEXT, svar TEXT
 );
 """
 
-JSON_FELT = {"utstyr", "muskler", "maal", "ai_tips", "ai_oppsummering", "data"}
+JSON_FELT = {"utstyr", "muskler", "maal", "ai_tips", "ai_oppsummering", "data", "kjente_loft"}
 
 
 class Database:
@@ -112,6 +117,7 @@ class Database:
                            ("lett_uke", "INTEGER DEFAULT 1")],
             "programovelser": [("fast", "INTEGER DEFAULT 0")],
             "okter": [("lett", "INTEGER DEFAULT 0"), ("blokk_nr", "INTEGER")],
+            "profiler": [("kroppsvekt", "REAL"), ("kjente_loft", "TEXT DEFAULT '[]'")],
         }
         for tabell, kolonner in nye.items():
             finnes = {r[1] for r in self.con.execute(f"PRAGMA table_info({tabell})")}
