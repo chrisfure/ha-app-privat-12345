@@ -7,6 +7,7 @@ from dataclasses import dataclass, field
 from typing import Any, Awaitable, Callable, Protocol
 
 import ai
+import kropp
 import program as P
 from db import naa
 from logikk import FARGER, TYPER, Feil, Styrkeboka
@@ -204,6 +205,89 @@ class API:
             p = sb.program(req.int("prid"))
             sb.arkiver_program(p["profil_id"], p["id"])
             return {"ok": True}
+
+        # ---- kropp og kondisjon
+        @r("GET", "/api/profiler/{pid}/kropp")
+        async def kropp_oversikt(req):
+            return kropp.oversikt(sb, req.int("pid"))
+
+        @r("GET", "/api/profiler/{pid}/maalinger")
+        async def hent_maalinger(req):
+            typ = str(req.query.get("type") or "vekt")
+            if typ not in kropp.MAALETYPER:
+                raise Feil("Ukjent måling")
+            return {"type": typ, "maalinger": kropp.maalinger(sb, req.int("pid"), typ, req.q_int("dager"))}
+
+        @r("POST", "/api/profiler/{pid}/maalinger")
+        async def ny_maaling(req):
+            d = req.data
+            pid = req.int("pid")
+            lagret = []
+            for typ, verdi in (d.get("verdier") or {d.get("type"): d.get("verdi")}).items():
+                if typ in kropp.MAALETYPER and verdi not in (None, ""):
+                    m = kropp.lagre_maaling(sb, pid, typ, verdi, d.get("dato"))
+                    if not m:
+                        raise Feil(f"Ugyldig verdi for {kropp.MAALETYPER[typ]['navn'].lower()}")
+                    lagret.append(m)
+            if not lagret:
+                raise Feil("Skriv inn minst én verdi")
+            sb._varsle("profil", None)  # noqa: SLF001
+            return {"lagret": lagret}
+
+        @r("DELETE", "/api/maalinger/{mid}")
+        async def slett_maaling(req):
+            kropp.slett_maaling(sb, req.int("mid"))
+            return {"ok": True}
+
+        @r("POST", "/api/profiler/{pid}/aktiviteter")
+        async def ny_aktivitet(req):
+            a = kropp.lagre_aktivitet(sb, req.int("pid"), req.data)
+            sb._varsle("profil", None)  # noqa: SLF001
+            return {"aktivitet": a}
+
+        @r("PATCH", "/api/aktiviteter/{aid}")
+        async def endre_aktivitet(req):
+            a = sb.db.en("SELECT * FROM aktiviteter WHERE id = ?", (req.int("aid"),))
+            if not a:
+                raise Feil("Fant ikke aktiviteten")
+            if a["kilde"] != "manuell":
+                sb.db.oppdater("aktiviteter", a["id"], {"notat": str(req.data.get("notat") or "")[:300]})
+                return {"aktivitet": kropp.aktivitet(sb, a["id"])}
+            return {"aktivitet": kropp.lagre_aktivitet(sb, a["profil_id"], req.data, a["id"])}
+
+        @r("DELETE", "/api/aktiviteter/{aid}")
+        async def slett_aktivitet(req):
+            sb.db.slett("aktiviteter", req.int("aid"))
+            return {"ok": True}
+
+        @r("GET", "/api/profiler/{pid}/ha-kilder")
+        async def ha_kilder(req):
+            if not hasattr(self.ai, "kilder"):
+                return {"kilder": {}, "forslag": {}}
+            try:
+                return await self.ai.kilder(sb.profil(req.int("pid")))
+            except Exception as e:  # noqa: BLE001
+                log.warning("Klarte ikke hente sensorer: %s", e)
+                return {"kilder": {}, "forslag": {}, "feil": "Fikk ikke hentet sensorer fra Home Assistant"}
+
+        @r("PUT", "/api/profiler/{pid}/koblinger")
+        async def koblinger(req):
+            pid = req.int("pid")
+            p = sb.lagre_profil({"koblinger": req.data.get("koblinger") or {}}, pid)
+            res = {"importert": 0, "maalinger": 0}
+            if hasattr(self.ai, "synk_profil"):
+                try:
+                    res = await self.ai.synk_profil(p, historikk=True)
+                except Exception as e:  # noqa: BLE001
+                    log.warning("Synk feilet: %s", e)
+                    raise Feil("Lagret, men klarte ikke å hente data fra Home Assistant nå") from e
+            return {"profil": sb.profil(pid), **res}
+
+        @r("POST", "/api/profiler/{pid}/synk")
+        async def synk(req):
+            if not hasattr(self.ai, "synk_profil"):
+                return {"importert": 0, "maalinger": 0}
+            return await self.ai.synk_profil(sb.profil(req.int("pid")), historikk=bool(req.data.get("historikk")))
 
         # ---- startvekter
         @r("GET", "/api/profiler/{pid}/startvekter")

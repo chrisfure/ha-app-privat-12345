@@ -1,5 +1,15 @@
 # Endringslogg
 
+## 0.5.0
+
+- Ny fane «Kropp»: vekt, midjemål, fettprosent, hvilepuls, VO₂max, skritt og blodtrykk med kurver over tid (vekt med 7 dagers snitt).
+- Løping, gåing, sykling, ski m.m.: hentes automatisk fra klokke/Garmin Connect via Home Assistant, eller registreres manuelt. Tempo, distanse, puls og høydemeter.
+- Aktivitetsminutter per uke (moderat + 2 × høy intensitet, inkl. styrkeøkter) mot anbefalingen på 150 minutter.
+- Kroppsprofil med fødselsår, høyde og kjønn: BMI, midje/høyde-forhold, estimert makspuls og pulssoner.
+- AI-treneren tar hensyn til alder, vektutvikling, hvilepuls, VO₂max og kondisjonstreningen de siste to ukene.
+- Sensoren per profil har fått aktivitetsminutter, km løping/gåing og vekt.
+- Fanen «Innstillinger» heter nå «Mer».
+
 ## 0.4.0
 
 - Hviletimeren står stille: knappene tegnes ikke lenger på nytt hvert kvarter sekund, så de er lette å treffe.

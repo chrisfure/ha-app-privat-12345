@@ -525,3 +525,13 @@ body.har-hvile .toast { bottom: calc(166px + env(safe-area-inset-bottom)); }
 .vekt-inp { display: flex; align-items: center; gap: 4px; font-weight: 800; color: var(--dempet); }
 .vekt-inp input { width: 74px; min-height: 46px; border-radius: 12px; border: 2px solid transparent; background: var(--flate-2); color: var(--blekk); font-weight: 900; font-size: 18px; text-align: center; }
 .vekt-inp input:focus { outline: none; border-color: var(--aksent); }
+
+/* ---- kropp ---- */
+.tall-under { font-size: 11.5px; font-weight: 800; color: var(--dempet); }
+.graf .linje.tynn { stroke-width: 1.5; opacity: .45; }
+.akt-navn { font-weight: 700; color: var(--dempet); }
+.dato-boks.akt-loping { background: var(--oransje-lys); color: var(--oransje-blekk); }
+.dato-boks.akt-gaing, .dato-boks.akt-tur { background: var(--gronn-lys); color: var(--gronn-blekk); }
+.dato-boks.akt-sykling { background: var(--blaa-lys); color: var(--blaa-blekk); }
+.dato-boks.akt-ski, .dato-boks.akt-svomming { background: var(--blaa-lys); color: var(--blaa-blekk); }
+.faner button { font-size: 11.5px; }

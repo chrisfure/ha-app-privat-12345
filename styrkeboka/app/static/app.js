@@ -135,7 +135,7 @@
   const aiLaster = (tekst) => el("div", { class: "ai-kort" }, el("div", { class: "laster" }, tekst));
 
   // ================================================================ navigasjon
-  const VISNINGER = ["trening", "okt", "program", "historikk", "detalj", "innstillinger"];
+  const VISNINGER = ["trening", "okt", "program", "historikk", "kropp", "detalj", "innstillinger"];
   function vis(navn, fanenavn) {
     for (const v of VISNINGER) $(`v-${v}`).hidden = v !== navn;
     fane = fanenavn || (navn === "okt" ? "trening" : navn);
@@ -149,6 +149,7 @@
     if (f === "trening") visTrening();
     if (f === "program") visProgram();
     if (f === "historikk") visHistorikk();
+    if (f === "kropp") visKropp();
     if (f === "innstillinger") visInnstillinger();
   });
   function settTittel(t, under = "") { $("tittel").textContent = t; $("undertittel").textContent = under; }
@@ -170,6 +171,7 @@
     tegnProfilvelger();
     if (fane === "program") visProgram();
     else if (fane === "historikk") visHistorikk();
+    else if (fane === "kropp") visKropp();
     else if (fane === "innstillinger") visInnstillinger();
     else visTrening();
   }
@@ -263,7 +265,8 @@
     v.append(el("div", { class: "kort" },
       el("div", { class: "uke" },
         el("div", { class: "uke-tekst" }, `${u.okter} av ${u.plan} økter denne uka`,
-          el("small", {}, u.okter >= u.plan ? "Ukemålet er nådd – sterkt!" : u.okter ? `${u.plan - u.okter} igjen` : "Helsedirektoratet anbefaler styrke minst 2 dager i uka")),
+          el("small", {}, u.okter >= u.plan ? "Ukemålet er nådd – sterkt!" : u.okter ? `${u.plan - u.okter} igjen` : "Helsedirektoratet anbefaler styrke minst 2 dager i uka"),
+          u.aktivitetsminutter ? el("small", {}, `${u.aktivitetsminutter} av 150 aktivitetsminutter (styrke, løping, gåing m.m.)`) : null),
         u.uker_paa_rad > 1 ? el("span", { class: "flamme" }, ikon("flamme"), `${u.uker_paa_rad} uker`) : null),
       el("div", { class: "uke-prikker" }, Array.from({ length: Math.max(u.plan, u.okter) }, (_, i) => el("span", { class: i < u.okter ? "gjort" : "" })))));
 
@@ -1308,7 +1311,7 @@
       el("div", { class: "knapperad" }, videoLenke(h.ovelse))));
   }
 
-  function linjegraf(serie, enhet = "") {
+  function linjegraf(serie, enhet = "", snitt = 0) {
     const B = 320, H = 150, ml = 34, mr = 8, mt = 12, mb = 22;
     const ys = serie.map((p) => p.y);
     let min = Math.min(...ys), maks = Math.max(...ys);
@@ -1326,7 +1329,17 @@
     }
     const d = serie.map((p, i) => `${i ? "L" : "M"}${x(p.t).toFixed(1)},${y(p.y).toFixed(1)}`).join(" ");
     svg.append(svgEl("path", { class: "felt", d: `${d} L${x(serie[serie.length - 1].t)},${H - mb} L${x(serie[0].t)},${H - mb} Z` }));
-    svg.append(svgEl("path", { class: "linje", d }));
+    if (snitt && serie.length >= 4) {
+      const glatt = serie.map((p, i) => {
+        const fra = new Date(p.t).getTime() - (snitt - 1) * 864e5;
+        const vindu = serie.filter((q, j) => j <= i && new Date(q.t).getTime() >= fra);
+        return { t: p.t, y: vindu.reduce((s_, q) => s_ + q.y, 0) / vindu.length };
+      });
+      svg.append(svgEl("path", { class: "linje tynn", d }));
+      svg.append(svgEl("path", { class: "linje", d: glatt.map((p, i) => `${i ? "L" : "M"}${x(p.t).toFixed(1)},${y(p.y).toFixed(1)}`).join(" ") }));
+    } else {
+      svg.append(svgEl("path", { class: "linje", d }));
+    }
     serie.forEach((p) => { const c = svgEl("circle", { class: "punkt", cx: x(p.t), cy: y(p.y), r: 3.5 }); c.append(svgEl("title", {}, `${dato(p.t, true)}: ${tall(p.y)}${enhet}`)); svg.append(c); });
     svg.append(svgEl("text", { class: "akse-tekst", x: ml, y: H - 6 }, dato(serie[0].t)));
     svg.append(svgEl("text", { class: "akse-tekst", x: B - mr, y: H - 6, "text-anchor": "end" }, dato(serie[serie.length - 1].t)));
@@ -1359,6 +1372,224 @@
       el("p", { class: "forklaring", style: "font-size:13px" }, st.muskelvekst
         ? "Grønt felt = 10–20 sett i uka, et vanlig mål for muskelvekst. Hovedmuskelen i en øvelse teller ett sett, hjelpemuskler et halvt."
         : "Hovedmuskelen i en øvelse teller ett sett, hjelpemuskler et halvt. For generell styrke holder det godt med noen sett per muskelgruppe 2 dager i uka.")));
+  }
+
+  // ================================================================ KROPP
+  let kroppData = null;
+  let kurveType = hent("kurvetype", "vekt");
+  let kurveDager = hent("kurvedager", 90);
+  const ENKEL = { vekt: 1, midje: 1, fettprosent: 1, hvilepuls: 0, vo2max: 0, skritt: 0, blodtrykk_sys: 0, blodtrykk_dia: 0 };
+  const fmt = (typ, v) => v == null ? "–" : (ENKEL[typ] ? tall(Math.round(v * 10) / 10) : tusen(v));
+
+  async function visKropp() {
+    vis("kropp");
+    const v = $("v-kropp");
+    if (!pid) { v.innerHTML = ""; v.append(el("p", { class: "tom" }, "Lag en profil først.")); return; }
+    try { kroppData = await api(`api/profiler/${pid}/kropp`); } catch (e) { feil(e); return; }
+    const k = kroppData;
+    const koblet = Object.keys(k.koblinger || {}).length > 0;
+    settTittel("Kropp", koblet ? "Hentes automatisk fra Home Assistant" : "");
+    v.innerHTML = "";
+
+    if (!koblet && S.ai_tilgjengelig) {
+      v.append(el("div", { class: "velkommen" }, el("h2", {}, "Hent data automatisk"),
+        el("p", {}, "Har du klokke eller vekt i Home Assistant (f.eks. Garmin Connect), kan løpeturer, gåturer, vekt, hvilepuls, VO₂max og skritt hentes inn av seg selv."),
+        el("button", { class: "knapp", onclick: koblingArk }, ikon("hjerte"), "Velg hva som skal hentes")));
+    }
+
+    // nøkkeltall
+    const m = k.maalinger, av = k.avledet;
+    const boks = (verdi, navn, under) => el("div", { class: "tall-boks" }, el("span", { class: "tall-verdi" }, verdi), el("span", { class: "tall-navn" }, navn), under ? el("span", { class: "tall-under" }, under) : null);
+    const endr = (e, enhet, bra = "ned") => e == null || e === 0 ? null : el("span", { class: (e < 0) === (bra === "ned") ? "trend-opp" : "trend-ned" }, `${e > 0 ? "+" : ""}${tall(e)} ${enhet} / 30 d`);
+    const tall_ = el("div", { class: "nokkeltall" },
+      boks(m.vekt ? `${fmt("vekt", m.vekt.verdi)} kg` : "–", "vekt", m.vekt ? endr(m.vekt.endring_30, "kg") : null),
+      av.bmi ? boks(tall(av.bmi), "BMI", av.bmi_kategori) : boks(av.alder ? `${av.alder} år` : "–", "alder"),
+      boks(m.hvilepuls ? `${fmt("hvilepuls", m.hvilepuls.verdi)}` : "–", "hvilepuls", m.hvilepuls ? endr(m.hvilepuls.endring_30, "") : null));
+    v.append(tall_);
+    const ekstra = [];
+    if (m.vo2max) ekstra.push(boks(fmt("vo2max", m.vo2max.verdi), "VO₂max"));
+    if (m.fettprosent) ekstra.push(boks(`${fmt("fettprosent", m.fettprosent.verdi)} %`, "fettprosent"));
+    if (m.midje) ekstra.push(boks(`${fmt("midje", m.midje.verdi)} cm`, "midje", av.midje_hoyde ? `midje/høyde ${tall(av.midje_hoyde)}` : null));
+    if (av.makspuls) ekstra.push(boks(`${av.makspuls}`, "makspuls (est.)"));
+    if (m.skritt) ekstra.push(boks(tusen(m.skritt.verdi), "skritt", dato(m.skritt.dato)));
+    if (ekstra.length) v.append(el("div", { class: "nokkeltall" }, ekstra.slice(0, 6)));
+
+    // kurve
+    const kurve = el("div", { class: "kort" });
+    v.append(kurve);
+    tegnKurve(kurve);
+
+    // aktivitet
+    const u = k.denne_uka;
+    const pst = Math.min(100, Math.round(100 * u.minutter / 150));
+    const typer = Object.entries(u.per_type).map(([t, x]) => el("span", { class: "merkelapp aksent" }, `${k.aktivitetstyper[t]?.navn || t}: ${x.km ? `${tall(x.km)} km` : `${x.minutter} min`}`));
+    if (u.styrkeokter) typer.push(el("span", { class: "merkelapp aksent" }, `Styrke: ${u.styrkeokter} ${u.styrkeokter === 1 ? "økt" : "økter"}`));
+    v.append(el("div", { class: "kort" },
+      el("div", { class: "kort-hode" }, el("h2", {}, "Aktivitet denne uka"), el("span", { class: "merkelapp" }, `${u.minutter} / 150 min`)),
+      el("div", { class: "fremdrift" }, el("div", { style: `width:${pst}%` })),
+      typer.length ? el("div", { class: "chips" }, typer) : el("p", { class: "forklaring" }, "Ingen aktivitet registrert ennå denne uka."),
+      soylegraf(k.uker.map((x) => ({ etikett: `u${x.uke}`, verdi: x.minutter })), 150),
+      el("p", { class: "forklaring", style: "font-size:13px" }, "Aktivitetsminutter = moderat + 2 × høy intensitet (WHO/Helsedirektoratet: 150–300 i uka). Løping teller som høy intensitet, gåing og styrke som moderat. Stiplet linje = 150.")));
+
+    // aktiviteter
+    const liste = el("div", { class: "kort", style: "padding:12px 16px" },
+      el("div", { class: "kort-hode" }, el("h2", {}, "Løping, gåing og annen aktivitet"), koblet ? el("button", { class: "ikonknapp", "aria-label": "Hent nå", onclick: async () => {
+        try { const r = await post(`api/profiler/${pid}/synk`, {}); visToast(r.importert || r.maalinger ? `Hentet ${r.importert} aktiviteter og ${r.maalinger} målinger` : "Alt er oppdatert"); visKropp(); } catch (e) { feil(e); }
+      } }, ikon("angre")) : null));
+    if (!k.aktiviteter.length) liste.append(el("p", { class: "tom" }, "Ingen aktiviteter siste 60 dager."));
+    for (const a of k.aktiviteter.slice(0, 15)) {
+      const d = new Date(a.start);
+      liste.append(el("button", { class: "okt-rad", onclick: () => aktivitetArk(a) },
+        el("span", { class: `dato-boks akt-${a.type}` }, el("b", {}, d.getDate()), el("small", {}, d.toLocaleDateString("nb-NO", { month: "short" }).replace(".", ""))),
+        el("span", { class: "tekst" }, el("b", {}, a.typenavn, a.navn && a.navn !== a.typenavn ? el("span", { class: "akt-navn" }, ` · ${a.navn}`) : null),
+          el("small", {}, [a.km ? `${tall(a.km)} km` : null, `${a.minutter} min`, a.tempo ? `${a.tempo} /km` : a.fart ? `${tall(a.fart)} km/t` : null, a.snittpuls ? `puls ${a.snittpuls}` : null].filter(Boolean).join(" · "))),
+        a.kilde === "garmin" ? el("span", { class: "merkelapp" }, "Klokke") : null, ikon("hoyre")));
+    }
+    liste.append(el("button", { class: "legg-til", style: "margin-top:10px", onclick: () => aktivitetArk(null) }, ikon("pluss"), "Registrer aktivitet"));
+    v.append(liste);
+
+    // kroppsprofil og puls
+    const p = profil();
+    v.append(el("div", { class: "kort" },
+      el("div", { class: "kort-hode" }, el("h2", {}, "Kroppsprofil"), el("button", { class: "lenke", onclick: () => profilArk(p) }, ikon("blyant"), "Endre")),
+      el("p", { class: "forklaring" }, [av.alder ? `${av.alder} år` : "Alder ikke oppgitt", av.hoyde_cm ? `${tall(av.hoyde_cm)} cm` : "høyde ikke oppgitt", p.kjonn ? p.kjonn : null].filter(Boolean).join(" · ")),
+      av.soner ? el("details", {}, el("summary", { class: "lenke", style: "cursor:pointer" }, `Pulssoner (makspuls ${av.makspuls}, estimert)`),
+        el("table", { class: "tabell", style: "margin-top:8px" }, el("tbody", {}, av.soner.map((z) => el("tr", {}, el("td", {}, `Sone ${z.sone}`), el("td", {}, `${z.fra}–${z.til} slag/min`), el("td", {}, ["Rolig", "Lett", "Moderat", "Hardt", "Maks"][z.sone - 1]))))),
+        el("p", { class: "forklaring", style: "font-size:12.5px;margin-top:6px" }, "Makspuls estimert med HUNT-formelen (211 − 0,64 × alder). Har du målt makspulsen din, er den mer presis.")) : el("p", { class: "forklaring" }, "Legg inn fødselsår for å få estimert makspuls og pulssoner."),
+      S.ai_tilgjengelig ? el("button", { class: "knapp noytral liten", style: "width:100%", onclick: koblingArk }, ikon("hjerte"), koblet ? "Endre hva som hentes fra Home Assistant" : "Hent data fra Home Assistant") : null));
+  }
+
+  async function tegnKurve(kort) {
+    const k = kroppData;
+    const harData = Object.keys(k.maalinger);
+    const typer = ["vekt", ...Object.keys(k.maaletyper).filter((t) => t !== "vekt" && harData.includes(t))];
+    if (!typer.includes(kurveType)) kurveType = "vekt";
+    let rader = [];
+    try { rader = (await api(`api/profiler/${pid}/maalinger?type=${kurveType}${kurveDager ? `&dager=${kurveDager}` : ""}`)).maalinger; } catch (e) { feil(e); }
+    const t = k.maaletyper[kurveType];
+    kort.innerHTML = "";
+    kort.append(el("div", { class: "kort-hode" }, el("h2", {}, t.navn), el("button", { class: "knapp sekundaer liten", onclick: maalingArk }, ikon("pluss"), "Ny måling")));
+    if (typer.length > 1) kort.append(el("div", { class: "chips rull" }, typer.map((x) => el("button", { class: `chip liten ${x === kurveType ? "valgt" : ""}`, onclick: () => { kurveType = x; lagre("kurvetype", x); tegnKurve(kort); } }, k.maaletyper[x].navn))));
+    kort.append(el("div", { class: "segment" }, [[30, "1 mnd"], [90, "3 mnd"], [365, "1 år"], [0, "Alt"]].map(([n, navn]) =>
+      el("button", { class: n === kurveDager ? "valgt" : "", onclick: () => { kurveDager = n; lagre("kurvedager", n); tegnKurve(kort); } }, navn))));
+    if (rader.length >= 2) {
+      kort.append(linjegraf(rader.map((r) => ({ t: r.dato, y: r.verdi })), ` ${t.enhet}`, kurveType === "vekt" ? 7 : 0));
+      const forste = rader[0].verdi, sist = rader[rader.length - 1].verdi;
+      kort.append(el("p", { class: "forklaring", style: "font-size:13px" }, `${rader.length} målinger · fra ${fmt(kurveType, forste)} til ${fmt(kurveType, sist)} ${t.enhet} (${sist - forste > 0 ? "+" : ""}${fmt(kurveType, sist - forste)})${kurveType === "vekt" ? " · tykk linje = 7 dagers snitt" : ""}`));
+    } else if (rader.length === 1) {
+      kort.append(el("p", { class: "forklaring" }, `Én måling: ${fmt(kurveType, rader[0].verdi)} ${t.enhet} (${dato(rader[0].dato, true)}). Kurven vises fra to målinger.`));
+    } else {
+      kort.append(el("p", { class: "tom" }, "Ingen målinger i perioden."));
+    }
+    if (rader.length) {
+      kort.append(el("details", {}, el("summary", { class: "lenke", style: "cursor:pointer" }, "Alle målinger"),
+        el("div", {}, [...rader].reverse().slice(0, 60).map((r) => el("div", { class: "versjon" },
+          el("span", { class: "tekst" }, el("b", {}, `${fmt(kurveType, r.verdi)} ${t.enhet}`), el("small", {}, `${dato(r.dato, true)} · ${r.kilde === "manuell" ? "lagt inn" : "Home Assistant"}`)),
+          el("button", { class: "ikonknapp", "aria-label": "Slett måling", onclick: async () => { try { await slett(`api/maalinger/${r.id}`); visKropp(); } catch (e) { feil(e); } } }, ikon("soppel")))))));
+    }
+  }
+
+  function soylegraf(punkter, mal) {
+    const B = 320, H = 120, mb = 18, mt = 14;
+    const maks = Math.max(mal || 0, ...punkter.map((p) => p.verdi), 1) * 1.08;
+    const bw = B / punkter.length;
+    const svg = svgEl("svg", { viewBox: `0 0 ${B} ${H}`, role: "img", "aria-label": "Søylediagram" });
+    const yv = (n) => mt + (1 - n / maks) * (H - mt - mb);
+    if (mal) svg.append(svgEl("line", { class: "maal-linje", x1: 0, x2: B, y1: yv(mal), y2: yv(mal) }));
+    punkter.forEach((p, i) => {
+      const h = Math.max(3, (H - mt - mb) * p.verdi / maks);
+      svg.append(svgEl("rect", { class: `soyle ${p.verdi ? "" : "tom"}`, x: i * bw + 3, y: H - mb - h, width: bw - 6, height: h, rx: 4 }));
+      if (i === punkter.length - 1 || i % 2 === 1) svg.append(svgEl("text", { class: "akse-tekst", x: i * bw + bw / 2, y: H - 4, "text-anchor": "middle" }, p.etikett));
+    });
+    return el("div", { class: "graf" }, svg);
+  }
+
+  function maalingArk() {
+    const k = kroppData;
+    const datoInp = el("input", { type: "date", value: new Date().toLocaleDateString("sv-SE") });
+    const felter = {};
+    const inp = (typ) => { felter[typ] = el("input", { type: "text", inputmode: "decimal", placeholder: k.maaletyper[typ].enhet }); return felt(k.maaletyper[typ].navn, felter[typ]); };
+    aapneArk(el("h3", {}, ikon("vekt"), "Ny måling"), el("p", { class: "hint" }, "Fyll inn det du har målt – resten kan stå tomt. Mål gjerne vekt om morgenen før frokost for jevnest kurve."),
+      el("div", { class: "skjema" }, felt("Dato", datoInp), el("div", { class: "felt-rad" }, inp("vekt"), inp("midje")),
+        el("div", { class: "felt-rad" }, inp("fettprosent"), inp("hvilepuls")), el("div", { class: "felt-rad" }, inp("blodtrykk_sys"), inp("blodtrykk_dia")), inp("vo2max")),
+      el("div", { class: "ark-knapper" }, el("button", { class: "knapp noytral", onclick: lukkArk }, "Avbryt"),
+        el("button", { class: "knapp", onclick: async () => {
+          const verdier = Object.fromEntries(Object.entries(felter).map(([t, e]) => [t, e.value.trim()]).filter(([, x]) => x));
+          try { await post(`api/profiler/${pid}/maalinger`, { verdier, dato: datoInp.value }); lukkArk(); visToast("Måling lagret"); visKropp(); } catch (e) { feil(e); }
+        } }, "Lagre")));
+    setTimeout(() => felter.vekt.focus(), 250);
+  }
+
+  function aktivitetArk(a) {
+    const k = kroppData;
+    if (a && a.kilde !== "manuell") {
+      aapneArk(el("h3", {}, ikon("lop"), a.navn || a.typenavn), el("p", { class: "hint" }, `${ukedag(a.start)} kl. ${kl(a.start)} · hentet fra klokka`),
+        el("div", { class: "nokkeltall" },
+          el("div", { class: "tall-boks" }, el("span", { class: "tall-verdi" }, a.km ? tall(a.km) : "–"), el("span", { class: "tall-navn" }, "km")),
+          el("div", { class: "tall-boks" }, el("span", { class: "tall-verdi" }, `${a.minutter}`), el("span", { class: "tall-navn" }, "minutter")),
+          el("div", { class: "tall-boks" }, el("span", { class: "tall-verdi" }, a.tempo || (a.fart ? tall(a.fart) : "–")), el("span", { class: "tall-navn" }, a.tempo ? "min/km" : "km/t"))),
+        el("div", { class: "nokkeltall", style: "margin-top:8px" },
+          el("div", { class: "tall-boks" }, el("span", { class: "tall-verdi" }, a.snittpuls || "–"), el("span", { class: "tall-navn" }, "snittpuls")),
+          el("div", { class: "tall-boks" }, el("span", { class: "tall-verdi" }, a.makspuls || "–"), el("span", { class: "tall-navn" }, "makspuls")),
+          el("div", { class: "tall-boks" }, el("span", { class: "tall-verdi" }, a.hoydemeter ? Math.round(a.hoydemeter) : "–"), el("span", { class: "tall-navn" }, "høydemeter"))),
+        el("p", { class: "forklaring", style: "margin-top:10px" }, [a.kalorier ? `${a.kalorier} kcal` : null, a.skritt ? `${tusen(a.skritt)} skritt` : null, a.aerob_effekt != null ? `aerob effekt ${tall(a.aerob_effekt)}` : null, `${Math.round((a.moderate_min || 0) + 2 * (a.hoy_min || 0))} aktivitetsminutter`].filter(Boolean).join(" · ")),
+        el("div", { class: "ark-knapper" }, el("button", { class: "knapp fare", onclick: async () => {
+          if (!(await bekreft("Fjerne aktiviteten?", "Den hentes ikke inn igjen automatisk.", "Fjern", true))) return;
+          try { await slett(`api/aktiviteter/${a.id}`); visKropp(); } catch (e) { feil(e); }
+        } }, ikon("soppel")), el("button", { class: "knapp", onclick: lukkArk }, "Lukk")));
+      return;
+    }
+    let typ = a?.type || "loping";
+    const typer = el("div", { class: "chips" }, Object.entries(k.aktivitetstyper).map(([t, x]) => el("button", { class: `chip liten ${t === typ ? "valgt" : ""}`, onclick: (e) => {
+      typ = t; for (const b of typer.children) b.classList.toggle("valgt", b === e.currentTarget);
+    } }, x.navn)));
+    const tid = el("input", { type: "datetime-local", value: tilLokalInput(a?.start || Date.now() - 36e5) });
+    const min = el("input", { type: "text", inputmode: "numeric", value: a?.minutter || "", placeholder: "min" });
+    const km = el("input", { type: "text", inputmode: "decimal", value: a?.km ? tall(a.km) : "", placeholder: "km" });
+    const puls = el("input", { type: "text", inputmode: "numeric", value: a?.snittpuls || "", placeholder: "valgfritt" });
+    const notat = el("input", { value: a?.notat || "", placeholder: "valgfritt" });
+    aapneArk(el("h3", {}, ikon("lop"), a ? "Endre aktivitet" : "Registrer aktivitet"),
+      el("div", { class: "ark-etikett" }, "Type"), typer,
+      el("div", { class: "skjema", style: "margin-top:12px" }, felt("Når", tid), el("div", { class: "felt-rad tre" }, felt("Minutter", min), felt("Distanse (km)", km), felt("Snittpuls", puls)), felt("Notat", notat)),
+      el("div", { class: "ark-knapper" },
+        a ? el("button", { class: "knapp fare", onclick: async () => { try { await slett(`api/aktiviteter/${a.id}`); lukkArk(); visKropp(); } catch (e) { feil(e); } } }, ikon("soppel")) : el("button", { class: "knapp noytral", onclick: lukkArk }, "Avbryt"),
+        el("button", { class: "knapp", onclick: async () => {
+          const body = { type: typ, start: new Date(tid.value).toISOString(), minutter: min.value, km: km.value, snittpuls: puls.value, notat: notat.value };
+          try { if (a) await patch(`api/aktiviteter/${a.id}`, body); else await post(`api/profiler/${pid}/aktiviteter`, body); lukkArk(); visToast("Aktivitet lagret"); visKropp(); } catch (e) { feil(e); }
+        } }, "Lagre")));
+  }
+
+  async function koblingArk() {
+    let r;
+    try { r = await api(`api/profiler/${pid}/ha-kilder`); } catch (e) { feil(e); return; }
+    if (r.feil) { visToast(r.feil); return; }
+    const naa_ = profil().koblinger || {};
+    const valg = { ...r.forslag, ...naa_ };
+    const navn = { aktiviteter: "Aktiviteter (løping, gåing m.m.)", vekt: "Vekt", hvilepuls: "Hvilepuls", vo2max: "VO₂max", skritt: "Skritt per dag", fettprosent: "Fettprosent" };
+    const felter = Object.entries(navn).map(([typ, tekst]) => {
+      const liste = r.kilder[typ] || [];
+      const sel = el("select", { onchange: () => { valg[typ] = sel.value; } }, el("option", { value: "" }, liste.length ? "Ikke hent" : "Fant ingen sensor"),
+        liste.map((x) => el("option", { value: x.entity_id }, `${x.navn}${x.state && !["unknown", "unavailable"].includes(x.state) && typ !== "aktiviteter" ? ` (${x.state}${x.enhet ? ` ${x.enhet}` : ""})` : ""}`)));
+      sel.value = valg[typ] || "";
+      if (!liste.length) sel.disabled = true;
+      return felt(tekst, sel);
+    });
+    const knapp = el("button", { class: "knapp" }, "Lagre og hent");
+    knapp.addEventListener("click", async () => {
+      knapp.disabled = true;
+      knapp.textContent = "Henter historikk …";
+      try {
+        const res = await put(`api/profiler/${pid}/koblinger`, { koblinger: Object.fromEntries(Object.entries(valg).filter(([, x]) => x)) });
+        lukkArk(); await lastStart();
+        visToast(`Koblet! Hentet ${res.importert} aktiviteter og ${res.maalinger} målinger.`);
+        visKropp();
+      } catch (e) { knapp.disabled = false; knapp.textContent = "Lagre og hent"; feil(e); }
+    });
+    aapneArk(el("h3", {}, ikon("hjerte"), "Hent fra Home Assistant"),
+      el("p", { class: "hint" }, `Velg sensorene som hører til ${profil().navn}. Forslagene er gjettet ut fra navnene – sjekk at det stemmer. Data hentes hvert kvarter, og første gang hentes også historikk bakover.`),
+      el("div", { class: "skjema" }, felter),
+      el("p", { class: "forklaring", style: "margin-top:10px;font-size:13px" }, "Styrketrening registrert på klokka hoppes over, siden den logges her i appen. Startposisjon (GPS) lagres ikke."),
+      el("div", { class: "ark-knapper" }, el("button", { class: "knapp noytral", onclick: lukkArk }, "Avbryt"), knapp));
   }
 
   // ================================================================ INNSTILLINGER
@@ -1436,6 +1667,10 @@
     } }, `${m} min`)));
     const stedV = el("select", { onchange: () => { d.utstyrsprofil_id = +stedV.value; } }, S.utstyrsprofiler.map((u) => el("option", { value: u.id }, u.navn)));
     stedV.value = d.utstyrsprofil_id || "";
+    const fodt = el("input", { type: "text", inputmode: "numeric", placeholder: "f.eks. 1987", value: d.fodselsaar || "", oninput: (e) => { d.fodselsaar = e.target.value; } });
+    const hoyde = el("input", { type: "text", inputmode: "decimal", placeholder: "cm", value: d.hoyde_cm ? tall(d.hoyde_cm) : "", oninput: (e) => { d.hoyde_cm = e.target.value; } });
+    const kjonn = el("select", { onchange: () => { d.kjonn = kjonn.value || null; } }, el("option", { value: "" }, "Ikke oppgitt"), el("option", { value: "kvinne" }, "Kvinne"), el("option", { value: "mann" }, "Mann"));
+    kjonn.value = d.kjonn || "";
     const hensyn = el("textarea", { placeholder: "F.eks. «vond venstre skulder – unngå press over hodet» eller «opptrening etter kneoperasjon»", oninput: (e) => { d.hensyn = e.target.value; } }, d.hensyn || "");
     const haRot = el("div");
     const tegnHA = () => {
@@ -1454,6 +1689,7 @@
         el("div", { class: "felt" }, el("span", {}, "Erfaring med styrketrening"), erf),
         felt("Økter per uke", dager), el("div", { class: "felt" }, el("span", {}, "Tid per økt"), minutter),
         felt("Trener vanligvis", stedV),
+        el("div", { class: "felt-rad tre" }, felt("Fødselsår", fodt), felt("Høyde", hoyde), felt("Kjønn", kjonn)),
         felt("Skader, plager eller hensyn", hensyn, "Brukes av appen og AI-treneren (uten navn) for å velge skånsomme øvelser.")),
       el("div", { class: "ark-knapper" },
         !ny ? el("button", { class: "knapp fare", "aria-label": "Slett profil", onclick: async () => {

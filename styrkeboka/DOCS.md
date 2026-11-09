@@ -16,7 +16,8 @@ Alt lagres lokalt i appens egen database. Ingen navn eller treningsdata ligger i
 * **Trening** – neste økt i programmet med foreslått vekt per øvelse, valg av treningssted, ukemål og «uker på rad». Start økten, velg en annen økt eller en fri økt.
 * **Program** – det aktive programmet, «Juster med AI», redigering, tidligere versjoner og andre programmer.
 * **Historikk** – alle økter (trykk for detaljer og endring), fremgang per øvelse med graf, økter per uke og harde sett per muskelgruppe.
-* **Innstillinger** – profiler, treningssteder og utstyr, AI-treneren, hviletimer, egne øvelser og eksport.
+* **Kropp** – målinger med kurver, løping/gåing og annen aktivitet, aktivitetsminutter og kroppsprofil.
+* **Mer** – profiler, treningssteder og utstyr, AI-treneren, hviletimer, egne øvelser og eksport.
 
 ## Under økta
 
@@ -63,6 +64,23 @@ Programmet går i blokker på **6 uker** (anbefalt; kan settes til 4–8 under P
 
 Hver endring av programmet lagres som en versjon, så du alltid kan gå tilbake.
 
+## Kropp og kondisjon
+
+Fanen **Kropp** samler kroppen og all aktivitet utenom styrketreningen:
+
+* **Målinger med kurver** – vekt (med 7 dagers snitt), midjemål, fettprosent, hvilepuls, VO₂max, skritt og blodtrykk. Legg inn selv med «Ny måling», eller hent automatisk.
+* **Løping, gåing og annen aktivitet** – distanse, tid, tempo, puls og høydemeter. Registrer manuelt eller hent fra klokka.
+* **Aktivitetsminutter** – moderat + 2 × høy intensitet per uke, med styrkeøktene inkludert, mot anbefalingen på 150–300 minutter (WHO/Helsedirektoratet).
+* **Kroppsprofil** – fødselsår, høyde og kjønn gir BMI, midje/høyde-forhold, estimert makspuls (HUNT-formelen: 211 − 0,64 × alder) og pulssoner.
+
+### Automatisk henting fra Home Assistant
+
+Har du f.eks. Garmin Connect-integrasjonen, trykk **Kropp → Hent data automatisk** og velg sensorene som hører til profilen (appen foreslår ut fra navnene). Aktiviteter hentes fra sensoren med `last_activities`, og vekt, hvilepuls, VO₂max, skritt og fettprosent fra de vanlige sensorene. Første gang hentes også historikk bakover (så langt Home Assistant har den), deretter hvert kvarter.
+
+* Styrketrening registrert på klokka hoppes over – den logges i appen.
+* GPS-posisjoner lagres ikke.
+* Målinger du legger inn selv overskrives ikke av automatisk henting samme dag.
+
 ## AI-treneren
 
 Bruker AI-en du har i Home Assistant (en «AI-oppgave»-entitet, `ai_task.*`, f.eks. fra Anthropic-integrasjonen). Velg hvilken under Innstillinger, eller la appen velge automatisk.
@@ -76,7 +94,7 @@ AI-en får mål, erfaring, utstyr, hensyn du har skrevet og de siste øktene –
 
 ## Home Assistant
 
-* Sensor per profil: `sensor.styrkeboka_<navn>` med antall økter denne uka. Attributter: `plan_per_uke`, `uker_paa_rad`, `siste_okt`, `dager_siden`, `neste_okt`, `trener_naa`, `okter_totalt`.
+* Sensor per profil: `sensor.styrkeboka_<navn>` med antall økter denne uka. Attributter: `plan_per_uke`, `uker_paa_rad`, `siste_okt`, `dager_siden`, `neste_okt`, `trener_naa`, `okter_totalt`, `aktivitetsminutter_uke`, `km_loping_uke`, `km_gaing_uke`, `vekt`.
 * Hendelsen `styrkeboka_hendelse` med `handling: okt_startet` eller `okt_fullfort` (med minutter, sett, volum og rekorder).
 
 Eksempel – påminnelse hvis det er gått fire dager:
@@ -93,6 +111,7 @@ actions:
 
 ## Kilder
 
+* Nes m.fl. (2013), HUNT: *Age-predicted maximal heart rate in healthy subjects* – makspuls ≈ 211 − 0,64 × alder.
 * WHO (2020): *Guidelines on physical activity and sedentary behaviour* – muskelstyrkende aktivitet minst 2 dager i uka.
 * Helsedirektoratet: *Fysisk aktivitet – råd for voksne* – styrketrening for de store muskelgruppene minst 2 dager i uka.
 * ACSM (2009): *Progression models in resistance training for healthy adults* – 8–12 reps for nybegynnere og viderekomne, lettere belastning med 10–15 reps for eldre og ved opptrening.

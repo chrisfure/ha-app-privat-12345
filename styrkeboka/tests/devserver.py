@@ -25,6 +25,43 @@ class FalskAI:
     def __init__(self, sb):
         self.sb = sb
 
+    async def kilder(self, profil):
+        return {"kilder": {"aktiviteter": [{"entity_id": "sensor.test_last_activities", "navn": "Test Garmin Last activities", "state": "0"}],
+                           "vekt": [{"entity_id": "sensor.test_weight", "navn": "Test Garmin Weight", "state": "81.4", "enhet": "kg"}],
+                           "hvilepuls": [{"entity_id": "sensor.test_rhr", "navn": "Test Resting heart rate", "state": "56"}],
+                           "vo2max": [], "skritt": [{"entity_id": "sensor.test_yesterday_steps", "navn": "Test Yesterday steps", "state": "8123"}],
+                           "fettprosent": []},
+                "forslag": {"aktiviteter": "sensor.test_last_activities", "vekt": "sensor.test_weight", "hvilepuls": "sensor.test_rhr",
+                            "skritt": "sensor.test_yesterday_steps"}}
+
+    async def synk_profil(self, profil, historikk=False):
+        import random
+        from datetime import timedelta
+        import kropp
+        from db import naa, til_iso
+        pid = profil["id"]
+        n = m = 0
+        rnd = random.Random(1)
+        for i in range(40):
+            d = naa() - timedelta(days=i * 2 + 1)
+            typ = ["running", "walking", "walking", "e_bike_fitness"][i % 4]
+            dist = {"running": 6000, "walking": 3500, "e_bike_fitness": 9000}[typ] + rnd.randint(-800, 800)
+            dur = dist / {"running": 2.9, "walking": 1.3, "e_bike_fitness": 4.5}[typ]
+            if kropp.importer_garmin(self.sb, pid, {"activityId": 1000 + i, "activityName": {"running": "Løping", "walking": "Gåtur", "e_bike_fitness": "Sykkel"}[typ],
+                                     "activityType": typ, "distance": dist, "duration": dur, "averageHR": 150 if typ == "running" else 95,
+                                     "moderateIntensityMinutes": 0 if typ == "running" else int(dur / 60), "vigorousIntensityMinutes": int(dur / 60) if typ == "running" else 0,
+                                     "startTime": til_iso(d)}):
+                n += 1
+        for i in range(120):
+            dag = (self.sb.lokal(naa()).date() - timedelta(days=i))
+            if kropp.lagre_maaling(self.sb, pid, "vekt", round(81.5 - i * -0.02 + rnd.uniform(-0.6, 0.6) - 2.4 + i * 0.02, 1), dag.isoformat(), "ha"):
+                m += 1
+            if kropp.lagre_maaling(self.sb, pid, "hvilepuls", 56 + rnd.randint(-2, 3) + i // 40, dag.isoformat(), "ha"):
+                m += 1
+            kropp.lagre_maaling(self.sb, pid, "skritt", 6000 + rnd.randint(-3000, 5000), (dag - timedelta(days=1)).isoformat(), "ha")
+        kropp.lagre_maaling(self.sb, pid, "vo2max", 50, None, "ha")
+        return {"importert": n, "maalinger": m}
+
     async def ai_entiteter(self):
         return [{"entity_id": "ai_task.claude_ai_task", "navn": "Claude AI Task"}]
 

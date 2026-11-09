@@ -88,13 +88,25 @@ CREATE TABLE IF NOT EXISTS startvekter (
   PRIMARY KEY (profil_id, ovelse)
 );
 
+CREATE TABLE IF NOT EXISTS maalinger (
+  id INTEGER PRIMARY KEY, profil_id INTEGER NOT NULL, type TEXT NOT NULL, verdi REAL NOT NULL,
+  dato TEXT NOT NULL, tid TEXT NOT NULL, kilde TEXT DEFAULT 'manuell', UNIQUE (profil_id, type, dato)
+);
+CREATE TABLE IF NOT EXISTS aktiviteter (
+  id INTEGER PRIMARY KEY, profil_id INTEGER NOT NULL, ekstern_id TEXT, type TEXT NOT NULL, navn TEXT,
+  start TEXT NOT NULL, varighet_s REAL, distanse_m REAL, hoydemeter REAL, snittpuls INTEGER, makspuls INTEGER,
+  kalorier INTEGER, skritt INTEGER, moderate_min INTEGER, hoy_min INTEGER, belastning REAL, aerob_effekt REAL,
+  kilde TEXT DEFAULT 'manuell', notat TEXT DEFAULT '', UNIQUE (profil_id, ekstern_id)
+);
+CREATE INDEX IF NOT EXISTS ix_akt_profil ON aktiviteter(profil_id, start);
+
 CREATE TABLE IF NOT EXISTS ai_logg (
   id INTEGER PRIMARY KEY, profil_id INTEGER, okt_id INTEGER, tid TEXT NOT NULL, type TEXT,
   sporsmal TEXT, svar TEXT
 );
 """
 
-JSON_FELT = {"utstyr", "muskler", "maal", "ai_tips", "ai_oppsummering", "data", "kjente_loft"}
+JSON_FELT = {"utstyr", "muskler", "maal", "ai_tips", "ai_oppsummering", "data", "kjente_loft", "koblinger"}
 
 
 class Database:
@@ -117,7 +129,8 @@ class Database:
                            ("lett_uke", "INTEGER DEFAULT 1")],
             "programovelser": [("fast", "INTEGER DEFAULT 0")],
             "okter": [("lett", "INTEGER DEFAULT 0"), ("blokk_nr", "INTEGER")],
-            "profiler": [("kroppsvekt", "REAL"), ("kjente_loft", "TEXT DEFAULT '[]'")],
+            "profiler": [("kroppsvekt", "REAL"), ("kjente_loft", "TEXT DEFAULT '[]'"), ("fodselsaar", "INTEGER"),
+                         ("hoyde_cm", "REAL"), ("kjonn", "TEXT"), ("koblinger", "TEXT DEFAULT '{}'")],
         }
         for tabell, kolonner in nye.items():
             finnes = {r[1] for r in self.con.execute(f"PRAGMA table_info({tabell})")}

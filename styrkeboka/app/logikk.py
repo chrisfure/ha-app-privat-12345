@@ -235,6 +235,19 @@ class Styrkeboka:
         if "kroppsvekt" in d:
             kv = _float(d["kroppsvekt"])
             rad["kroppsvekt"] = kv if kv and 25 <= kv <= 300 else None
+        if "fodselsaar" in d:
+            fa = _int(d["fodselsaar"])
+            rad["fodselsaar"] = fa if fa and 1920 <= fa <= naa().year - 10 else None
+        if "hoyde_cm" in d:
+            h = _float(d["hoyde_cm"])
+            rad["hoyde_cm"] = h if h and 100 <= h <= 230 else None
+        if "kjonn" in d:
+            rad["kjonn"] = d["kjonn"] if d["kjonn"] in ("mann", "kvinne") else None
+        if "koblinger" in d:
+            k = d["koblinger"] or {}
+            rad["koblinger"] = {n: str(v) for n, v in k.items()
+                                if n in ("aktiviteter", "vekt", "hvilepuls", "vo2max", "skritt", "fettprosent")
+                                and isinstance(v, str) and re.fullmatch(r"sensor\.[a-z0-9_]+", v)}
         if "utstyrsprofil_id" in d:
             rad["utstyrsprofil_id"] = _int(d["utstyrsprofil_id"])
         if pid is None:
@@ -247,6 +260,10 @@ class Styrkeboka:
         else:
             self.profil(pid)
             self.db.oppdater("profiler", pid, rad)
+        if rad.get("kroppsvekt") and d.get("lagre_maaling", True):
+            import kropp
+            if not kropp.siste(self, pid, "vekt") or kropp.siste(self, pid, "vekt")["verdi"] != rad["kroppsvekt"]:
+                kropp.lagre_maaling(self, pid, "vekt", rad["kroppsvekt"])
         self._varsle("profil", None)
         return self.profil(pid)
 
@@ -1051,7 +1068,8 @@ class Styrkeboka:
                                      "dager": [{"id": d["id"], "navn": d["navn"]} for d in prog["dager"]]} if prog else None,
             "neste": neste_ut, "aktiv": aktiv, "mangler_startvekt": self.mangler_startvekt(pid) if prog else 0,
             "sist": {"id": sist["id"], "startet": sist["startet"], "dag_navn": sist["dag_navn"]} if sist else None,
-            "uke": {"okter": st["denne_uka"], "plan": st["plan_per_uke"], "uker_paa_rad": st["uker_paa_rad"]},
+            "uke": {"okter": st["denne_uka"], "plan": st["plan_per_uke"], "uker_paa_rad": st["uker_paa_rad"],
+                    "aktivitetsminutter": self._kropp_attributter(pid)["aktivitetsminutter_uke"]},
         }
 
     # ------------------------------------------------------------ sensorer
@@ -1075,9 +1093,17 @@ class Styrkeboka:
                     "dager_siden": dager_siden, "neste_okt": neste["navn"] if neste else None,
                     "trener_naa": bool(aktiv), "pagaende_okt": aktiv["dag_navn"] if aktiv else None,
                     "okter_totalt": st["totalt"],
+                    **self._kropp_attributter(p["id"]),
                 },
             }
         return ut
+
+    def _kropp_attributter(self, pid: int) -> dict:
+        import kropp
+        u = kropp.uker(self, pid, 1)[-1]
+        vekt = kropp.siste(self, pid, "vekt")
+        return {"aktivitetsminutter_uke": u["minutter"], "km_loping_uke": u["km_loping"], "km_gaing_uke": u["km_gaing"],
+                "vekt": vekt["verdi"] if vekt else None}
 
     # ------------------------------------------------------------ eksport
     def csv(self, pid: int | None = None) -> str:

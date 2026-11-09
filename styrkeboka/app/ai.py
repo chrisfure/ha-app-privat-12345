@@ -59,6 +59,8 @@ def profilkontekst(sb: Styrkeboka, pid: int, upid: int | None = None) -> str:
             f"{u['navn']} ({', '.join(UTSTYR[x] for x in u['utstyr'] if x in UTSTYR) or 'kun kroppsvekt'})" for u in andre))
     if (p.get("hensyn") or "").strip():
         linjer.append(f"Hensyn/skader brukeren har oppgitt: {p['hensyn'].strip()}")
+    import kropp
+    linjer.append(kropp.ai_tekst(sb, pid))
     return "\n".join(linjer)
 
 

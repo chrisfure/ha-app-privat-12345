@@ -244,3 +244,95 @@ def test_anslag_fra_logget_ovelse(sb):
     sb.avslutt_okt(o["id"], {})
     f = sb.forslag(pid, sb.ovelse("skrå-benk-manualer"), {"reps_min": 8, "reps_maks": 12, "rir": 2}, [])
     assert f["kg"] and 10 <= f["kg"] <= 30 and "benkpress" in f["tekst"]
+
+
+# ------------------------------------------------------------------ kropp og kondisjon
+GARMIN_LOP = {"activityId": 111, "activityName": "Morgenløp", "activityType": "running", "distance": 5000.0, "duration": 1500.0,
+              "averageHR": 150, "maxHR": 170, "steps": 4500, "moderateIntensityMinutes": 2, "vigorousIntensityMinutes": 22,
+              "startLatitude": 1.0, "startLongitude": 2.0, "startTime": None}
+GARMIN_GAA = {"activityId": 112, "activityName": "Gåtur", "activityType": "walking", "distance": 3000.0, "duration": 2400.0,
+              "moderateIntensityMinutes": 30, "vigorousIntensityMinutes": 0, "startTime": None}
+
+
+def _naa_iso(dager_siden=0):
+    from datetime import timedelta
+    from db import naa, til_iso
+    return til_iso(naa() - timedelta(days=dager_siden))
+
+
+def test_garmin_import_og_ukesminutter(sb):
+    import kropp
+    pid = sb.profiler()[0]["id"]
+    lop = {**GARMIN_LOP, "startTime": _naa_iso(0)}
+    assert kropp.importer_garmin(sb, pid, lop)
+    assert not kropp.importer_garmin(sb, pid, lop)  # ingen duplikat
+    assert kropp.importer_garmin(sb, pid, {**GARMIN_GAA, "startTime": _naa_iso(0)})
+    assert not kropp.importer_garmin(sb, pid, {"activityId": 9, "activityType": "strength_training", "startTime": _naa_iso(0)})
+    rader = sb.db.alle("SELECT * FROM aktiviteter")
+    assert "startLatitude" not in rader[0] and len(rader) == 2
+    u = kropp.uker(sb, pid, 1)[-1]
+    assert u["kondisjon_min"] == 2 + 2 * 22 + 30
+    assert u["km_loping"] == 5.0 and u["km_gaing"] == 3.0
+    a = kropp.aktiviteter(sb, pid)[0]
+    assert a["tempo"] in ("5:00",) or kropp.aktiviteter(sb, pid)[1]["tempo"] == "5:00"
+
+
+def test_maalinger_og_avledet(sb):
+    import kropp
+    pid = sb.profiler()[0]["id"]
+    sb.lagre_profil({"fodselsaar": 1987, "hoyde_cm": "180", "kjonn": "mann"}, pid)
+    kropp.lagre_maaling(sb, pid, "vekt", "80,0", "2026-10-01")
+    kropp.lagre_maaling(sb, pid, "vekt", 78, "2026-10-31")
+    assert sb.profil(pid)["kroppsvekt"] == 78
+    # automatisk henting overskriver ikke manuell måling samme dag
+    assert kropp.lagre_maaling(sb, pid, "vekt", 90, "2026-10-31", kilde="ha") is None
+    assert kropp.lagre_maaling(sb, pid, "vekt", 500) is None
+    av = kropp.avledet(sb, pid)
+    assert av["bmi"] == round(78 / 1.8 ** 2, 1) and av["makspuls"] == round(211 - 0.64 * av["alder"])
+    tekst = kropp.ai_tekst(sb, pid)
+    assert "Vekt: 78 kg" in tekst and "Testperson" not in tekst
+
+
+def test_ha_synk(sb, monkeypatch):
+    import asyncio
+    import types
+    if "aiohttp" not in sys.modules:
+        fake = types.ModuleType("aiohttp")
+        fake.ClientTimeout = lambda **k: None
+        fake.ClientError = Exception
+        fake.ClientSession = object
+        sys.modules["aiohttp"] = fake
+    import ha
+    pid = sb.profiler()[0]["id"]
+    sb.lagre_profil({"navn": "Ola"}, pid)
+    sb.lagre_profil({"navn": "Kari"})
+    k = ha.HAKobling(sb)
+    k.aktiv = True
+    tilstander = [
+        {"entity_id": "sensor.ola_last_activities", "state": "0", "attributes": {"friendly_name": "Ola Garmin Last activities",
+         "last_activities": [{**GARMIN_LOP, "startTime": _naa_iso(1)}]}},
+        {"entity_id": "sensor.ola_weight", "state": "81.2", "last_changed": _naa_iso(2),
+         "attributes": {"friendly_name": "Ola Garmin Weight", "device_class": "weight", "unit_of_measurement": "kg"}},
+        {"entity_id": "sensor.kari_weight", "state": "60", "last_changed": _naa_iso(2),
+         "attributes": {"friendly_name": "Kari Garmin Weight", "device_class": "weight", "unit_of_measurement": "kg"}},
+        {"entity_id": "sensor.ola_yesterday_steps", "state": "8000", "last_changed": _naa_iso(0), "attributes": {"friendly_name": "Ola Yesterday steps"}},
+        {"entity_id": "sensor.ola_resting_heart_rate", "state": "55", "last_changed": _naa_iso(0), "attributes": {"friendly_name": "Ola Resting heart rate"}},
+    ]
+
+    async def fake_tilstander():
+        return tilstander
+
+    async def fake_hist(eid, dager, attributter=False):
+        return [{"state": "83.0", "last_changed": _naa_iso(40)}] if eid == "sensor.ola_weight" else []
+    monkeypatch.setattr(k, "_tilstander", fake_tilstander)
+    monkeypatch.setattr(k, "_historikk", fake_hist)
+    res = asyncio.run(k.kilder(sb.profil(pid)))
+    assert res["forslag"]["vekt"] == "sensor.ola_weight" and res["forslag"]["aktiviteter"] == "sensor.ola_last_activities"
+    sb.lagre_profil({"koblinger": res["forslag"]}, pid)
+    r = asyncio.run(k.synk_profil(sb.profil(pid), historikk=True))
+    assert r["importert"] == 1
+    import kropp
+    vekter = kropp.maalinger(sb, pid, "vekt")
+    assert [v["verdi"] for v in vekter] == [83.0, 81.2]
+    assert kropp.siste(sb, pid, "skritt")["verdi"] == 8000
+    assert kropp.siste(sb, pid, "hvilepuls")["verdi"] == 55
