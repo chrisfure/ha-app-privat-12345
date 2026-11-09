@@ -623,6 +623,10 @@ def test_treningsanalyse_til_ai(sb):
         o = sb.start_okt(pid, sb.program(sb.aktivt_program(pid)["id"])["dager"][0]["id"])
         sb.logg_sett(o["id"], {"okt_ovelse_id": o["ovelser"][0]["id"], "vekt": kg, "reps": 8})
         sb.avslutt_okt(o["id"], {"opplevd": 3})
+        if kg == 40:  # første økt for en uke siden, så progresjonen går over flere dager
+            from db import naa, til_iso
+            from datetime import timedelta
+            sb.db.kjor("UPDATE okter SET startet = ? WHERE id = ?", (til_iso(naa() - timedelta(days=7)), o["id"]))
     t = ai.treningsanalyse(sb, pid)
     assert "Oppmøte" in t and "PROGRESJON" in t and "kg e1RM" in t and "Opplevd tyngde" in t
     assert "TRENINGSANALYSE" in ai.oppgave_lag_program(sb, pid, None)
