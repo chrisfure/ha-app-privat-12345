@@ -11,7 +11,7 @@ from datetime import timedelta
 
 from db import naa, til_iso
 from logikk import Feil, Styrkeboka
-from ovelser import MONSTER, UTSTYR, tilgjengelig
+from ovelser import MONSTER, UTSTYR, tilgjengelig, sekunder as er_sekunder
 import program as P
 
 ROLLE = (
@@ -98,6 +98,76 @@ def historikkontekst(sb: Styrkeboka, pid: int, antall: int = 6) -> str:
     return "\n".join(deler)
 
 
+def treningsanalyse(sb: Styrkeboka, pid: int) -> str:
+    """Utdrag av hele historikken: oppmøte, progresjon per øvelse, volum per muskelgruppe og formtrend.
+    Gir AI-en grunnlag for gode valg (stillstand, ubalanse, for lite/mye volum, dårlig restitusjon) uten rådata."""
+    p = sb.profil(pid)
+    deler = []
+    st = sb.statistikk(pid)
+    plan = st["plan_per_uke"]
+    uker = [u["okter"] for u in st["uker"]]
+    if st["totalt"]:
+        aktive = [u for u in uker if u]
+        deler.append(f"Oppmøte siste 12 uker (eldst→nyest): {', '.join(map(str, uker))} økter/uke; mål {plan}; "
+                     f"ukemål nådd {sum(1 for u in uker if u >= plan)} av 12 uker; totalt {st['totalt']} økter"
+                     + (f"; snitt i aktive uker {sum(aktive) / len(aktive):.1f}" if aktive else ""))
+    prog = sb.aktivt_program(pid)
+    if prog and prog.get("blokk"):
+        b = prog["blokk"]
+        deler.append(f"Treningsblokk: nr {b['nr']}, uke {b.get('uke')} av {b['uker']}" + (" (lettere uke nå)" if b.get("lett_naa") else ""))
+    # progresjon per øvelse siste 12 uker: estimert 1RM første → beste siste 2 uker, og uker siden forrige rekord
+    fra = til_iso(naa() - timedelta(weeks=12))
+    rader = sb.db.alle(
+        "SELECT s.ovelse, s.vekt, s.reps, o.startet FROM sett s JOIN okter o ON o.id = s.okt_id "
+        "WHERE o.profil_id = ? AND o.status = 'fullfort' AND s.oppvarming = 0 AND o.startet >= ? ORDER BY o.startet", (pid, fra))
+    per: dict[str, list] = {}
+    for r in rader:
+        sek = er_sekunder(sb.ovelse(r["ovelse"]))
+        e = P.e1rm(r["vekt"], r["reps"]) if r["vekt"] and not sek else None
+        verdi, enhet = (round(e * 2) / 2, "kg e1RM") if e else ((r["reps"] or 0), "sek" if sek else "reps")
+        per.setdefault(r["ovelse"], []).append((r["startet"], verdi, enhet))
+    linjer = []
+    grense2 = til_iso(naa() - timedelta(weeks=2))
+    for ov, xs in sorted(per.items(), key=lambda kv: -len(kv[1])):
+        dager = sorted({x[0][:10] for x in xs})
+        if len(dager) < 2:
+            continue
+        forste = max(v for t, v, _ in xs if t[:10] == dager[0])
+        nyeste = max([v for t, v, _ in xs if t >= grense2] or [0])
+        beste, siste_rek = 0, xs[0][0]
+        for t, v, _ in xs:
+            if v > beste * 1.001:
+                beste, siste_rek = v, t
+        uker_siden = (naa() - __import__("db").fra_iso(siste_rek)).days // 7
+        flagg = " – STILLSTAND" if uker_siden >= 3 and len(dager) >= 4 else ""
+        linjer.append(f"{sb.ovelse(ov)['navn']}: {forste:g}→{nyeste or beste:g} {xs[0][2]} ({len(dager)} økter, "
+                      f"beste {beste:g}, {uker_siden} uker siden rekord{flagg})")
+    if linjer:
+        deler.append("PROGRESJON SISTE 12 UKER (første → siste 2 uker):\n" + "\n".join(f"- {x}" for x in linjer[:14]))
+    musk = [m for m in st["muskler"] if m["uke"] or m["snitt"]]
+    if musk:
+        deler.append("HARDE SETT PER MUSKELGRUPPE (siste 7 dager / snitt per uke siste 4 uker; ca. 10–20 per uke er vanlig anbefaling for vekst): "
+                     + "; ".join(f"{m['navn']} {m['uke']:g}/{m['snitt']:g}" for m in musk))
+    opplevd = sb.db.alle("SELECT opplevd FROM okter WHERE profil_id = ? AND status = 'fullfort' AND opplevd IS NOT NULL AND startet >= ?",
+                         (pid, til_iso(naa() - timedelta(weeks=4))))
+    if opplevd:
+        deler.append(f"Opplevd tyngde siste 4 uker: snitt {sum(r['opplevd'] for r in opplevd) / len(opplevd):.1f}/5 ({len(opplevd)} økter)")
+    # formtrend: snitt siste 7 dager mot 28 dager
+    trend = []
+    navn = {"sovn_min": ("søvn", "min"), "sovn_score": ("søvnscore", ""), "hrv": ("HRV", "ms"), "hvilepuls": ("hvilepuls", ""),
+            "stress": ("stress", ""), "body_battery": ("Body Battery", ""), "beredskap": ("treningsberedskap", "")}
+    i_dag = sb.lokal(naa()).date()
+    for typ, (n, enhet) in navn.items():
+        r7 = sb.db.alle("SELECT verdi FROM maalinger WHERE profil_id = ? AND type = ? AND dato > ?", (pid, typ, (i_dag - timedelta(days=7)).isoformat()))
+        r28 = sb.db.alle("SELECT verdi FROM maalinger WHERE profil_id = ? AND type = ? AND dato > ?", (pid, typ, (i_dag - timedelta(days=28)).isoformat()))
+        if r7 and len(r28) >= 5:
+            a7, a28 = sum(x["verdi"] for x in r7) / len(r7), sum(x["verdi"] for x in r28) / len(r28)
+            trend.append(f"{n} {a7:.0f}{enhet} (28 d: {a28:.0f})")
+    if trend:
+        deler.append("FORMTREND, snitt siste 7 dager (mot 28 dager): " + ", ".join(trend))
+    return "\n".join(deler)
+
+
 def _sett_tekst(s: dict) -> str:
     t = f"{s['vekt']:g}kg×{s['reps']}" if s.get("vekt") else f"{s['reps']}"
     if s.get("rir") is not None:
@@ -140,10 +210,11 @@ def oppgave_lag_program(sb: Styrkeboka, pid: int, upid: int | None, onske: str =
         "OPPGAVE: Lag et styrketreningsprogram for brukeren som gir gode resultater og er realistisk å gjennomføre over tid.",
         "OM BRUKEREN:\n" + profilkontekst(sb, pid, upid),
         "SISTE ØKTER:\n" + historikkontekst(sb, pid),
+        "TRENINGSANALYSE:\n" + treningsanalyse(sb, pid),
         f"BRUKERENS ØNSKER: {onske.strip()}" if onske.strip() else "",
         "UTGANGSPUNKT (appens eget forslag – forbedre det gjerne):\n" + program_tekst(mal, sb),
         "TILGJENGELIGE ØVELSER (nøkkel = navn):\n" + bibliotek_tekst(sb, utstyr),
-        "Krav: dekk alle store muskelgrupper i løpet av uka, tilpass antall øvelser til tiden, ta hensyn til oppgitte skader "
+        "Krav: dekk alle store muskelgrupper i løpet av uka, bruk treningsanalysen (stillstand, muskelgrupper med for lite volum, oppmøte og restitusjon), tilpass antall øvelser til tiden, ta hensyn til oppgitte skader "
         "(velg skånsomme varianter og unngå det som kan provosere), og bruk dobbel progresjon (reps-intervall).",
         JSON_FORMAT,
     ] if x)
@@ -161,6 +232,7 @@ def oppgave_juster_program(sb: Styrkeboka, pid: int, prid: int, onske: str) -> s
         "OM BRUKEREN:\n" + profilkontekst(sb, pid),
         "NÅVÆRENDE PROGRAM:\n" + program_tekst(data, sb),
         "SISTE ØKTER:\n" + historikkontekst(sb, pid),
+        "TRENINGSANALYSE:\n" + treningsanalyse(sb, pid),
         "TILGJENGELIGE ØVELSER (nøkkel = navn):\n" + bibliotek_tekst(sb, utstyr),
         JSON_FORMAT,
     ])
@@ -184,6 +256,7 @@ def oppgave_ny_blokk(sb: Styrkeboka, pid: int, prid: int) -> str:
         "OM BRUKEREN:\n" + profilkontekst(sb, pid),
         "NÅVÆRENDE PROGRAM:\n" + program_tekst(data, sb),
         "FREMGANG I BLOKKA (første → siste økt):\n" + sb.blokk_oppsummering(prid),
+        "TRENINGSANALYSE:\n" + treningsanalyse(sb, pid),
         "TILGJENGELIGE ØVELSER (nøkkel = navn):\n" + bibliotek_tekst(sb, utstyr),
         JSON_FORMAT,
     ])
@@ -239,6 +312,7 @@ def oppgave_ukeplan(sb: Styrkeboka, pid: int, onske: str = "") -> str:
             f"- {d['dato']} {d['ukedag']}: " + (", ".join(o.get('navn') or o.get('tittel') for o in d['okter']) or "hvile")
             + (f" [{d['notat']}]" if d['notat'] else "") for d in lokal["dager"]),
         "SISTE ØKTER:\n" + historikkontekst(sb, pid, 4),
+        "TRENINGSANALYSE:\n" + treningsanalyse(sb, pid),
         f"BRUKERENS ØNSKER: {onske.strip()}" if onske.strip() else "",
         'Svar KUN med JSON: {"oppsummering": "2-3 setninger om uka", "dager": [{"dato": "YYYY-MM-DD", '
         '"okter": [{"type": "styrke", "dag_id": 123} eller {"type": "lop", "tittel": "Rolig tur", "minutter": 30} eller '
@@ -328,6 +402,8 @@ def oppgave_sporsmal(sb: Styrkeboka, pid: int, sporsmal: str, oid: int | None = 
                      f"Appens instruksjon – start: {ins.get('start', '')} Steg: {' '.join(ins.get('steg') or [])} "
                      f"Vanlige feil: {'; '.join(ins.get('feil') or [])}. Teknikkpunkter: {'; '.join(ov.get('tips') or [])}")
     deler.append("SISTE ØKTER:\n" + historikkontekst(sb, pid, 4))
+    if (ta := treningsanalyse(sb, pid)):
+        deler.append("TRENINGSANALYSE:\n" + ta)
     import ukeplan
     if (ut := ukeplan.ai_tekst(sb, pid)):
         deler.append(ut)

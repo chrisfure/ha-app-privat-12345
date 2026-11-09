@@ -613,3 +613,16 @@ def test_spill_ringer_niva_og_merker(sb):
     assert not spill.status(sb, pid)["nye_merker"]                   # … og ikke igjen
     assert sum(d["styrke"] for d in s["dager"]) == 1 and len(s["dager"]) == 7
     assert spill.niva(0)["nr"] == 1 and spill.niva(400)["nr"] == 2 and spill.niva(1199)["nr"] == 2
+
+
+def test_treningsanalyse_til_ai(sb):
+    import ai
+    pid = sb.profiler()[0]["id"]
+    sb.lagre_program(pid, sb.foreslaa_program(pid), kilde="mal")
+    for kg in (40, 45):
+        o = sb.start_okt(pid, sb.program(sb.aktivt_program(pid)["id"])["dager"][0]["id"])
+        sb.logg_sett(o["id"], {"okt_ovelse_id": o["ovelser"][0]["id"], "vekt": kg, "reps": 8})
+        sb.avslutt_okt(o["id"], {"opplevd": 3})
+    t = ai.treningsanalyse(sb, pid)
+    assert "Oppmøte" in t and "PROGRESJON" in t and "kg e1RM" in t and "Opplevd tyngde" in t
+    assert "TRENINGSANALYSE" in ai.oppgave_lag_program(sb, pid, None)

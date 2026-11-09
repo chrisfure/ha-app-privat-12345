@@ -134,7 +134,7 @@ Bruker AI-en du har i Home Assistant (en «AI-oppgave»-entitet, `ai_task.*`, f.
 * **Oppsummering etter økta** – automatisk eller på knappen.
 * **Spør treneren** – fra forsiden, under økta eller fra en øvelse.
 
-AI-en får mål, erfaring, utstyr, hensyn du har skrevet, de siste øktene, dagsformen og kalenderen for de neste 7 dagene – **aldri navn**. Appen fungerer fullt ut uten AI.
+AI-en får mål, erfaring, alder/høyde/vekt, utstyr, hensyn du har skrevet, de siste øktene, kondisjon, dagsform og kalenderstatus de neste 7 dagene – **aldri navn**. Når den lager program, ny blokk eller ukeplan (og når du spør), får den også en **treningsanalyse**: oppmøte siste 12 uker, progresjon per øvelse med stillstand markert, harde sett per muskelgruppe, opplevd tyngde og formtrend. En forespørsel er typisk 1 500–4 000 tokens inn. Appen fungerer fullt ut uten AI.
 
 ## Home Assistant
 

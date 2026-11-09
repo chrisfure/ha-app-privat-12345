@@ -1,5 +1,9 @@
 # Endringslogg
 
+## 0.12.0
+
+- AI-treneren får en treningsanalyse når den lager program, ny blokk, ukeplan eller svarer på spørsmål: oppmøte siste 12 uker, progresjon per øvelse (med stillstand markert), harde sett per muskelgruppe, opplevd tyngde og formtrend (søvn, HRV, hvilepuls, stress siste 7 mot 28 dager).
+
 ## 0.11.0
 
 - Ny forside med ringer som skal lukkes hver uke: styrkeøkter, aktivitetsminutter og søvn (eller arbeidssett uten søvndata).
