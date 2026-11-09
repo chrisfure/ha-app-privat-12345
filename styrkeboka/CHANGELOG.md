@@ -1,5 +1,9 @@
 # Endringslogg
 
+## 0.10.2
+
+- Reiser over flere dager vises med hele perioden (og «siste dag»), så AI-treneren ser om du er på vei ut eller hjem.
+
 ## 0.10.1
 
 - Kalenderforslag: Garmins egen øktkalender og arbeidsdag-kalendere foreslås ikke lenger som jobbkalender.

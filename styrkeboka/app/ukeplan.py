@@ -47,7 +47,10 @@ def dag_info(sb: "Styrkeboka", alle: list[dict], dag: date) -> dict:
             heldag.append(h["tittel"])
             if BORTE_ORD.search(h["tittel"]) or "tripit" in h.get("kalender", "") or h.get("sted"):
                 borte = True
-            titler.append(f"hele dagen: {h['tittel']}" + (f" ({h['sted']})" if h.get("sted") else ""))
+            spenn = ""
+            if (he - hs).days > 1:  # flerdagers hendelse, f.eks. en reise: vis hele perioden så AI-en ser hvor du er i den
+                spenn = f", {hs:%d.%m}–{(he - timedelta(days=1)):%d.%m}" + (" – siste dag" if (he - slutt).days <= 0 else "")
+            titler.append(f"hele dagen: {h['tittel']}" + (f" ({h['sted']}{spenn})" if h.get("sted") else f" ({spenn[2:]})" if spenn else ""))
         else:
             fra, til = max(hs, start), min(he, slutt)
             timer += (til - fra).total_seconds() / 3600
