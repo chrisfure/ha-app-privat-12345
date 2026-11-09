@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import asyncio
+import re
 import logging
 import os
 from datetime import timedelta
@@ -194,7 +195,8 @@ class HAKobling:
             return p
         forslag = {}
         mine_kal = [x["entity_id"] for x in kilder["kalendere"]
-                    if any(o in f"{x['entity_id']} {x['navn']}".lower() for o in ("jobb", "work", "tripit", "reise"))
+                    if re.search(r"jobb|\bwork(?!out|day)|working|tripit|reise|arbeid|vakt", f"{x['entity_id']} {x['navn']}".lower().replace("_", " "))
+                    and not re.search(r"garmin|workout|workday|holiday|helligdag", f"{x['entity_id']} {x['navn']}".lower())
                     and not any(n and n in f"{x['entity_id']} {x['navn']}".lower() for n in andre)]
         kilder["kalendere"].sort(key=lambda x: (x["entity_id"] not in mine_kal, x["navn"]))
         if mine_kal:

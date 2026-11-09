@@ -1,5 +1,9 @@
 # Endringslogg
 
+## 0.10.1
+
+- Kalenderforslag: Garmins egen øktkalender og arbeidsdag-kalendere foreslås ikke lenger som jobbkalender.
+
 ## 0.10.0
 
 - Dagsform: søvn (score og lengde), HRV mot ditt eget snitt, Body Battery, stress, treningsberedskap og restitusjonstid hentes fra klokka. Forsiden viser dagsformen med råd, og «Gjør økta lettere» når formen er lav.
