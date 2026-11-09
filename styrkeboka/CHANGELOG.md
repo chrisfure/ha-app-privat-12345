@@ -1,5 +1,11 @@
 # Endringslogg
 
+## 0.9.0
+
+- Styrkeøkter til klokka: hver økt i programmet ligger i Garmin som strukturert styrkeøkt med øvelser, sett, reps, vekt, hvile og oppvarmingssett – oppdatert med dagens vektforslag etter hver økt. Neste økt legges i Garmin-kalenderen, så klokka guider deg og Garmin-aktiviteten får øvelser og vekter.
+- Øvelsene kobles til Garmins egne øvelseskategorier (og nøyaktige navn der de er sikre).
+- «Send fullførte økter som aktivitet» er nå tydelig merket som et valg for deg som ikke starter økta på klokka.
+
 ## 0.8.0
 
 - Styrkeøkter du starter på klokka kobles automatisk til økta i appen (samme tidspunkt). Appen har settene, klokka pulsen – nå ser du begge sammen.

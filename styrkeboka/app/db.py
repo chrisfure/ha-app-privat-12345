@@ -110,6 +110,11 @@ CREATE TABLE IF NOT EXISTS pulsdata (
   aktivitet_id INTEGER PRIMARY KEY REFERENCES aktiviteter(id) ON DELETE CASCADE, start TEXT NOT NULL, data TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS garmin_styrke (
+  id INTEGER PRIMARY KEY, profil_id INTEGER NOT NULL, dag_id INTEGER NOT NULL, workout_id TEXT, fingeravtrykk TEXT,
+  schedule_id TEXT, schedule_dato TEXT, tid TEXT, UNIQUE (profil_id, dag_id)
+);
+
 CREATE TABLE IF NOT EXISTS garmin_okter (
   id INTEGER PRIMARY KEY, profil_id INTEGER NOT NULL, periode_id INTEGER, dato TEXT NOT NULL, nokkel TEXT NOT NULL,
   workout_id TEXT, schedule_id TEXT, tid TEXT, UNIQUE (profil_id, dato)

@@ -326,14 +326,15 @@ class API:
             p = sb.lagre_profil({"garmin_eksport": req.data}, req.int("pid"))
             res = {}
             if hasattr(self.ai, "synk_garmin_lopeokter"):
-                if p["garmin_eksport"]["okter"] or p["garmin_eksport"]["loping"]:
-                    if not self.ai.garmin_konto(p):
-                        raise Feil("Koble profilen til Garmin-sensorene først (Helse → Hent data fra Home Assistant)")
+                if any(p["garmin_eksport"].values()) and not self.ai.garmin_konto(p):
+                    raise Feil("Koble profilen til Garmin-sensorene først (Helse → Hent data fra Home Assistant)")
                 try:
                     res = await self.ai.synk_garmin_lopeokter(p)
+                    if hasattr(self.ai, "synk_garmin_styrke"):
+                        res["styrke"] = await self.ai.synk_garmin_styrke(p)
                 except Exception as e:  # noqa: BLE001
-                    log.warning("Løpeøkter til Garmin: %s", e)
-                    raise Feil(f"Lagret, men klarte ikke å legge løpeturer i Garmin: {e}") from e
+                    log.warning("Til Garmin: %s", e)
+                    raise Feil(f"Lagret, men klarte ikke å oppdatere Garmin: {e}") from e
             return {"garmin_eksport": p["garmin_eksport"], **res}
 
         @r("POST", "/api/okter/{oid}/garmin")
@@ -409,7 +410,9 @@ class API:
         async def lagre_startvekter(req):
             d = req.data
             kilde = d.get("kilde") if d.get("kilde") in ("ai", "beregnet", "manuell") else "manuell"
-            return {"lagret": sb.lagre_startvekter(req.int("pid"), d.get("vekter") or {}, kilde)}
+            n = sb.lagre_startvekter(req.int("pid"), d.get("vekter") or {}, kilde)
+            sb._varsle("startvekter", {"profil_id": req.int("pid")})  # noqa: SLF001
+            return {"lagret": n}
 
         # ---- blokker
         @r("PATCH", "/api/programmer/{prid}/blokk")

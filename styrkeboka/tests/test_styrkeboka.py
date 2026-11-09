@@ -473,3 +473,60 @@ def test_les_tcx_uten_gps():
     start, serie = kropp.les_tcx(tcx)
     assert start.startswith("2026-11-09T10:00:00") and serie[0] == [0, 102, None] and len(serie) == 3
     assert all(len(p) == 3 for p in serie)
+
+
+def test_garmin_styrkeokter(sb, monkeypatch):
+    import asyncio
+    import types
+    if "aiohttp" not in sys.modules:
+        fake = types.ModuleType("aiohttp")
+        fake.ClientTimeout = lambda **k: None
+        fake.ClientError = Exception
+        fake.ClientSession = object
+        sys.modules["aiohttp"] = fake
+    import garmin
+    import ha
+    from ovelser import BIBLIOTEK as BIB
+    pid = sb.profiler()[0]["id"]
+    prog = sb.lagre_program(pid, sb.foreslaa_program(pid), kilde="mal")
+    sb.lagre_startvekter(pid, {"knebøy-stang": 80, "benkpress": 62.5}, "manuell")
+    sb.lagre_profil({"koblinger": {"aktiviteter": "sensor.x"}, "garmin_eksport": {"styrke": True}}, pid)
+    k = ha.HAKobling(sb)
+    k.aktiv = True
+    kall = []
+
+    async def fake_tjeneste(domene, tjeneste, data, svar=False):
+        kall.append((tjeneste, data))
+        return {"workout_id": 500 + len(kall), "schedule_id": 900 + len(kall)} if svar else None
+    monkeypatch.setattr(k, "_tjeneste", fake_tjeneste)
+    r = asyncio.run(k.synk_garmin_styrke(sb.profil(pid)))
+    assert r["nye"] == len(prog["dager"]) and r["planlagt"]
+    w = next(c[1]["workout"] for c in kall if c[0] == "create_workout")
+    steg = w["workoutSegments"][0]["workoutSteps"]
+    assert w["sportType"]["sportTypeKey"] == "strength_training"
+    oppv = [s for s in steg if s["type"] == "ExecutableStepDTO" and s["stepType"]["stepTypeKey"] == "warmup"]
+    assert oppv and oppv[0]["exerciseName"] == "BARBELL_BACK_SQUAT"
+    gruppe = next(s for s in steg if s["type"] == "RepeatGroupDTO")
+    assert gruppe["workoutSteps"][0]["weightValue"] == 80 and gruppe["workoutSteps"][1]["stepType"]["stepTypeKey"] == "rest"
+    assert sum(1 for c in kall if c[0] == "schedule_workout") == 1
+    # ingen endring -> ingen kall
+    kall.clear()
+    asyncio.run(k.synk_garmin_styrke(sb.profil(pid)))
+    assert not kall
+    # etter en økt endres vekten -> update_workout, og neste økt planlegges på nytt
+    o = sb.start_okt(pid, prog["dager"][0]["id"])
+    for _ in range(3):
+        sb.logg_sett(o["id"], {"okt_ovelse_id": o["ovelser"][0]["id"], "vekt": 80, "reps": o["ovelser"][0]["reps_maks"]})
+    sb.avslutt_okt(o["id"], {})
+    kall.clear()
+    asyncio.run(k.synk_garmin_styrke(sb.profil(pid)))
+    typer = [c[0] for c in kall]
+    assert "update_workout" in typer and "unschedule_workout" in typer and "schedule_workout" in typer
+    # alle øvelser har gyldig kategori
+    for o in BIB:
+        assert garmin.kategori(o)[0], o["nokkel"]
+    # slått av -> alt slettes
+    sb.lagre_profil({"garmin_eksport": {"styrke": False}}, pid)
+    kall.clear()
+    r = asyncio.run(k.synk_garmin_styrke(sb.profil(pid)))
+    assert r["fjernet"] == len(prog["dager"]) and not sb.db.alle("SELECT * FROM garmin_styrke")

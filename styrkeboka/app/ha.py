@@ -87,6 +87,13 @@ class HAKobling:
                             await self.send_okt_til_garmin(data["oppsummering"]["okt"]["id"])
                         except Exception as e:  # noqa: BLE001
                             log.warning("Kunne ikke sende økt til Garmin: %s", e)
+                    if hva in ("okt_fullfort", "program", "startvekter") and data and data.get("profil_id"):
+                        try:
+                            p = self.sb.profil(data["profil_id"])
+                            if (p.get("garmin_eksport") or {}).get("styrke"):
+                                await self.synk_garmin_styrke(p)
+                        except Exception as e:  # noqa: BLE001
+                            log.warning("Styrkeøkter til Garmin feilet: %s", e)
             except Exception as e:  # noqa: BLE001
                 log.warning("Publisering feilet: %s", e)
             self._publiser_naa.clear()
@@ -299,6 +306,11 @@ class HAKobling:
                         await self.synk_profil(p)
                     except Exception as e:  # noqa: BLE001
                         log.warning("Henting av kroppsdata feilet for profil %s: %s", p["id"], e)
+                if runde % 4 == 0 and (p.get("garmin_eksport") or {}).get("styrke"):
+                    try:
+                        await self.synk_garmin_styrke(p)
+                    except Exception as e:  # noqa: BLE001
+                        log.warning("Styrkeøkter til Garmin feilet for profil %s: %s", p["id"], e)
                 if runde % 4 == 0 and (p.get("garmin_eksport") or {}).get("loping"):
                     try:
                         await self.synk_garmin_lopeokter(p)
@@ -345,6 +357,66 @@ class HAKobling:
             "duration_min": max(1, o["nokkeltall"]["minutter"]), "time_zone": str(self.sb.tz)})
         self.sb.db.oppdater("okter", oid, {"garmin_sendt": naa().isoformat(timespec="seconds")})
         return True
+
+    async def synk_garmin_styrke(self, p: dict) -> dict:
+        """Én Garmin-økt per programdag med dagens vekter. Neste økt legges i kalenderen (i dag, eller i morgen
+        hvis du allerede har trent i dag), så klokka henter den automatisk."""
+        import garmin
+        konto = self.garmin_konto(p)
+        if not self.aktiv or not konto:
+            return {"nye": 0, "oppdatert": 0, "fjernet": 0}
+        pid = p["id"]
+        aktiv = (p.get("garmin_eksport") or {}).get("styrke")
+        prog = self.sb.aktivt_program(pid) if aktiv else None
+        lagret = {r["dag_id"]: r for r in self.sb.db.alle("SELECT * FROM garmin_styrke WHERE profil_id = ?", (pid,))}
+        dager = {d["id"]: d for d in (prog["dager"] if prog else [])}
+        nye = oppdatert = fjernet = 0
+        for dag_id, r in lagret.items():
+            if dag_id not in dager:
+                try:
+                    await self._tjeneste("garmin_connect", "delete_workout", {"entity_id": konto, "workout_id": int(r["workout_id"])})
+                except Feil as e:
+                    log.info("Klarte ikke slette Garmin-økt: %s", e)
+                self.sb.db.kjor("DELETE FROM garmin_styrke WHERE id = ?", (r["id"],))
+                fjernet += 1
+        if not prog:
+            return {"nye": nye, "oppdatert": oppdatert, "fjernet": fjernet}
+        tid = naa().isoformat(timespec="seconds")
+        for dag_id, dag in dager.items():
+            w = garmin.bygg_workout(dag["navn"], self.sb.garmin_dagplan(pid, dag, prog))
+            fa = garmin.fingeravtrykk(w)
+            r = lagret.get(dag_id)
+            if r and r["fingeravtrykk"] == fa:
+                continue
+            if r:
+                await self._tjeneste("garmin_connect", "update_workout", {"entity_id": konto, "workout_id": int(r["workout_id"]), "workout": w})
+                self.sb.db.oppdater("garmin_styrke", r["id"], {"fingeravtrykk": fa, "tid": tid})
+                oppdatert += 1
+            else:
+                res = await self._tjeneste("garmin_connect", "create_workout", {"entity_id": konto, "workout": w}, svar=True)
+                self.sb.db.sett_inn("garmin_styrke", {"profil_id": pid, "dag_id": dag_id, "workout_id": str(res.get("workout_id")),
+                                                      "fingeravtrykk": fa, "tid": tid})
+                nye += 1
+        # neste økt i kalenderen
+        neste = self.sb.neste_dag(pid, prog)
+        i_dag = self.sb.lokal(naa()).date()
+        trent_i_dag = any(self.sb.lokal(o["startet"]).date() == i_dag for o in self.sb.db.alle(
+            "SELECT startet FROM okter WHERE profil_id = ? AND status = 'fullfort' ORDER BY startet DESC LIMIT 3", (pid,)))
+        dato = (i_dag + timedelta(days=1 if trent_i_dag else 0)).isoformat()
+        rader = self.sb.db.alle("SELECT * FROM garmin_styrke WHERE profil_id = ?", (pid,))
+        for r in rader:
+            riktig = neste and r["dag_id"] == neste["id"] and r["schedule_dato"] == dato
+            if r.get("schedule_id") and not riktig:
+                try:
+                    await self._tjeneste("garmin_connect", "unschedule_workout", {"entity_id": konto, "schedule_id": int(r["schedule_id"])})
+                except Feil as e:
+                    log.info("Klarte ikke fjerne fra Garmin-kalenderen: %s", e)
+                self.sb.db.oppdater("garmin_styrke", r["id"], {"schedule_id": None, "schedule_dato": None})
+        r = next((x for x in self.sb.db.alle("SELECT * FROM garmin_styrke WHERE profil_id = ?", (pid,)) if neste and x["dag_id"] == neste["id"]), None)
+        if r and r["schedule_dato"] != dato:
+            res = await self._tjeneste("garmin_connect", "schedule_workout", {"entity_id": konto, "workout_id": int(r["workout_id"]), "date": dato}, svar=True)
+            self.sb.db.oppdater("garmin_styrke", r["id"], {"schedule_id": str(res.get("schedule_id") or ""), "schedule_dato": dato})
+        return {"nye": nye, "oppdatert": oppdatert, "fjernet": fjernet, "planlagt": dato if r else None}
 
     async def synk_garmin_lopeokter(self, p: dict) -> dict:
         """Holder Garmin-kalenderen i takt med løpeplanen: nye turer legges inn, endrede byttes ut."""

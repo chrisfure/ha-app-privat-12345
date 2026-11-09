@@ -247,6 +247,7 @@
         S.utstyrsprofiler.length > 1 ? el("div", { class: "segment" }, S.utstyrsprofiler.map((u) =>
           el("button", { class: u.id === stedId ? "valgt" : "", onclick: () => { lagre(`sted-${pid}`, u.id); visTrening(); } }, ikon("sted"), u.navn))) : null,
         n.ovelser.some((o) => o.erstatter) ? el("p", { class: "forklaring" }, `Øvelser som krever utstyr ${valgtSted?.navn || "stedet"} ikke har, er byttet ut med en tilsvarende øvelse for denne økta.`) : null,
+        profil()?.garmin_eksport?.styrke ? el("p", { class: "forklaring", style: "font-size:13px;text-align:center" }, "⌚ Økta ligger klar i Garmin-kalenderen – start den på klokka og logg settene her.") : null,
         el("button", { class: "knapp", onclick: () => startOkt(n.id) }, ikon("play"), "Start økten")));
       const andre = ov.program.dager.filter((d) => d.id !== n.id);
       v.append(el("div", { class: "chips rull" },
@@ -1581,18 +1582,22 @@
           const r = await put(`api/profiler/${pid}/garmin`, { ...g, ...endring });
           Object.assign(g, r.garmin_eksport);
           await lastStart();
-          if (r.lagt_inn) visToast(`${r.lagt_inn} løpeturer lagt i Garmin-kalenderen`);
-          else if (r.fjernet) visToast(`${r.fjernet} løpeturer fjernet fra Garmin-kalenderen`);
+          const st = r.styrke || {};
+          if (st.nye) visToast(`${st.nye} styrkeøkter lagt i Garmin${st.planlagt ? " – neste ligger i kalenderen" : ""}`);
+          else if (r.lagt_inn) visToast(`${r.lagt_inn} løpeturer lagt i Garmin-kalenderen`);
+          else if (r.fjernet || st.fjernet) visToast("Fjernet fra Garmin");
           visKropp();
         } catch (e) { feil(e); visKropp(); }
       };
       v.append(el("div", { class: "kort" },
         el("h2", {}, "Til Garmin Connect"),
-        el("div", { class: "liste-rad", style: "min-height:0;padding:0" }, el("span", { class: "tekst" }, el("b", {}, "Send styrkeøkter"), el("small", {}, "Fullførte økter legges inn som aktivitet i Garmin Connect, med navn og varighet.")), bryter(g.okter, (x) => lagre_({ okter: x }))),
+        el("div", { class: "liste-rad", style: "min-height:0;padding:0" }, el("span", { class: "tekst" }, el("b", {}, "Styrkeøkter til klokka"), el("small", {}, "Hver økt i programmet ligger i Garmin med øvelser, sett, reps, kg og hvile – oppdatert med dagens vektforslag. Neste økt legges i kalenderen, så klokka guider deg og Garmin-aktiviteten får øvelser og vekter.")), bryter(g.styrke, (x) => lagre_({ styrke: x }))),
+        g.styrke && k.garmin_styrke?.length ? el("p", { class: "forklaring", style: "font-size:13px" }, "I Garmin: " + k.garmin_styrke.map((x) => `${x.navn}${x.schedule_dato ? ` (i kalenderen ${dato(x.schedule_dato)})` : ""}`).join(" · ")) : null,
+        el("div", { class: "liste-rad", style: "min-height:0;padding:0" }, el("span", { class: "tekst" }, el("b", {}, "Send fullførte økter som aktivitet"), el("small", {}, "Bare hvis du ikke starter økta på klokka – ellers blir den liggende dobbelt.")), bryter(g.okter, (x) => lagre_({ okter: x }))),
         el("div", { class: "liste-rad", style: "min-height:0;padding:0" }, el("span", { class: "tekst" }, el("b", {}, "Løpeturer til klokka"), el("small", {}, "Turene i løpeplanen legges i Garmin-kalenderen 2 uker fram, med oppvarming, drag og pulssoner – klokka guider deg.")), bryter(g.loping, (x) => lagre_({ loping: x }))),
         g.loping && k.garmin_lagt_inn?.length ? el("p", { class: "forklaring", style: "font-size:13px" }, "I Garmin-kalenderen: " + k.garmin_lagt_inn.map((x) => `${dato(x.dato)} ${x.nokkel.split(":")[2]}`).join(" · ")) : null,
         g.loping && !k.garmin_lagt_inn?.length ? el("p", { class: "forklaring", style: "font-size:13px" }, "Ingen løpeturer å legge inn ennå – legg inn en løpeperiode under Program.") : null,
-        g.okter ? el("p", { class: "forklaring", style: "font-size:13px" }, "Tips: Registrerer du styrkeøkta på klokka også, blir den liggende dobbelt i Garmin.") : null));
+        g.styrke ? el("p", { class: "forklaring", style: "font-size:13px" }, "På klokka: Trening → Styrke → Treningsøkter / Treningskalender. Juster vekt eller reps på klokka hvis du avviker – men logg settene i appen, den henter ikke settene tilbake.") : null));
     }
 
     // kroppsprofil og puls

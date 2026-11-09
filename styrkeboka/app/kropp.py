@@ -293,6 +293,8 @@ def oversikt(sb: "Styrkeboka", pid: int) -> dict:
             "aktiviteter": aktiviteter(sb, pid, 60, 30), "maaletyper": MAALETYPER, "aktivitetstyper": AKTIVITETSTYPER,
             "koblinger": sb.profil(pid).get("koblinger") or {},
             "garmin_eksport": sb.profil(pid).get("garmin_eksport") or {},
+            "garmin_styrke": sb.db.alle("SELECT g.schedule_dato, d.navn FROM garmin_styrke g JOIN programdager d ON d.id = g.dag_id "
+                                        "WHERE g.profil_id = ? ORDER BY d.rekkefolge", (pid,)),
             "garmin_lagt_inn": sb.db.alle("SELECT dato, nokkel FROM garmin_okter WHERE profil_id = ? AND dato >= ? ORDER BY dato",
                                           (pid, lokal_dato(sb)))}
 

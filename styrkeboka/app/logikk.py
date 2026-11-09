@@ -245,7 +245,7 @@ class Styrkeboka:
             rad["kjonn"] = d["kjonn"] if d["kjonn"] in ("mann", "kvinne") else None
         if "garmin_eksport" in d:
             g = d["garmin_eksport"] or {}
-            rad["garmin_eksport"] = {"okter": bool(g.get("okter")), "loping": bool(g.get("loping"))}
+            rad["garmin_eksport"] = {"okter": bool(g.get("okter")), "loping": bool(g.get("loping")), "styrke": bool(g.get("styrke"))}
         if "koblinger" in d:
             k = d["koblinger"] or {}
             rad["koblinger"] = {n: str(v) for n, v in k.items()
@@ -742,6 +742,29 @@ class Styrkeboka:
             up = self.db.en("SELECT navn FROM utstyrsprofiler WHERE id = ?", (o["utstyrsprofil_id"],))
             o["sted"] = up["navn"] if up else None
         return o
+
+    def garmin_dagplan(self, pid: int, dag: dict, prog: dict) -> list[dict]:
+        """Øvelsene i en programdag med dagens vektforslag – grunnlaget for Garmin-økta."""
+        import loping
+        lett = prog["blokk"]["lett_naa"]
+        varmet: set[str] = set()
+        ut = []
+        for po in dag["ovelser"]:
+            ov = self.ovelse(po["ovelse"])
+            plan = loping.juster_plan(self, pid, P.lett_dose(po) if lett else po, ov["monster"], bool(po.get("fast")))
+            tidl = self.tidligere_sett(pid, ov["nokkel"])
+            f = self.forslag(pid, ov, plan, tidl)
+            if lett:
+                f = P.lett_forslag(f, tidl)
+            region = "under" if ov["monster"] in P.UNDERKROPP else "over" if ov["monster"] in P.OVERKROPP else None
+            oppv = []
+            if region and vektbasert(ov) and ov.get("sammensatt") and f["kg"]:
+                oppv = P.oppvarming(f["kg"], ov, kort=region in varmet)
+                varmet.add(region)
+            ut.append({"ovelse": ov, "sett": int(plan.get("sett_plan") or plan.get("sett") or 3), "reps": f["reps"] or plan.get("reps_min") or 8,
+                       "kg": f["kg"] if vektbasert(ov) else None, "hvile_s": plan.get("hvile_s") or 90, "sekunder": sekunder(ov),
+                       "oppvarming": oppv, "tekst": f"{plan.get('reps_min')}–{plan.get('reps_maks')} reps, {plan.get('rir', 2)} i reserve"})
+        return ut
 
     def _klokke(self, oid: int, alle_sett: list[dict]) -> dict | None:
         """Pulsdata fra en styrkeøkt registrert på klokka, koblet til denne økta."""

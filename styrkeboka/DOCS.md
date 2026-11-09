@@ -75,10 +75,11 @@ Under **Program → Løping i perioder** kan du legge inn en periode (f.eks. «S
 
 Er profilen koblet til Garmin (Helse → Hent data fra Home Assistant), finner du **Helse → Til Garmin Connect**:
 
-* **Send styrkeøkter** – fullførte økter legges inn som aktivitet («Styrketrening: Helkropp A») med starttid og varighet. Eldre økter kan sendes med «Send til Garmin» i økt-detaljene. Registrerer du økta på klokka også, blir den liggende dobbelt.
+* **Styrkeøkter til klokka** – hver økt i programmet ligger i Garmin som en strukturert styrkeøkt («Styrkeboka: Helkropp A») med øvelser, sett, reps, vekt, hvile og oppvarmingssett. Vektene oppdateres etter hver økt (og når du endrer program eller startvekter), og neste økt legges i Garmin-kalenderen – i dag, eller i morgen hvis du allerede har trent. Start den på klokka (Styrke → Treningskalender / Treningsøkter), så får Garmin-aktiviteten øvelser og vekter, og appen kobler pulsen til økta di. Logg likevel settene i appen – avvik du legger inn på klokka hentes ikke tilbake. Øvelsene vises med Garmins kategori (f.eks. «Roing») der vi ikke er sikre på det nøyaktige navnet.
+* **Send fullførte økter som aktivitet** – for deg som *ikke* starter økta på klokka: fullførte økter legges inn som aktivitet med starttid og varighet.
 * **Løpeturer til klokka** – turene i løpeplanen legges i Garmin-kalenderen to uker fram, som strukturerte økter med oppvarming, drag, pauser og pulssoner (klokkas egne soner). Start dem fra treningskalenderen på klokka. Endres eller slettes perioden, oppdateres kalenderen.
 
-Bruker tjenestene `garmin_connect.create_activity`, `create_workout` og `delete_workout` fra Garmin Connect-integrasjonen.
+Bruker tjenestene `garmin_connect.create_activity`, `create_workout`, `update_workout`, `delete_workout`, `schedule_workout` og `unschedule_workout` fra Garmin Connect-integrasjonen.
 
 ### Treningsblokker
 
