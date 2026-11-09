@@ -120,13 +120,20 @@ CREATE TABLE IF NOT EXISTS garmin_okter (
   workout_id TEXT, schedule_id TEXT, tid TEXT, UNIQUE (profil_id, dato)
 );
 
+CREATE TABLE IF NOT EXISTS intervaller (
+  id INTEGER PRIMARY KEY, profil_id INTEGER NOT NULL, startet TEXT NOT NULL, varighet_s REAL,
+  format TEXT NOT NULL, navn TEXT, oppsett TEXT NOT NULL, runder REAL, fullfort INTEGER DEFAULT 1,
+  opplevd INTEGER, notat TEXT DEFAULT '', aktivitet_id INTEGER
+);
+CREATE INDEX IF NOT EXISTS ix_intervaller ON intervaller(profil_id, startet);
+
 CREATE TABLE IF NOT EXISTS ai_logg (
   id INTEGER PRIMARY KEY, profil_id INTEGER, okt_id INTEGER, tid TEXT NOT NULL, type TEXT,
   sporsmal TEXT, svar TEXT
 );
 """
 
-JSON_FELT = {"utstyr", "muskler", "maal", "ai_tips", "ai_oppsummering", "data", "kjente_loft", "koblinger", "lopedager", "garmin_eksport", "soner"}
+JSON_FELT = {"utstyr", "muskler", "maal", "ai_tips", "ai_oppsummering", "data", "kjente_loft", "koblinger", "lopedager", "garmin_eksport", "soner", "oppsett"}
 
 
 class Database:

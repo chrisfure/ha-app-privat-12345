@@ -695,3 +695,107 @@ body.har-hvile .toast { bottom: calc(166px + env(safe-area-inset-bottom)); }
   .ring-midt, .feiring-emoji { animation: none; }
   .konfetti { display: none; }
 }
+
+/* ---------------------------------------------------------------- intervalløkter: inngang, meny og bygger */
+.kort.intervall-inngang { display: flex; flex-direction: row; align-items: center; gap: 14px; width: 100%; text-align: left; padding: 14px 16px; color: inherit; font: inherit; border: 0; cursor: pointer; }
+.intervall-inngang .tekst { flex: 1; display: flex; flex-direction: column; gap: 2px; }
+.intervall-inngang small { color: var(--dempet); font-weight: 700; font-size: 13px; }
+.intervall-inngang > svg { width: 20px; height: 20px; color: var(--dempet); }
+.ii-ikon { width: 44px; height: 44px; border-radius: 14px; display: grid; place-items: center; flex: none;
+  background: linear-gradient(135deg, var(--oransje), var(--rosa)); color: #fff; }
+.ii-ikon svg { width: 22px; height: 22px; }
+.seksjon-tittel.liten { margin: 16px 0 8px; font-size: 13px; }
+.format-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 8px; }
+.format-kort { display: flex; flex-direction: column; gap: 2px; align-items: flex-start; text-align: left; padding: 12px; border-radius: 16px;
+  background: var(--b-lys); color: var(--b-blekk); min-height: 74px; }
+.format-kort b { font-size: 16px; font-weight: 900; }
+.format-kort small { font-size: 12px; font-weight: 700; line-height: 1.25; opacity: .9; }
+.format-merke { flex: none; padding: 3px 8px; border-radius: 8px; font-size: 11px; font-weight: 900; letter-spacing: .04em; text-transform: uppercase;
+  background: var(--b-lys); color: var(--b-blekk); }
+.mal-liste { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.mal-liste button { width: 100%; display: flex; align-items: center; gap: 12px; padding: 12px; border-radius: 16px; background: var(--flate-2); text-align: left; color: inherit; }
+.mal-liste .tekst { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.mal-liste small { color: var(--dempet); font-weight: 700; font-size: 12.5px; }
+.mal-liste svg { width: 18px; height: 18px; color: var(--dempet); flex: none; }
+.iv-hode { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+.iv-hode .format-merke { font-size: 13px; padding: 5px 10px; }
+.iv-total { display: inline-flex; align-items: center; gap: 6px; font-size: 20px; font-variant-numeric: tabular-nums; }
+.iv-total svg { width: 18px; height: 18px; }
+.param-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 12px; }
+.param-grid .stepper button { width: 40px; height: 40px; }
+.param-grid .stepper .verdi { font-size: 18px; }
+.iv-ovelser { list-style: none; margin: 0 0 8px; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.iv-ovelser li { display: flex; align-items: center; gap: 8px; padding: 6px 6px 6px 10px; border-radius: 14px; background: var(--flate-2); }
+.iv-ovelser .nr { width: 24px; font-weight: 900; color: var(--dempet); font-variant-numeric: tabular-nums; flex: none; }
+.iv-navn { flex: 1; min-width: 0; display: flex; flex-direction: column; text-align: left; color: inherit; padding: 4px 0; }
+.iv-navn small { color: var(--dempet); font-size: 12px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.iv-ovelser .reps { width: 56px; text-align: center; min-height: 40px; padding: 0 6px; }
+.iv-ovelser .ikonknapp { width: 36px; height: 36px; flex: none; }
+.ark-knapper.loddrett { flex-direction: column; }
+.ark-knapper.loddrett .knapp { width: 100%; }
+
+/* ---------------------------------------------------------------- intervalløkter: klokka */
+body.har-intervall { overflow: hidden; }
+.iv-skjerm {
+  --fase: var(--blaa); --fase-lys: var(--blaa-lys);
+  position: fixed; inset: 0; z-index: 18; display: flex; flex-direction: column; gap: 10px;
+  padding: calc(12px + env(safe-area-inset-top)) 16px calc(16px + env(safe-area-inset-bottom));
+  background: radial-gradient(120% 70% at 50% 0%, color-mix(in srgb, var(--fase) 32%, #14131b) 0%, #14131b 70%);
+  color: #fff; overflow-y: auto; transition: background .5s ease;
+}
+.iv-skjerm[data-fase="jobb"] { --fase: var(--oransje); }
+.iv-skjerm[data-fase="pause"], .iv-skjerm[data-fase="rundepause"] { --fase: var(--gronn); }
+.iv-skjerm[data-fase="emom"] { --fase: var(--lilla); }
+.iv-skjerm[data-fase="amrap"] { --fase: var(--rosa); }
+.iv-topp { display: flex; align-items: center; gap: 8px; max-width: 600px; width: 100%; margin: 0 auto; }
+.iv-tittel { flex: 1; min-width: 0; display: flex; flex-direction: column; text-align: center; }
+.iv-tittel b { font-size: 16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.iv-tittel small { font-size: 13px; opacity: .7; font-weight: 700; font-variant-numeric: tabular-nums; }
+.iv-topp-knapp { min-width: 44px; height: 44px; border-radius: 14px; background: rgba(255,255,255,.1); color: #fff; display: grid; place-items: center; padding: 0 10px; }
+.iv-topp-knapp svg { width: 20px; height: 20px; }
+.iv-topp-knapp.tekst { font-size: 12px; font-weight: 800; }
+.iv-topp-knapp.av { opacity: .5; }
+.iv-lyd-ikon { font-size: 18px; }
+.iv-prog { height: 6px; border-radius: 99px; background: rgba(255,255,255,.12); overflow: hidden; max-width: 600px; width: 100%; margin: 0 auto; }
+.iv-prog > div { height: 100%; background: var(--fase); border-radius: inherit; transition: width .3s linear, background .5s; }
+.iv-midt { display: flex; flex-direction: column; align-items: center; gap: 10px; flex: 1; justify-content: center; }
+.iv-ring-boks { position: relative; width: min(72vw, 300px, 40vh); aspect-ratio: 1; }
+.iv-ring-boks svg.iv-ring { width: 100%; height: 100%; display: block; overflow: visible; }
+.iv-ring-spor { fill: none; stroke: rgba(255,255,255,.1); stroke-width: 16; }
+.iv-ring-bue { fill: none; stroke: var(--fase); stroke-width: 16; stroke-linecap: round; transition: stroke-dashoffset .25s linear, stroke .5s;
+  filter: drop-shadow(0 0 10px color-mix(in srgb, var(--fase) 70%, transparent)); }
+.iv-ring-tekst { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; }
+.iv-fase { font-size: 15px; font-weight: 900; text-transform: uppercase; letter-spacing: .12em; color: var(--fase); filter: brightness(1.25); }
+.iv-tid { font-size: clamp(56px, 18vw, 96px); font-weight: 900; line-height: 1; font-variant-numeric: tabular-nums; letter-spacing: -.02em; }
+.iv-runder { font-size: 16px; font-weight: 800; opacity: .85; }
+.pauset .iv-tid { animation: blink 1.2s steps(2, start) infinite; }
+@keyframes blink { to { visibility: hidden; } }
+.iv-ovelse { text-align: center; display: flex; flex-direction: column; gap: 4px; max-width: 560px; }
+.iv-ovnavn { font-size: clamp(26px, 7.5vw, 38px); font-weight: 900; line-height: 1.1; letter-spacing: -.01em; }
+.iv-ovnavn.dempet { opacity: .55; font-size: clamp(22px, 6vw, 30px); }
+.iv-reps { font-size: 15px; font-weight: 700; opacity: .8; min-height: 1.2em; }
+.iv-neste { font-size: 15px; font-weight: 800; color: var(--fase); filter: brightness(1.3); min-height: 1.2em; }
+.iv-info { font-size: 13.5px; font-weight: 700; opacity: .7; text-align: center; }
+.iv-kontroller { display: flex; align-items: center; justify-content: center; gap: 14px; }
+.iv-kontroll { width: 60px; height: 60px; border-radius: 50%; background: rgba(255,255,255,.12); color: #fff; display: grid; place-items: center; }
+.iv-kontroll svg { width: 24px; height: 24px; }
+.iv-kontroll.stor { width: 78px; height: 78px; background: #fff; color: #14131b; }
+.iv-kontroll.stor svg { width: 30px; height: 30px; }
+.iv-kontroll.bred { width: auto; padding: 0 20px; border-radius: 99px; display: inline-flex; gap: 6px; font-weight: 900; background: var(--fase); }
+.pause-ikon { display: flex; gap: 6px; }
+.pause-ikon i { width: 7px; height: 26px; border-radius: 3px; background: currentColor; }
+.iv-oversikt { max-width: 600px; width: 100%; margin: 4px auto 0; background: rgba(255,255,255,.06); border-radius: 20px; padding: 10px 12px; }
+.iv-oversikt-tittel { font-size: 12px; font-weight: 900; text-transform: uppercase; letter-spacing: .08em; opacity: .6; margin: 2px 4px 6px; }
+.iv-liste { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.iv-liste li { display: flex; align-items: center; gap: 10px; padding: 8px 8px; border-radius: 12px; transition: background .3s; }
+.iv-l-nr { width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; font-size: 12px; font-weight: 900; background: rgba(255,255,255,.1); flex: none; }
+.iv-l-navn { flex: 1; font-weight: 700; font-size: 15px; }
+.iv-l-reps { font-size: 13px; font-weight: 800; opacity: .7; font-variant-numeric: tabular-nums; }
+.iv-liste li.gjort { opacity: .45; }
+.iv-liste li.gjort .iv-l-nr { background: var(--gronn); }
+.iv-liste li.naa { background: color-mix(in srgb, var(--fase) 30%, transparent); }
+.iv-liste li.naa .iv-l-nr { background: var(--fase); }
+.iv-liste li.naa .iv-l-navn { font-weight: 900; }
+.iv-liste li.neste { outline: 2px dashed color-mix(in srgb, var(--fase) 60%, transparent); outline-offset: -2px; }
+@media (min-height: 760px) { .iv-skjerm { gap: 14px; } }
+@media (prefers-reduced-motion: reduce) { .iv-ring-bue, .iv-prog > div { transition: none; } .pauset .iv-tid { animation: none; opacity: .6; } }

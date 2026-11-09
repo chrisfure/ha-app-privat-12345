@@ -50,6 +50,7 @@ AKTIVITETSTYPER = {
     "svomming": {"navn": "Svømming", "intensitet": "hoy"},
     "annet": {"navn": "Annet", "intensitet": "moderat"},
     "styrke": {"navn": "Styrke (klokke)", "intensitet": "moderat"},
+    "hiit": {"navn": "Intervaller / HIIT", "intensitet": "hoy"},
 }
 
 # Garmin-aktivitetstyper → våre typer. Styrketrening fra klokka hoppes over (logges i appen).
@@ -64,8 +65,9 @@ GARMIN_TYPER = {
     "resort_skiing_snowboarding_ws": "ski",
     "lap_swimming": "svomming", "open_water_swimming": "svomming",
     "strength_training": "styrke",
+    "hiit": "hiit", "indoor_cardio": "hiit",
 }
-HOPP_OVER = {"indoor_cardio", "yoga", "pilates", "breathwork"}
+HOPP_OVER = {"yoga", "pilates", "breathwork"}
 
 
 def lokal_dato(sb: "Styrkeboka", d: datetime | str | None = None) -> str:
@@ -154,6 +156,19 @@ def importer_garmin(sb: "Styrkeboka", pid: int, akt: dict) -> bool:
         except (TypeError, ValueError):
             return None
     varighet = tall("movingDuration") if typ in ("sykling",) and tall("movingDuration") else tall("duration")
+    if typ in ("hiit", "styrke"):
+        # intervalløkt logget i appen samtidig: slå sammen, så pulsen fra klokka havner på økta og den ikke telles to ganger
+        app = next((r for r in sb.db.alle(
+            "SELECT * FROM aktiviteter WHERE profil_id = ? AND type = 'hiit' AND kilde = 'app' AND ekstern_id IS NULL AND start BETWEEN ? AND ?",
+            (pid, til_iso(start - timedelta(minutes=40)), til_iso(start + timedelta(minutes=40))))), None)
+        if app:
+            sb.db.oppdater("aktiviteter", app["id"], {
+                "ekstern_id": eid, "varighet_s": varighet or app["varighet_s"], "start": til_iso(start),
+                "snittpuls": tall("averageHR", lambda x: int(round(float(x)))), "makspuls": tall("maxHR", lambda x: int(round(float(x)))),
+                "kalorier": tall("calories", lambda x: int(round(float(x)))), "moderate_min": tall("moderateIntensityMinutes", int),
+                "hoy_min": tall("vigorousIntensityMinutes", int), "belastning": tall("activityTrainingLoad"),
+                "aerob_effekt": tall("aerobicTrainingEffect"), "soner": soner})
+            return True
     sb.db.sett_inn("aktiviteter", {
         "profil_id": pid, "ekstern_id": eid, "type": typ, "navn": str(akt.get("activityName") or "")[:80],
         "start": til_iso(start), "varighet_s": varighet, "distanse_m": tall("distance"), "hoydemeter": tall("elevationGain"),

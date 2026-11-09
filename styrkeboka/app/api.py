@@ -379,6 +379,57 @@ class API:
             sb._varsle("ukeplan", {"profil_id": pid})  # noqa: SLF001
             return {"ukeplan": plan}
 
+        # ------------------------------------------------ intervalløkter (HIIT, Tabata, sirkel, EMOM, AMRAP)
+        @r("GET", "/api/profiler/{pid}/intervaller")
+        async def intervaller(req):
+            import intervall
+            pid = req.int("pid")
+            upid = int(req.query["sted"]) if str(req.query.get("sted") or "").isdigit() else None
+            return {"formater": intervall.FORMATER, "fokus": {k: v["navn"] for k, v in intervall.FOKUS.items()},
+                    "maler": intervall.maler(sb, pid, upid), "historikk": intervall.historikk(sb, pid)}
+
+        @r("POST", "/api/profiler/{pid}/intervaller/forslag")
+        async def intervall_forslag(req):
+            import intervall
+            d = req.data or {}
+            return intervall.foreslaa(sb, req.int("pid"), str(d.get("format") or "hiit"), str(d.get("fokus") or "helkropp"),
+                                      int(d["antall"]) if str(d.get("antall") or "").isdigit() else None,
+                                      int(d["sted"]) if str(d.get("sted") or "").isdigit() else None)
+
+        @r("POST", "/api/profiler/{pid}/intervaller/ai")
+        async def intervall_ai(req):
+            import intervall
+            pid = req.int("pid")
+            d = req.data or {}
+            fmt = str(d.get("format") or "hiit")
+            if fmt not in intervall.FORMATER:
+                raise Feil("Ukjent format")
+            minutter = max(4, min(60, int(d.get("minutter") or 20)))
+            upid = int(d["sted"]) if str(d.get("sted") or "").isdigit() else None
+            svar = ai.les_json(await self.ai.spor("intervalløkt", ai.oppgave_intervall(
+                sb, pid, fmt, minutter, str(d.get("fokus") or "helkropp"), upid, str(d.get("onske") or ""))))
+            oppsett = intervall.valider(sb, {**(svar.get("oppsett") or {}), "format": fmt})
+            sb.logg_ai(pid, "intervalløkt", str(d.get("onske") or ""), str(svar.get("begrunnelse") or ""))
+            return {"navn": str(svar.get("navn") or intervall.FORMATER[fmt]["navn"])[:60], "oppsett": oppsett,
+                    "sekunder": intervall.total_sekunder(oppsett), "begrunnelse": str(svar.get("begrunnelse") or "")[:400],
+                    "tips": [str(t)[:200] for t in (svar.get("tips") or [])][:4]}
+
+        @r("POST", "/api/profiler/{pid}/intervaller")
+        async def lagre_intervall(req):
+            import intervall
+            pid = req.int("pid")
+            d = req.data or {}
+            forrige = intervall.beste(sb, pid, str(d.get("navn") or ""), str((d.get("oppsett") or {}).get("format") or ""))
+            x = intervall.lagre(sb, pid, d)
+            sb._varsle("aktivitet", {"profil_id": pid})  # noqa: SLF001
+            return {"intervall": x, "forrige_beste": forrige}
+
+        @r("DELETE", "/api/intervaller/{iid}")
+        async def slett_intervall(req):
+            import intervall
+            intervall.slett(sb, req.int("iid"))
+            return {"ok": True}
+
         @r("DELETE", "/api/profiler/{pid}/ukeplan")
         async def nullstill_ukeplan(req):
             import ukeplan

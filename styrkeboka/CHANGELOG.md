@@ -1,5 +1,12 @@
 # Endringslogg
 
+## 0.14.0
+
+- Intervalløkter: HIIT, Tabata, sirkel, EMOM og AMRAP – lag din egen, velg en ferdig økt (bl.a. «Sete og bein», «Kjerne 10», «AMRAP 12», «Kettlebell-AMRAP») eller la treneren lage en ut fra dagsform og utstyr.
+- Stor nedtellingsklokke i fullskjerm: fargekodet jobb/pause, nåværende og neste øvelse, runde og øvelse, oversikt over alle øvelsene, pip de siste sekundene, opplesning av øvelsene og skjermen holdes på. AMRAP teller runder med «Neste øvelse»-knappen og viser ny rekord.
+- Gjennomførte intervalløkter teller som aktivitet (høy intensitet) i ringene og uke-kjeden. Kjører du samtidig økta på klokka, slås den sammen med Garmin-aktiviteten og får pulsen derfra.
+- 18 nye øvelser: kondisjon (burpees, fjellklatrer, sprellemann, hoppknebøy, skøyterhopp, thrusters m.fl.), sete (eselspark, sidehev på alle fire, sumoknebøy) og kjerne (sykkelcrunch, russisk vri, saksespark, planke med skulderklapp).
+
 ## 0.13.0
 
 - Egen AI til planlegging: velg en kraftigere modell (f.eks. Claude Sonnet) for program, justering, ny blokk, ukeplan og startvekter, mens tips, oppsummeringer og spørsmål bruker den raske og billige.

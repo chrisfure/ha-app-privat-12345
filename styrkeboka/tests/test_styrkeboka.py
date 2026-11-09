@@ -645,3 +645,40 @@ def test_egen_ai_til_planlegging(sb):
     assert asyncio.run(k._velg_entitet("ny blokk")) == "ai_task.rask"
     with pytest.raises(Feil):
         sb.lagre_innstillinger({"ai_entitet_plan": "ikke gyldig"})
+
+
+def test_intervaller_maler_forslag_og_lagring(sb):
+    import intervall
+    import kropp
+    pid = sb.profiler()[0]["id"]
+    maler = intervall.maler(sb, pid)
+    assert {m["format"] for m in maler} >= {"hiit", "tabata", "sirkel", "emom", "amrap"}
+    for m in maler:
+        assert m["oppsett"]["ovelser"] and m["sekunder"] > 0
+        for o in m["oppsett"]["ovelser"]:
+            assert intervall._egnet(sb.ovelse(o["nokkel"]))
+    # utstyr byttes: uten kettlebell skal kettlebell-AMRAP enten byttes eller droppes
+    hjemme = next(u for u in sb.utstyrsprofiler() if "kettlebell" not in u["utstyr"])
+    for m in intervall.maler(sb, pid, hjemme["id"]):
+        assert all(sb.ovelse(o["nokkel"])["type"] != "kettlebell" for o in m["oppsett"]["ovelser"])
+    f = intervall.foreslaa(sb, pid, "amrap", "sete", seed=1)
+    assert len(f["oppsett"]["ovelser"]) == 4 and all(o["reps"] for o in f["oppsett"]["ovelser"])
+    assert intervall.foreslaa(sb, pid, "tabata", seed=2)["oppsett"]["runder"] == 4
+    # 40/20 × 6 øvelser × 3 runder + 2 × 60 s rundehvile
+    o = {"format": "hiit", "arbeid": 40, "hvile": 20, "runder": 3, "rundehvile": 60, "ovelser": [{"nokkel": "burpees"}] * 6}
+    assert intervall.total_sekunder(o) == 3 * 6 * 40 + 3 * 5 * 20 + 2 * 60
+    with pytest.raises(Feil):
+        intervall.valider(sb, {"format": "zumba", "ovelser": [{"nokkel": "burpees"}]})
+    x = intervall.lagre(sb, pid, {"navn": "AMRAP 12", "oppsett": {"format": "amrap", "minutter": 12,
+                                  "ovelser": [{"nokkel": "burpees", "reps": 6}, {"nokkel": "ukjent"}]}, "varighet_s": 720, "runder": 5.5})
+    assert x["oppsett"]["ovelser"] == [x["oppsett"]["ovelser"][0]] and x["runder"] == 5.5
+    akt = sb.db.en("SELECT * FROM aktiviteter WHERE id = ?", (x["aktivitet_id"],))
+    assert akt["type"] == "hiit" and kropp.aktivitetsminutter(akt) > 12
+    assert intervall.beste(sb, pid, "AMRAP 12", "amrap")["runder"] == 5.5
+    # klokka importerer samme økt fra Garmin → slås sammen, ikke dobbelt
+    assert kropp.importer_garmin(sb, pid, {"activityId": 9, "activityType": "hiit", "startTime": akt["start"],
+                                           "duration": 740, "averageHR": 151, "vigorousIntensityMinutes": 10})
+    assert sb.db.verdi("SELECT COUNT(*) FROM aktiviteter WHERE type = 'hiit'") == 1
+    assert sb.db.en("SELECT snittpuls FROM aktiviteter WHERE id = ?", (x["aktivitet_id"],))["snittpuls"] == 151
+    intervall.slett(sb, x["id"])
+    assert not sb.db.verdi("SELECT COUNT(*) FROM aktiviteter WHERE id = ?", (x["aktivitet_id"],))

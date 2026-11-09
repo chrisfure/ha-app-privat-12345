@@ -19,6 +19,18 @@ Alt lagres lokalt i appens egen database. Ingen navn eller treningsdata ligger i
 * **Helse** – målinger med kurver, løping/gåing og annen aktivitet, aktivitetsminutter og kroppsprofil.
 * **Mer** – profiler, treningssteder og utstyr, AI-treneren, hviletimer, egne øvelser og eksport.
 
+## Intervalløkter (HIIT, Tabata, sirkel, EMOM, AMRAP)
+
+Trykk **Intervalløkt** på forsiden.
+
+* **HIIT** – harde drag med pause (f.eks. 40 s jobb / 20 s pause), flere runder.
+* **Tabata** – 20 s fullt / 10 s pause, åtte ganger.
+* **Sirkel** – litt lengre drag i rolig tempo, fint for sete, kjerne og helkropp.
+* **EMOM** – ny øvelse hvert minutt: gjør repetisjonene og hvil resten av minuttet.
+* **AMRAP** – flest mulig runder på tiden. Trykk «Neste øvelse» når du er ferdig; appen teller rundene og viser om du slo forrige rekord.
+
+Velg en ferdig økt, lag din egen (velg fokus: helkropp, puls, sete og bein, kjerne eller overkropp – appen foreslår øvelser ut fra utstyret der du er), eller la treneren lage en. Klokka viser nedtelling, hvilken øvelse du gjør og hva som kommer, med pip og opplesning. Øktene teller som aktivitet i ringene.
+
 ## Forsiden: ringer, nivå og merker
 
 * **Ringene** lukkes når du når ukemålene: styrkeøkter (ditt mål per uke), aktivitetsminutter (150 i uka) og søvn (snitt 7,5 timer – eller arbeidssett hvis du ikke henter søvn fra klokka).

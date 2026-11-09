@@ -178,6 +178,8 @@ def _sett_tekst(s: dict) -> str:
 def bibliotek_tekst(sb: Styrkeboka, utstyr: set[str] | None) -> str:
     linjer = []
     for m, navn in MONSTER.items():
+        if m == "kondisjon":  # kondisjonsøvelser hører til intervalløkter, ikke styrkeprogram
+            continue
         ovl = [o for o in sb.ovelser() if o["monster"] == m and tilgjengelig(o, utstyr)]
         if ovl:
             linjer.append(f"[{navn}] " + "; ".join(f"{o['nokkel']} = {o['navn']}{' (skånsom)' if o.get('skansom') else ''}" for o in ovl))
@@ -283,6 +285,28 @@ def oppgave_startvekter(sb: Styrkeboka, pid: int, lokalt: dict) -> str:
         "ØVELSER:\n" + "\n".join(linjer),
         'Svar KUN med JSON: {"vekter": {"<nøkkel>": kg, ...}, "kommentar": "1-2 setninger om hvordan du har tenkt"}',
     ])
+
+
+def oppgave_intervall(sb: Styrkeboka, pid: int, fmt: str, minutter: int, fokus: str, upid: int | None, onske: str = "") -> str:
+    import intervall
+    utstyr = sb.utstyr_for(upid if upid is not None else sb.profil(pid).get("utstyrsprofil_id"))
+    egnet = [o for o in sb.ovelser() if intervall._egnet(o) and tilgjengelig(o, utstyr)]  # noqa: SLF001
+    f = intervall.FORMATER[fmt]
+    return "\n\n".join(x for x in [
+        ROLLE,
+        f"OPPGAVE: Lag én intervalløkt i formatet {f['navn']} ({f['beskrivelse']}) på ca. {minutter} minutter, "
+        f"med fokus på {intervall.FOKUS.get(fokus, intervall.FOKUS['helkropp'])['navn'].lower()}. "
+        "Tilpass vanskelighetsgrad, hopp/støt og volum til brukerens erfaring, dagsform og hva hun/han har trent de siste dagene "
+        "(unngå å knekke beina dagen før en tung beinøkt). Velg øvelser som flyter godt etter hverandre uten mye rigging.",
+        "OM BRUKEREN:\n" + profilkontekst(sb, pid),
+        "SISTE ØKTER:\n" + historikkontekst(sb, pid, 3),
+        "ØVELSER DU KAN BRUKE (nøkkel = navn):\n" + "; ".join(f"{o['nokkel']} = {o['navn']}" for o in egnet),
+        f"BRUKERENS ØNSKER: {onske.strip()}" if onske.strip() else "",
+        "Svar KUN med JSON: {\"navn\": \"kort navn\", \"oppsett\": {\"format\": \"" + fmt + "\", "
+        + ("\"arbeid\": sek, \"hvile\": sek, \"runder\": n, \"rundehvile\": sek, " if fmt in intervall.TIDSSTYRT else "\"minutter\": n, ")
+        + "\"ovelser\": [{\"nokkel\": \"...\"" + (", \"reps\": n" if fmt in ("emom", "amrap") else "") + "}]}, "
+        "\"begrunnelse\": \"1-2 setninger\", \"tips\": [\"kort tips\", ...]}",
+    ] if x)
 
 
 def oppgave_ukeplan(sb: Styrkeboka, pid: int, onske: str = "") -> str:

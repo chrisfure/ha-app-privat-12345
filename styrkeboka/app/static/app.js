@@ -256,6 +256,7 @@
         el("button", { class: "chip liten", onclick: () => startOkt(null) }, ikon("pluss"), "Fri økt")));
     }
 
+    if (!ov.aktiv) v.append(intervallInngang());
     if (ov.loping) v.append(lopeKort(ov.loping));
     if (ov.mangler_startvekt && !ov.aktiv) {
       v.append(el("div", { class: "ai-kort" },
@@ -867,6 +868,476 @@
             if (!$("v-okt").hidden && okt) visOkt(okt.id); else if (fane === "program") visProgram(); else visTrening();
           } catch (e) { feil(e); }
         } }, ikon("sjekk"), "Lagre")));
+  }
+
+  // ================================================================ INTERVALLER: HIIT, TABATA, SIRKEL, EMOM, AMRAP
+  const TIDSSTYRT = new Set(["hiit", "tabata", "sirkel"]);
+  const FORMATFARGE = { hiit: "oransje", tabata: "rosa", sirkel: "blaa", emom: "lilla", amrap: "gronn" };
+  let intervallData = null;
+  let intervallSted = null;
+
+  function totalSek(o) {
+    const n = o.ovelser.length;
+    if (TIDSSTYRT.has(o.format)) return o.runder * n * o.arbeid + o.runder * (n - 1) * o.hvile + (o.runder - 1) * o.rundehvile;
+    return (o.minutter || 0) * 60;
+  }
+  const minTekst = (s) => s >= 60 ? `${Math.round(s / 60)} min` : `${s} s`;
+  const formatMerke = (f) => el("span", { class: `format-merke farge-${FORMATFARGE[f]}` }, intervallData?.formater?.[f]?.navn || f.toUpperCase());
+
+  function intervallInngang() {
+    return el("button", { class: "kort intervall-inngang", onclick: () => intervallMeny() },
+      el("span", { class: "ii-ikon" }, ikon("flamme")),
+      el("span", { class: "tekst" }, el("b", {}, "Intervalløkt"), el("small", {}, "HIIT · Tabata · Sirkel · EMOM · AMRAP – med klokke")),
+      ikon("hoyre"));
+  }
+
+  async function intervallMeny() {
+    intervallSted = intervallSted || sted();
+    const innhold = el("div", { class: "intervall-meny" }, aiLaster("Henter økter …"));
+    aapneArk(el("h3", {}, ikon("flamme"), " Intervalløkt"), innhold);
+    try {
+      intervallData = await api(`api/profiler/${pid}/intervaller?sted=${intervallSted}`);
+    } catch (e) { innhold.innerHTML = ""; innhold.append(el("p", { class: "hint" }, e.message)); return; }
+    innhold.innerHTML = "";
+    const d = intervallData;
+    if (S.utstyrsprofiler.length > 1) {
+      innhold.append(el("div", { class: "segment" }, S.utstyrsprofiler.map((u) =>
+        el("button", { class: u.id === intervallSted ? "valgt" : "", onclick: () => { intervallSted = u.id; intervallMeny(); } }, ikon("sted"), u.navn))));
+    }
+    innhold.append(el("div", { class: "seksjon-tittel liten" }, "Lag din egen"));
+    innhold.append(el("div", { class: "format-grid" }, Object.entries(d.formater).map(([k, f]) =>
+      el("button", { class: `format-kort farge-${FORMATFARGE[k]}`, onclick: () => nyIntervall(k) }, el("b", {}, f.navn), el("small", {}, f.kort)))));
+    if (aiPaa()) innhold.append(el("button", { class: "knapp ai-lys", style: "width:100%;margin-top:10px", onclick: () => intervallAiArk() }, ikon("gnist"), "La treneren lage en økt"));
+    innhold.append(el("div", { class: "seksjon-tittel liten" }, "Ferdige økter"));
+    innhold.append(el("ul", { class: "mal-liste" }, d.maler.map((m) => el("li", {},
+      el("button", { onclick: () => intervallBygger({ navn: m.navn, oppsett: m.oppsett }) },
+        formatMerke(m.format),
+        el("span", { class: "tekst" }, el("b", {}, m.navn), el("small", {}, `${minTekst(m.sekunder)} · ${m.beskrivelse}`)),
+        ikon("hoyre"))))));
+    if (d.historikk.length) {
+      innhold.append(el("div", { class: "seksjon-tittel liten" }, "Sist gjort"));
+      innhold.append(el("ul", { class: "mal-liste" }, d.historikk.slice(0, 6).map((h) => el("li", {},
+        el("button", { onclick: () => intervallBygger({ navn: h.navn, oppsett: h.oppsett }) },
+          formatMerke(h.format),
+          el("span", { class: "tekst" }, el("b", {}, h.navn), el("small", {}, `${dato(h.startet)} · ${mmss(h.varighet_s)}${h.runder != null ? ` · ${tall(h.runder)} runder` : ""}${h.fullfort ? "" : " · avbrutt"}`)),
+          el("span", { class: "gjenta" }, ikon("angre")))))));
+    }
+  }
+
+  async function nyIntervall(format, fokus = "helkropp") {
+    try {
+      const r = await post(`api/profiler/${pid}/intervaller/forslag`, { format, fokus, sted: intervallSted });
+      intervallBygger({ navn: intervallData.formater[format].navn, oppsett: r.oppsett, fokus });
+    } catch (e) { feil(e); }
+  }
+
+  function intervallAiArk() {
+    let format = "hiit", fokus = "helkropp", minutter = 20;
+    const onske = el("textarea", { rows: 2, placeholder: "F.eks. «skånsomt for knærne», «mye sete», «kort og hard»" });
+    const formatValg = el("div", { class: "chips" });
+    const fokusValg = el("div", { class: "chips" });
+    const tegnValg = () => {
+      formatValg.innerHTML = ""; fokusValg.innerHTML = "";
+      for (const [k, f] of Object.entries(intervallData.formater)) formatValg.append(el("button", { class: `chip liten ${k === format ? "valgt" : ""}`, onclick: () => { format = k; tegnValg(); } }, f.navn));
+      for (const [k, n] of Object.entries(intervallData.fokus)) fokusValg.append(el("button", { class: `chip liten ${k === fokus ? "valgt" : ""}`, onclick: () => { fokus = k; tegnValg(); } }, n));
+    };
+    tegnValg();
+    const varighet = stepperCb(minutter, 2, 4, 60, (v) => { minutter = v; }, (v) => `${v} min`);
+    const knapp = el("button", { class: "knapp ai", onclick: async () => {
+      knapp.disabled = true; knapp.textContent = "Treneren lager økta …";
+      try {
+        const r = await post(`api/profiler/${pid}/intervaller/ai`, { format, fokus, minutter, onske: onske.value, sted: intervallSted });
+        intervallBygger({ navn: r.navn, oppsett: r.oppsett, begrunnelse: r.begrunnelse, tips: r.tips, fokus });
+      } catch (e) { feil(e); knapp.disabled = false; knapp.textContent = "Lag økta"; }
+    } }, ikon("gnist"), "Lag økta");
+    aapneArk(el("h3", {}, ikon("gnist"), " Treneren lager en intervalløkt"),
+      el("p", { class: "hint" }, "Treneren tar hensyn til dagsformen, hva du har trent sist og utstyret der du er."),
+      felt("Format", formatValg), felt("Fokus", fokusValg), felt("Lengde", varighet), felt("Ønsker (valgfritt)", onske),
+      el("div", { class: "ark-knapper" }, el("button", { class: "knapp noytral", onclick: () => intervallMeny() }, "Tilbake"), knapp));
+  }
+
+  function stepperCb(start, steg, min, maks, ved_endring, format = String) {
+    let verdi = start;
+    const vis_ = el("span", { class: "verdi" }, format(verdi));
+    const sett = (v) => { verdi = Math.max(min, Math.min(maks, v)); vis_.textContent = format(verdi); ved_endring(verdi); };
+    return el("div", { class: "stepper" }, el("button", { type: "button", "aria-label": "Mindre", onclick: () => sett(verdi - steg) }, "−"), vis_,
+      el("button", { type: "button", "aria-label": "Mer", onclick: () => sett(verdi + steg) }, "+"));
+  }
+
+  function intervallBygger({ navn, oppsett, begrunnelse = "", tips = [], fokus = "helkropp" }) {
+    const o = JSON.parse(JSON.stringify(oppsett));
+    const f = intervallData.formater[o.format];
+    const navnInput = el("input", { type: "text", value: navn, maxlength: 60 });
+    const total = el("b", {});
+    const liste = el("ul", { class: "iv-ovelser" });
+    const oppdaterTotal = () => { total.textContent = mmss(totalSek(o)); };
+    const tegnListe = () => {
+      liste.innerHTML = "";
+      o.ovelser.forEach((x, i) => {
+        const reps = ["emom", "amrap"].includes(o.format)
+          ? el("input", { type: "text", inputmode: "numeric", class: "reps", value: x.reps ?? "", placeholder: "reps", "aria-label": `Repetisjoner ${x.navn}`,
+            oninput: (e) => { x.reps = parseInt(e.target.value, 10) || null; } })
+          : null;
+        liste.append(el("li", {},
+          el("span", { class: "nr" }, o.format === "emom" ? `${i + 1}′` : i + 1),
+          el("button", { class: "iv-navn", onclick: () => ovelseInfoArk(x.nokkel, null, { tilbake: () => intervallBygger({ navn: navnInput.value, oppsett: o, begrunnelse, tips, fokus }) }) },
+            el("b", {}, x.navn), el("small", {}, ovelse(x.nokkel).tips?.[0] || "")),
+          reps,
+          el("button", { class: "ikonknapp", "aria-label": `Flytt ${x.navn} opp`, disabled: i === 0, onclick: () => { [o.ovelser[i - 1], o.ovelser[i]] = [o.ovelser[i], o.ovelser[i - 1]]; tegnListe(); } }, ikon("opp")),
+          el("button", { class: "ikonknapp", "aria-label": `Fjern ${x.navn}`, onclick: () => { o.ovelser.splice(i, 1); tegnListe(); oppdaterTotal(); } }, ikon("kryss"))));
+      });
+    };
+    const leggTil = () => aapneOvelsevelger({ tittel: "Legg til øvelse", utstyrsprofil_id: intervallSted, ved_valg: (x) => {
+      o.ovelser.push({ nokkel: x.nokkel, navn: x.navn, reps: ["emom", "amrap"].includes(o.format) ? 10 : null });
+      intervallBygger({ navn: navnInput.value, oppsett: o, begrunnelse, tips, fokus });
+    } });
+    const nyeOvelser = async () => {
+      try {
+        const r = await post(`api/profiler/${pid}/intervaller/forslag`, { format: o.format, fokus, antall: o.ovelser.length || null, sted: intervallSted });
+        o.ovelser = r.oppsett.ovelser; tegnListe(); oppdaterTotal();
+      } catch (e) { feil(e); }
+    };
+    const param = [];
+    if (TIDSSTYRT.has(o.format)) {
+      param.push(el("div", { class: "param-grid" },
+        felt("Jobb", stepperCb(o.arbeid, 5, 5, 300, (v) => { o.arbeid = v; oppdaterTotal(); }, (v) => `${v} s`)),
+        felt("Pause", stepperCb(o.hvile, 5, 0, 300, (v) => { o.hvile = v; oppdaterTotal(); }, (v) => `${v} s`)),
+        felt("Runder", stepperCb(o.runder, 1, 1, 20, (v) => { o.runder = v; oppdaterTotal(); })),
+        felt("Pause mellom runder", stepperCb(o.rundehvile, 15, 0, 600, (v) => { o.rundehvile = v; oppdaterTotal(); }, (v) => `${v} s`))));
+    } else {
+      param.push(felt("Lengde", stepperCb(o.minutter, 1, 1, 90, (v) => { o.minutter = v; oppdaterTotal(); }, (v) => `${v} min`)));
+    }
+    const fokusValg = el("div", { class: "chips rull" }, Object.entries(intervallData.fokus).map(([k, n]) =>
+      el("button", { class: `chip liten ${k === fokus ? "valgt" : ""}`, onclick: () => { fokus = k; for (const b of fokusValg.children) b.classList.toggle("valgt", b.textContent === n); nyeOvelser(); } }, n)));
+    tegnListe(); oppdaterTotal();
+    aapneArk(
+      el("div", { class: "iv-hode" }, formatMerke(o.format), el("span", { class: "iv-total" }, ikon("klokke"), total)),
+      felt("Navn", navnInput),
+      el("p", { class: "hint" }, f.beskrivelse),
+      begrunnelse ? el("div", { class: "ai-kort" }, el("p", {}, begrunnelse), tips.length ? el("ul", {}, tips.map((t) => el("li", {}, t))) : null) : null,
+      ...param,
+      el("div", { class: "seksjon-tittel liten" }, o.format === "emom" ? "Øvelser – én per minutt, på rundgang" : o.format === "amrap" ? "Øvelser i hver runde" : "Øvelser"),
+      liste,
+      el("div", { class: "chips" },
+        el("button", { class: "chip liten", onclick: leggTil }, ikon("pluss"), "Legg til"),
+        el("button", { class: "chip liten", onclick: nyeOvelser }, ikon("bytt"), "Nye øvelser")),
+      fokusValg,
+      el("div", { class: "ark-knapper" },
+        el("button", { class: "knapp noytral", onclick: () => intervallMeny() }, "Tilbake"),
+        el("button", { class: "knapp", onclick: () => {
+          if (!o.ovelser.length) return feil(new Error("Legg til minst én øvelse"));
+          lukkArk(); startIntervall(navnInput.value.trim() || f.navn, o);
+        } }, ikon("play"), "Start")));
+  }
+
+  // ---------------------------------------------------------------- klokka
+  let iv = null;
+  function lagSegmenter(o) {
+    const seg = [{ type: "klar", sek: 10, ov: 0, runde: 1 }];
+    const n = o.ovelser.length;
+    if (TIDSSTYRT.has(o.format)) {
+      for (let r = 1; r <= o.runder; r++) {
+        for (let i = 0; i < n; i++) {
+          seg.push({ type: "jobb", sek: o.arbeid, ov: i, runde: r });
+          if (i < n - 1 && o.hvile > 0) seg.push({ type: "pause", sek: o.hvile, ov: i + 1, runde: r });
+        }
+        if (r < o.runder && o.rundehvile > 0) seg.push({ type: "rundepause", sek: o.rundehvile, ov: 0, runde: r + 1 });
+        else if (r < o.runder && o.hvile > 0) seg.push({ type: "pause", sek: o.hvile, ov: 0, runde: r + 1 });
+      }
+    } else if (o.format === "emom") {
+      for (let m = 0; m < o.minutter; m++) seg.push({ type: "emom", sek: 60, ov: m % n, runde: m + 1 });
+    } else {
+      seg.push({ type: "amrap", sek: o.minutter * 60, ov: 0, runde: 1 });
+    }
+    return seg;
+  }
+
+  function tone(frekvens, start = 0, lengde = 0.15, styrke = 0.3) {
+    if (!S.innstillinger.hviletimer_lyd || !iv?.lyd) return;
+    try {
+      lydKontekst = lydKontekst || new (window.AudioContext || window.webkitAudioContext)();
+      const t = lydKontekst.currentTime + start;
+      const osc = lydKontekst.createOscillator(), g = lydKontekst.createGain();
+      osc.frequency.value = frekvens; osc.connect(g); g.connect(lydKontekst.destination);
+      g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(styrke, t + 0.02); g.gain.exponentialRampToValueAtTime(0.0001, t + lengde);
+      osc.start(t); osc.stop(t + lengde + 0.05);
+    } catch (_) { /* */ }
+  }
+  function si(tekst) {
+    if (!iv?.lyd || !iv.tale || !("speechSynthesis" in window)) return;
+    try {
+      speechSynthesis.cancel();
+      const u = new SpeechSynthesisUtterance(tekst);
+      u.lang = "nb-NO"; u.rate = 1.05;
+      const stemme = speechSynthesis.getVoices().find((v) => /^(nb|no|nn)/i.test(v.lang));
+      if (stemme) u.voice = stemme;
+      speechSynthesis.speak(u);
+    } catch (_) { /* */ }
+  }
+
+  async function holdSkjermPaa() {
+    try { if ("wakeLock" in navigator) iv.vaaken = await navigator.wakeLock.request("screen"); } catch (_) { /* */ }
+  }
+  document.addEventListener("visibilitychange", () => { if (iv && !iv.ferdig && document.visibilityState === "visible") holdSkjermPaa(); });
+
+  function startIntervall(navn, o) {
+    if (S.innstillinger.hviletimer_lyd && !lydKontekst) { try { lydKontekst = new (window.AudioContext || window.webkitAudioContext)(); } catch (_) { /* */ } }
+    stoppHvile();
+    const seg = lagSegmenter(o);
+    iv = { navn, o, seg, i: 0, segStart: Date.now(), pauset: null, startet: new Date().toISOString(), sistSek: null,
+      lyd: hent("iv-lyd", true), tale: hent("iv-tale", true), amrapOv: 0, amrapRunder: 0, ferdig: false, jobbet: 0 };
+    holdSkjermPaa();
+    byggKlokke();
+    nyttSegment();
+    iv.timer = setInterval(tikk, 200);
+  }
+
+  const RING_R = 118, RING_O = 2 * Math.PI * RING_R;
+  function byggKlokke() {
+    const rot = $("intervall-rot");
+    rot.innerHTML = "";
+    const e = {};
+    e.ring = svgEl("circle", { cx: 130, cy: 130, r: RING_R, class: "iv-ring-bue", "stroke-dasharray": `${RING_O} ${RING_O}`, transform: "rotate(-90 130 130)" });
+    e.tid = el("div", { class: "iv-tid" });
+    e.fase = el("div", { class: "iv-fase" });
+    e.ovNavn = el("div", { class: "iv-ovnavn" });
+    e.ovReps = el("div", { class: "iv-reps" });
+    e.neste = el("div", { class: "iv-neste" });
+    e.info = el("div", { class: "iv-info" });
+    e.totalTid = el("span", {});
+    e.prog = el("div", { class: "iv-prog" }, el("div", {}));
+    e.liste = el("ol", { class: "iv-liste" });
+    e.pause = el("button", { class: "iv-kontroll stor", "aria-label": "Pause", onclick: () => pauseIntervall() });
+    e.lydKnapp = el("button", { class: "iv-topp-knapp", "aria-label": "Lyd av/på", onclick: () => { iv.lyd = !iv.lyd; lagre("iv-lyd", iv.lyd); tegnLydKnapp(); } });
+    e.taleKnapp = el("button", { class: "iv-topp-knapp tekst", "aria-label": "Opplesning av/på", onclick: () => { iv.tale = !iv.tale; lagre("iv-tale", iv.tale); tegnLydKnapp(); } });
+    const amrap = iv.o.format === "amrap";
+    e.runder = amrap ? el("div", { class: "iv-runder" }) : null;
+    iv.e = e;
+    const kontroller = amrap
+      ? el("div", { class: "iv-kontroller" },
+        el("button", { class: "iv-kontroll", "aria-label": "Angre", onclick: () => amrapSteg(-1) }, ikon("angre")),
+        e.pause,
+        el("button", { class: "iv-kontroll bred", onclick: () => amrapSteg(1) }, "Neste øvelse", ikon("hoyre")))
+      : el("div", { class: "iv-kontroller" },
+        el("button", { class: "iv-kontroll", "aria-label": "Forrige", onclick: () => hoppTil(iv.i - 1) }, ikon("venstre")),
+        e.pause,
+        el("button", { class: "iv-kontroll", "aria-label": "Hopp over", onclick: () => hoppTil(iv.i + 1) }, ikon("hoyre")));
+    const ring = svgEl("svg", { viewBox: "0 0 260 260", class: "iv-ring" });
+    ring.append(svgEl("circle", { cx: 130, cy: 130, r: RING_R, class: "iv-ring-spor" }), e.ring);
+    rot.append(el("div", { class: "iv-skjerm", role: "dialog", "aria-modal": "true", "aria-label": `Intervalløkt: ${iv.navn}` },
+      el("div", { class: "iv-topp" },
+        el("button", { class: "iv-topp-knapp", "aria-label": "Avslutt", onclick: () => avsluttIntervall(false) }, ikon("kryss")),
+        el("div", { class: "iv-tittel" }, el("b", {}, iv.navn), el("small", {}, e.totalTid)),
+        e.taleKnapp, e.lydKnapp),
+      e.prog,
+      el("div", { class: "iv-midt" },
+        el("div", { class: "iv-ring-boks" }, ring, el("div", { class: "iv-ring-tekst" }, e.fase, e.tid, e.runder)),
+        el("div", { class: "iv-ovelse" }, e.ovNavn, e.ovReps, e.neste),
+        e.info),
+      kontroller,
+      el("div", { class: "iv-oversikt" }, el("div", { class: "iv-oversikt-tittel" }, amrap ? "Hver runde" : iv.o.format === "emom" ? "Minutt for minutt" : "Øvelser"), e.liste)));
+    document.body.classList.add("har-intervall");
+    tegnLydKnapp();
+    tegnPause();
+  }
+  function tegnLydKnapp() {
+    const e = iv.e;
+    e.lydKnapp.innerHTML = ""; e.lydKnapp.append(el("span", { class: "iv-lyd-ikon" }, iv.lyd ? "🔊" : "🔇"));
+    e.taleKnapp.textContent = iv.tale ? "Tale på" : "Tale av";
+    e.taleKnapp.classList.toggle("av", !iv.tale || !iv.lyd);
+  }
+
+  function tegnListe() {
+    const { o, e } = iv;
+    const s = iv.seg[iv.i];
+    e.liste.innerHTML = "";
+    const n = o.ovelser.length;
+    o.ovelser.forEach((x, i) => {
+      let tilstand = "";
+      if (o.format === "amrap") tilstand = i < iv.amrapOv ? "gjort" : i === iv.amrapOv ? "naa" : "";
+      else if (s.type === "klar") tilstand = i === 0 ? "neste" : "";
+      else if (s.type === "jobb" || s.type === "emom") tilstand = i < s.ov ? "gjort" : i === s.ov ? "naa" : "";
+      else tilstand = i < s.ov ? "gjort" : i === s.ov ? "neste" : "";
+      if (s.type === "rundepause") tilstand = i === 0 ? "neste" : "";
+      if (o.format === "emom" && s.type === "emom") tilstand = i === s.ov ? "naa" : "";
+      e.liste.append(el("li", { class: tilstand, onclick: o.format === "amrap" ? () => { iv.amrapOv = i; oppdaterAmrap(); } : null },
+        el("span", { class: "iv-l-nr" }, tilstand === "gjort" ? "✓" : o.format === "emom" ? `${i + 1}′` : i + 1),
+        el("span", { class: "iv-l-navn" }, x.navn),
+        x.reps ? el("span", { class: "iv-l-reps" }, `× ${x.reps}`) : TIDSSTYRT.has(o.format) ? el("span", { class: "iv-l-reps" }, `${o.arbeid} s`) : null));
+    });
+    if (TIDSSTYRT.has(o.format) && n) {
+      const runde = s.runde;
+      e.info.textContent = `Runde ${Math.min(runde, o.runder)} av ${o.runder}` + (s.type === "jobb" ? ` · øvelse ${s.ov + 1} av ${n}` : "");
+    } else if (o.format === "emom") {
+      e.info.textContent = s.type === "emom" ? `Minutt ${s.runde} av ${o.minutter}` : `${o.minutter} minutter · ${n} øvelser på rundgang`;
+    } else {
+      e.info.textContent = "Trykk «Neste øvelse» når du er ferdig – eller på en øvelse i lista.";
+    }
+  }
+
+  const FASETEKST = { klar: "Gjør deg klar", jobb: "Jobb!", pause: "Pause", rundepause: "Rundepause", emom: "Gjør reps", amrap: "AMRAP" };
+  function nyttSegment() {
+    const { o, e } = iv;
+    const s = iv.seg[iv.i];
+    const ov = o.ovelser[s.ov];
+    document.querySelector(".iv-skjerm").dataset.fase = s.type;
+    e.fase.textContent = FASETEKST[s.type];
+    if (o.format === "amrap" && s.type === "amrap") {
+      oppdaterAmrap();
+    } else {
+      e.ovNavn.textContent = ov.navn;
+      e.ovReps.textContent = s.type === "emom" ? `${ov.reps || "?"} repetisjoner – hvil resten av minuttet` : s.type === "jobb" ? (ovelse(ov.nokkel).tips?.[0] || "") : "";
+      const nesteSeg = iv.seg.slice(iv.i + 1).find((x) => x.type === "jobb" || x.type === "emom");
+      e.neste.textContent = s.type === "jobb" || s.type === "emom"
+        ? (nesteSeg ? `Neste: ${o.ovelser[nesteSeg.ov].navn}` : "Siste drag!")
+        : s.type === "klar" ? `Første: ${ov.navn}` : `Neste: ${ov.navn}`;
+      e.ovNavn.classList.toggle("dempet", !["jobb", "emom"].includes(s.type));
+    }
+    tegnListe();
+    // lyd og tale
+    if (s.type === "jobb" || s.type === "emom") { tone(988, 0, 0.35, 0.35); si(ov.navn + (s.type === "emom" && ov.reps ? `, ${ov.reps}` : "")); }
+    else if (s.type === "amrap") { tone(988, 0, 0.5, 0.35); si(`Start. ${ov.navn}`); }
+    else if (s.type === "pause" || s.type === "rundepause") { tone(523, 0, 0.3); si(`${s.type === "rundepause" ? "Rundepause" : "Pause"}. Neste: ${ov.navn}`); }
+    else if (s.type === "klar") si(`Gjør deg klar. ${iv.navn}. Første øvelse: ${ov.navn}`);
+    vibrer(s.type === "jobb" || s.type === "emom" || s.type === "amrap" ? [200] : [80]);
+  }
+
+  function oppdaterAmrap() {
+    const { o, e } = iv;
+    const ov = o.ovelser[iv.amrapOv];
+    e.ovNavn.textContent = ov.navn;
+    e.ovNavn.classList.remove("dempet");
+    e.ovReps.textContent = ov.reps ? `${ov.reps} repetisjoner` : "";
+    e.neste.textContent = `Neste: ${o.ovelser[(iv.amrapOv + 1) % o.ovelser.length].navn}`;
+    if (e.runder) e.runder.textContent = `${iv.amrapRunder} ${iv.amrapRunder === 1 ? "runde" : "runder"}`;
+    tegnListe();
+  }
+  function amrapSteg(retning) {
+    if (iv.seg[iv.i].type !== "amrap") return;
+    const n = iv.o.ovelser.length;
+    let pos = iv.amrapRunder * n + iv.amrapOv + retning;
+    pos = Math.max(0, pos);
+    const nyRunde = Math.floor(pos / n) > iv.amrapRunder;
+    iv.amrapRunder = Math.floor(pos / n); iv.amrapOv = pos % n;
+    if (nyRunde) { tone(1318, 0, 0.12); tone(1568, 0.12, 0.2); vibrer([60, 40, 60]); si(`Runde ${iv.amrapRunder} ferdig`); }
+    else if (retning > 0) si(iv.o.ovelser[iv.amrapOv].navn);
+    oppdaterAmrap();
+  }
+
+  function tikk() {
+    if (!iv || iv.pauset) return;
+    const s = iv.seg[iv.i];
+    const brukt = (Date.now() - iv.segStart) / 1000;
+    const igjen = s.sek - brukt;
+    if (igjen <= 0) {
+      if (s.type === "jobb" || s.type === "emom" || s.type === "amrap") iv.jobbet += s.sek;
+      if (iv.i + 1 >= iv.seg.length) return avsluttIntervall(true);
+      iv.segStart += s.sek * 1000;
+      iv.i += 1;
+      nyttSegment();
+      return tikk();
+    }
+    const hel = Math.ceil(igjen);
+    if (hel !== iv.sistSek) {
+      iv.sistSek = hel;
+      if (hel <= 3 && s.sek > 5) { tone(784, 0, 0.12, 0.3); }
+      if (s.type === "amrap" && [60, 30].includes(hel) && s.sek > hel) si(hel === 60 ? "Ett minutt igjen" : "Tretti sekunder");
+      if (s.type === "jobb" && hel === Math.floor(s.sek / 2) && s.sek >= 30) tone(660, 0, 0.08, 0.15);
+    }
+    const e = iv.e;
+    e.tid.textContent = hel >= 60 ? mmss(hel) : String(hel);
+    e.ring.setAttribute("stroke-dashoffset", RING_O * (1 - igjen / s.sek));
+    const totalt = iv.seg.reduce((a, x) => a + x.sek, 0);
+    const forbi = iv.seg.slice(0, iv.i).reduce((a, x) => a + x.sek, 0) + brukt;
+    e.prog.firstChild.style.width = `${Math.min(100, (forbi / totalt) * 100)}%`;
+    e.totalTid.textContent = `${mmss(Math.max(0, totalt - forbi))} igjen`;
+  }
+
+  function pauseIntervall() {
+    if (!iv) return;
+    if (iv.pauset) { iv.segStart += Date.now() - iv.pauset; iv.pauset = null; }
+    else iv.pauset = Date.now();
+    tegnPause();
+  }
+  function tegnPause() {
+    const e = iv.e;
+    e.pause.innerHTML = "";
+    e.pause.append(iv.pauset ? ikon("play") : el("span", { class: "pause-ikon" }, el("i"), el("i")));
+    e.pause.setAttribute("aria-label", iv.pauset ? "Fortsett" : "Pause");
+    document.querySelector(".iv-skjerm")?.classList.toggle("pauset", !!iv.pauset);
+  }
+  function hoppTil(i) {
+    if (!iv || i < 0) return;
+    if (i >= iv.seg.length) return avsluttIntervall(true);
+    const s = iv.seg[iv.i];
+    if (s.type === "jobb" || s.type === "emom") iv.jobbet += Math.min(s.sek, (Date.now() - iv.segStart) / 1000);
+    iv.i = i; iv.segStart = Date.now(); iv.sistSek = null;
+    if (iv.pauset) iv.pauset = Date.now();
+    nyttSegment(); tikk();
+  }
+
+  function stoppKlokke() {
+    clearInterval(iv?.timer);
+    try { iv?.vaaken?.release(); } catch (_) { /* */ }
+    try { speechSynthesis.cancel(); } catch (_) { /* */ }
+    $("intervall-rot").innerHTML = "";
+    document.body.classList.remove("har-intervall");
+  }
+
+  async function avsluttIntervall(ferdig) {
+    if (!iv) return;
+    if (!ferdig) {
+      const varPauset = !!iv.pauset;
+      if (!varPauset) pauseIntervall();
+      const valg = await new Promise((ok) => {
+        let svar = "fortsett";
+        aapneArk(el("h3", {}, "Avslutte økta?"),
+          el("p", { class: "hint" }, "Du kan lagre det du har gjort så langt, eller forkaste økta."),
+          el("div", { class: "ark-knapper loddrett" },
+            el("button", { class: "knapp", onclick: () => { svar = "lagre"; lukkArk(); } }, "Lagre det jeg har gjort"),
+            el("button", { class: "knapp noytral", onclick: () => { svar = "fortsett"; lukkArk(); } }, "Fortsett økta"),
+            el("button", { class: "knapp fare", onclick: () => { svar = "forkast"; lukkArk(); } }, "Forkast")));
+        const gammel = arkLukk; arkLukk = () => { gammel(); ok(svar); };
+      });
+      if (valg === "fortsett") { if (!varPauset) pauseIntervall(); return; }
+      if (valg === "forkast") { stoppKlokke(); iv = null; return; }
+    }
+    const s = iv.seg[iv.i];
+    const varighet = Math.round((iv.pauset || Date.now()) - new Date(iv.startet).getTime()) / 1000 - 10;
+    const n = iv.o.ovelser.length;
+    const runder = iv.o.format === "amrap" ? +(iv.amrapRunder + iv.amrapOv / n).toFixed(2)
+      : TIDSSTYRT.has(iv.o.format) ? (ferdig ? iv.o.runder : Math.max(0, s.runde - 1 + (s.type === "jobb" ? s.ov / n : 0))) : null;
+    iv.ferdig = true;
+    const resultat = { navn: iv.navn, oppsett: iv.o, startet: iv.startet, varighet_s: Math.max(30, varighet), runder, fullfort: ferdig };
+    stoppKlokke();
+    if (ferdig) { tone(1046, 0, 0.15); tone(1318, 0.15, 0.15); tone(1568, 0.3, 0.4); vibrer([100, 60, 100, 60, 300]); si("Bra jobba! Økta er ferdig."); }
+    iv = null;
+    intervallFerdigArk(resultat);
+  }
+
+  function intervallFerdigArk(r) {
+    let opplevd = null;
+    const notat = el("textarea", { rows: 2, placeholder: "Notat (valgfritt)" });
+    const tyngde = el("div", { class: "chips" });
+    const tegnT = () => { tyngde.innerHTML = ""; ["Lett", "Grei", "Passe", "Tung", "Knallhard"].forEach((t, i) => tyngde.append(el("button", { class: `chip liten ${opplevd === i + 1 ? "valgt" : ""}`, onclick: () => { opplevd = i + 1; tegnT(); } }, t))); };
+    tegnT();
+    const lagreKnapp = el("button", { class: "knapp", onclick: async () => {
+      lagreKnapp.disabled = true;
+      try {
+        const svar = await post(`api/profiler/${pid}/intervaller`, { ...r, opplevd, notat: notat.value });
+        lukkArk();
+        const fb = svar.forrige_beste;
+        if (r.oppsett.format === "amrap" && fb && r.runder > fb.runder) visToast(`🏆 Ny rekord på ${r.navn}: ${tall(r.runder)} runder (forrige beste ${tall(fb.runder)})`, [], 7000);
+        else visToast("Økta er lagret – den teller i aktivitetsringen 💪");
+        visTrening();
+      } catch (e) { feil(e); lagreKnapp.disabled = false; }
+    } }, ikon("sjekk"), "Lagre");
+    aapneArk(
+      el("div", { class: "feiring" }, el("div", { class: "feiring-emoji" }, r.fullfort ? "🔥" : "👍"),
+        el("h3", {}, r.fullfort ? "Bra jobba!" : "Godt forsøk!"),
+        el("p", {}, `${r.navn} · ${mmss(r.varighet_s)}` + (r.runder != null ? ` · ${tall(r.runder)} runder` : ""))),
+      felt("Hvordan kjentes det?", tyngde), felt("Notat", notat),
+      el("div", { class: "ark-knapper" }, el("button", { class: "knapp noytral", onclick: () => lukkArk() }, "Forkast"), lagreKnapp));
   }
 
   // ================================================================ SPILL: RINGER, UKE-KJEDE, NIVÅ OG MERKER

@@ -526,7 +526,7 @@ class HAKobling:
         return ut
 
     # oppgaver som krever mest vurdering – kan gå til en kraftigere modell
-    PLANLEGGING = {"lag program", "juster program", "ny blokk", "ukeplan", "startvekter"}
+    PLANLEGGING = {"lag program", "juster program", "ny blokk", "ukeplan", "startvekter", "intervalløkt"}
 
     async def _velg_entitet(self, oppgave: str = "") -> str | None:
         if oppgave in self.PLANLEGGING and self.sb.inn.get("ai_entitet_plan"):

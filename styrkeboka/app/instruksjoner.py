@@ -5,6 +5,7 @@ Teksten er skrevet kort og praktisk, i tråd med vanlig teknikkopplæring i styr
 from __future__ import annotations
 
 STANDARD_PUST = "Pust ut i den tunge delen av bevegelsen, inn i den lette. Ikke hold pusten lenge."
+KONDIS = "Pust jevnt og rytmisk. Ikke hold pusten – senk tempoet hvis du blir for andpusten til å snakke i korte setninger."
 STAG_PUST = "Pust inn og stram magen før hver rep, hold spenningen gjennom den tunge delen og pust ut i toppen."
 
 
@@ -584,6 +585,112 @@ INSTRUKSJONER: dict[str, dict] = {
          "Klem brystet et øyeblikk.",
          "Før kontrollert tilbake til du kjenner strekk."],
         ["Bøyer og strekker albuene", "Lener seg for langt frem", "Slipper fort tilbake"]),
+    # ------------------------------------------------------------------ kondisjon og intervaller
+    "sprellemann": _i(
+        "Stå oppreist med føttene samlet og armene langs siden.",
+        ["Hopp ut til bred fotstilling og før armene ut og opp over hodet samtidig.",
+         "Hopp tilbake til samlede føtter med armene ned langs siden.",
+         "Hold en jevn, lett rytme og land på fremre del av foten."],
+        ["Lander tungt på hælene", "Armene kommer bare halvveis opp"], KONDIS),
+    "jogg-pa-stedet": _i(
+        "Stå oppreist med lett bøyde armer.",
+        ["Jogg på stedet med lette, raske steg.",
+         "Bruk armene aktivt i takt med beina.",
+         "Øk tempoet for mer puls, eller gå på stedet for en roligere variant."],
+        ["Tunge steg på hælene", "Sammensunket overkropp"], KONDIS),
+    "hoye-knelloft": _i(
+        "Stå oppreist med føttene i hoftebredde.",
+        ["Løft knærne vekselvis opp til hoftehøyde i høyt tempo.",
+         "Bruk armene som når du løper.",
+         "Hold overkroppen oppreist og magen stram."],
+        ["Lener seg bakover", "Knærne kommer ikke høyt nok"], KONDIS),
+    "fjellklatrer": _i(
+        "Start i høy planke med hendene rett under skuldrene og kroppen i en rett linje.",
+        ["Dra det ene kneet frem mot brystet.",
+         "Bytt bein raskt, som om du løper i planke.",
+         "Hold hoftene lave og skuldrene over hendene hele tiden."],
+        ["Setet stikker høyt opp", "Skuldrene glir bakover bak hendene"], KONDIS),
+    "burpees": _i(
+        "Stå oppreist med føttene i hoftebredde.",
+        ["Sett deg ned og plasser hendene i gulvet foran føttene.",
+         "Hopp eller gå bena bakover til planke (og senk brystet mot gulvet om du vil).",
+         "Hopp eller gå føttene inn mot hendene igjen.",
+         "Reis deg og avslutt med et lite hopp med armene over hodet."],
+        ["Svai i korsryggen i planken", "Lander stivt med strake knær"], KONDIS),
+    "hoppknebøy": _i(
+        "Stå med føttene i hoftebredde, tærne lett utover.",
+        ["Sitt ned i en knebøy med brystet oppe.",
+         "Eksploder opp og hopp rett opp.",
+         "Land mykt på fremre del av foten, og gå rett ned i neste knebøy."],
+        ["Knærne faller innover i landingen", "Lander med strake bein"], KONDIS),
+    "hoppende-utfall": _i(
+        "Stå i en utfallsstilling med ett bein foran og ett bak.",
+        ["Senk deg ned i utfall.",
+         "Hopp opp og bytt bein i luften.",
+         "Land mykt i utfall med motsatt bein foran og gå rett ned igjen."],
+        ["Fremre kne faller innover", "Ukontrollert, hard landing"], KONDIS),
+    "skøyterhopp": _i(
+        "Stå på ett bein med lett bøyd kne.",
+        ["Hopp sidelengs over til det andre beinet.",
+         "Land mykt og la det frie beinet krysse bak.",
+         "Stabiliser kort før du hopper tilbake."],
+        ["Lander på strakt kne", "Mister balansen i landingen"], KONDIS),
+    "thruster-manualer": _i(
+        "Stå med føttene i hoftebredde og en manual i hver hånd, hvilende på skuldrene.",
+        ["Sitt ned i en knebøy med brystet oppe.",
+         "Press deg opp med kraft fra beina.",
+         "Bruk farten til å presse manualene rett over hodet.",
+         "Senk manualene til skuldrene og gå rett ned i neste knebøy."],
+        ["Svai i korsryggen når armene er over hodet", "Pressen starter før beina er ferdige"], STAG_PUST),
+    "step-up-kroppsvekt": _i(
+        "Stå foran en stødig benk eller kasse.",
+        ["Sett hele den ene foten opp på benken.",
+         "Press deg opp med beinet på benken til du står oppreist.",
+         "Gå kontrollert ned igjen med samme bein først.",
+         "Bytt bein, eller ta alle repetisjonene på én side først."],
+        ["Skyver fra med bakre fot", "Kneet faller innover"]),
+    "sumoknebøy": _i(
+        "Stå med bred fotstilling og tærne pekende godt utover.",
+        ["Sitt ned mellom hælene med oppreist overkropp.",
+         "La knærne følge retningen til tærne.",
+         "Press opp gjennom hælene og klem setet i toppen."],
+        ["Knærne faller innover", "Overkroppen faller fremover"]),
+    "eselspark": _i(
+        "Stå på alle fire med hendene under skuldrene og knærne under hoftene.",
+        ["Hold kneet bøyd 90 grader og press hælen opp mot taket.",
+         "Stopp når låret er i linje med kroppen.",
+         "Senk kontrollert og gjenta før du bytter side."],
+        ["Svai i korsryggen", "Vrir hoftene for å komme høyere"]),
+    "brannhydrant": _i(
+        "Stå på alle fire med hendene under skuldrene og knærne under hoftene.",
+        ["Løft det ene kneet ut til siden med bøyd kne.",
+         "Hold hoftene og overkroppen så stille som mulig.",
+         "Senk kontrollert og gjenta før du bytter side."],
+        ["Lener hele kroppen til siden", "Raske, ukontrollerte løft"]),
+    "sykkelcrunch": _i(
+        "Ligg på ryggen med hendene lett bak hodet og bena løftet med bøyde knær.",
+        ["Strekk det ene beinet mens du vrir motsatt albue mot det bøyde kneet.",
+         "Bytt side i en rolig «sykkelbevegelse».",
+         "Hold korsryggen i kontakt med gulvet."],
+        ["Drar i nakken med hendene", "For høyt tempo uten vridning"]),
+    "russisk-vri": _i(
+        "Sitt med bøyde knær og len overkroppen litt bakover med rett rygg.",
+        ["Vri overkroppen til den ene siden og før hendene mot gulvet.",
+         "Vri over til den andre siden.",
+         "Løft føttene fra gulvet for en tyngre variant."],
+        ["Runder ryggen", "Bare armene beveger seg"]),
+    "saksespark": _i(
+        "Ligg på ryggen med hendene under setet og bena strake.",
+        ["Løft bena litt fra gulvet.",
+         "Spark vekselvis opp og ned i små, raske bevegelser.",
+         "Hold korsryggen presset mot gulvet hele tiden."],
+        ["Korsryggen løfter seg", "Holder pusten"]),
+    "planke-skulderklapp": _i(
+        "Start i høy planke med hendene under skuldrene og føttene litt fra hverandre.",
+        ["Løft den ene hånden og klapp på motsatt skulder.",
+         "Sett hånden ned og bytt side.",
+         "Hold hoftene stille – ikke la dem vippe fra side til side."],
+        ["Hoftene svinger fra side til side", "Setet stikker opp"]),
 }
 
 
