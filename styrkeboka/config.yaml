@@ -1,5 +1,5 @@
 name: Styrkeboka
-version: "0.10.2"
+version: "0.11.0"
 slug: styrkeboka
 description: Styrketrening med program, logging av sett og AI-trener – med full historikk.
 url: https://github.com/chrisfure/ha-app-privat-12345

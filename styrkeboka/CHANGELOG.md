@@ -1,5 +1,12 @@
 # Endringslogg
 
+## 0.11.0
+
+- Ny forside med ringer som skal lukkes hver uke: styrkeøkter, aktivitetsminutter og søvn (eller arbeidssett uten søvndata).
+- Uke-kjede: én sirkel per dag – sirklene smelter sammen når du trener flere dager på rad, og planlagte økter vises stiplet.
+- Nivå og XP for økter, sett, rekorder, ukemål og kondisjon, ukerekke med flamme, nye rekorder denne uka og 14 merker å samle – med feiring når du tar et nytt.
+- Personvern: AI-treneren får ikke lenger titler eller steder fra kalenderen, bare status per dag (hjemme, borte, reisedag, opptatt fra–til).
+
 ## 0.10.2
 
 - Reiser over flere dager vises med hele perioden (og «siste dag»), så AI-treneren ser om du er på vei ut eller hjem.

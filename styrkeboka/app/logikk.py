@@ -1139,6 +1139,7 @@ class Styrkeboka:
             "neste": neste_ut, "aktiv": aktiv, "mangler_startvekt": self.mangler_startvekt(pid) if prog else 0,
             "loping": self._loping_kort(pid),
             "dagsform": __import__("dagsform").status(self, pid),
+            "spill": __import__("spill").status(self, pid),
             "ukeplan": __import__("ukeplan").hent(self, pid) if (prog or (p.get("koblinger") or {}).get("kalendere")) else None,
             "sist": {"id": sist["id"], "startet": sist["startet"], "dag_navn": sist["dag_navn"]} if sist else None,
             "uke": {"okter": st["denne_uka"], "plan": st["plan_per_uke"], "uker_paa_rad": st["uker_paa_rad"],

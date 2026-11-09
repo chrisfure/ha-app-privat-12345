@@ -19,6 +19,13 @@ Alt lagres lokalt i appens egen database. Ingen navn eller treningsdata ligger i
 * **Helse** – målinger med kurver, løping/gåing og annen aktivitet, aktivitetsminutter og kroppsprofil.
 * **Mer** – profiler, treningssteder og utstyr, AI-treneren, hviletimer, egne øvelser og eksport.
 
+## Forsiden: ringer, nivå og merker
+
+* **Ringene** lukkes når du når ukemålene: styrkeøkter (ditt mål per uke), aktivitetsminutter (150 i uka) og søvn (snitt 7,5 timer – eller arbeidssett hvis du ikke henter søvn fra klokka).
+* **Uke-kjeden** viser mandag–søndag: oransje for styrke, grønn for kondisjon. Trener du flere dager på rad, møtes sirklene. Stiplet sirkel betyr planlagt økt.
+* **Nivå og XP**: 100 XP per økt, 2 per arbeidssett, 25 per ny rekord (inntil tre per økt), 150 når ukemålet nås og litt for løping og gåing. Flammen viser hvor mange uker på rad du har nådd ukemålet.
+* **Merker**: 14 merker å samle (antall økter, rekorder, uker på rad, tonn løftet, alle ringer lukket). Trykk på merkelinja for å se alle og hvor nær du er.
+
 ## Under økta
 
 * Én rad per sett: **kg**, **reps** og (valgfritt) **reps i reserve** – hvor mange reps du kunne klart til. Trykk ✓.
@@ -116,7 +123,7 @@ Kobler du også søvn, HRV, Body Battery, stress, treningsberedskap og restitusj
 
 Velg kalenderne dine (jobb, reiser, f.eks. TripIt) i samme ark. Forsiden viser **de neste 7 dagene** med styrkeøkter og løpeturer: dager du er borte (reise, kurs, ferie, hytte – eller heldagshendelser med sted) og svært lange dager hoppes over, og øktene spres med hvile mellom. Jobbvakter teller som opptatte timer, ikke som borte. **Planlegg uka med AI** lager en mer gjennomtenkt plan ut fra kalender, dagsform, løpeplan og ønsker du skriver. Neste styrkeøkt legges i Garmin-kalenderen på dagen fra ukeplanen.
 
-Kalenderhendelsene (titler, tider og sted) sendes til AI-en når den planlegger – velg derfor bare kalendere du er komfortabel med.
+AI-en får **aldri** titler eller steder fra kalenderen – bare status per dag: hjemme, borte (og om du reiser ut eller kommer hjem), reisedag og når du er opptatt (f.eks. «opptatt 08:00–16:00, ca. 8 t»). Titlene vises bare for deg i appen.
 
 ## AI-treneren
 

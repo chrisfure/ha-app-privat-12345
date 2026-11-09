@@ -36,6 +36,8 @@ def dag_info(sb: "Styrkeboka", alle: list[dict], dag: date) -> dict:
     start = datetime.combine(dag, datetime.min.time(), tzinfo=sb.tz)
     slutt = start + timedelta(days=1)
     titler, timer, borte, heldag = [], 0.0, False, []
+    vinduer: list[tuple[datetime, datetime]] = []      # opptatte tidsrom (uten titler) – til AI-en
+    reise = {"drar": False, "hjem": False, "reisetid": None}
     for h in alle:
         hs, he = _tid(h.get("start"), sb), _tid(h.get("slutt"), sb)
         if not hs:
@@ -43,24 +45,56 @@ def dag_info(sb: "Styrkeboka", alle: list[dict], dag: date) -> dict:
         he = he or hs + timedelta(hours=1)
         if he <= start or hs >= slutt:
             continue
+        er_reise = bool(BORTE_ORD.search(h["tittel"]) or "tripit" in h.get("kalender", ""))
         if h.get("heldag"):
             heldag.append(h["tittel"])
-            if BORTE_ORD.search(h["tittel"]) or "tripit" in h.get("kalender", "") or h.get("sted"):
+            if er_reise or h.get("sted"):
                 borte = True
+                if (he - hs).days > 1:
+                    reise["drar"] = reise["drar"] or hs >= start
+                    reise["hjem"] = reise["hjem"] or he <= slutt
             spenn = ""
-            if (he - hs).days > 1:  # flerdagers hendelse, f.eks. en reise: vis hele perioden så AI-en ser hvor du er i den
-                spenn = f", {hs:%d.%m}–{(he - timedelta(days=1)):%d.%m}" + (" – siste dag" if (he - slutt).days <= 0 else "")
+            if (he - hs).days > 1:
+                spenn = f", {hs:%d.%m}–{(he - timedelta(days=1)):%d.%m}"
             titler.append(f"hele dagen: {h['tittel']}" + (f" ({h['sted']}{spenn})" if h.get("sted") else f" ({spenn[2:]})" if spenn else ""))
         else:
             fra, til = max(hs, start), min(he, slutt)
             timer += (til - fra).total_seconds() / 3600
-            if BORTE_ORD.search(h["tittel"]) and (til - fra).total_seconds() > 3 * 3600:
-                borte = True
+            if er_reise:
+                reise["reisetid"] = f"{fra:%H:%M}–{til:%H:%M}"
+                if (til - fra).total_seconds() > 3 * 3600:
+                    borte = True
+            else:
+                vinduer.append((fra, til))
             titler.append(f"{fra:%H:%M}–{til:%H:%M} {h['tittel']}" + (f" ({h['sted']})" if h.get("sted") else ""))
-    return {"titler": titler, "opptatt_t": round(timer, 1), "borte": borte, "heldag": heldag}
+    return {"titler": titler, "opptatt_t": round(timer, 1), "borte": borte, "heldag": heldag,
+            "vinduer": vinduer, "reise": reise}
+
+
+def status_tekst(info: dict) -> str:
+    """Dagens status uten titler, steder eller andre detaljer – det eneste AI-en får fra kalenderen."""
+    deler = []
+    r = info["reise"]
+    if info["borte"]:
+        deler.append("borte hjemmefra" + (" – reiser ut i dag" if r["drar"] else " – kommer hjem i dag" if r["hjem"] else ""))
+    elif r["reisetid"]:
+        deler.append("reisedag")
+    else:
+        deler.append("hjemme")
+    if r["reisetid"]:
+        deler.append(f"på reise {r['reisetid']}")
+    if info["vinduer"]:
+        fra = min(v[0] for v in info["vinduer"])
+        til = max(v[1] for v in info["vinduer"])
+        t = sum((b - a).total_seconds() for a, b in info["vinduer"]) / 3600
+        deler.append(f"opptatt {fra:%H:%M}–{til:%H:%M} (ca. {t:.0f} t)")
+    elif not info["borte"] and not r["reisetid"]:
+        deler.append("ingen avtaler")
+    return ", ".join(deler)
 
 
 def kalender_tekst(sb: "Styrkeboka", pid: int, dager: int = 7) -> str:
+    """Kalenderen som status per dag (hjemme/borte/opptatt) – aldri titler eller steder."""
     alle = hendelser(sb, pid)
     if not alle:
         return ""
@@ -68,10 +102,8 @@ def kalender_tekst(sb: "Styrkeboka", pid: int, dager: int = 7) -> str:
     linjer = []
     for i in range(dager):
         d = i_dag + timedelta(days=i)
-        info = dag_info(sb, alle, d)
-        if info["titler"]:
-            linjer.append(f"- {UKEDAG[d.weekday()]} {d:%d.%m}{' (BORTE/REISE)' if info['borte'] else ''}: " + "; ".join(info["titler"][:6]))
-    return "KALENDER NESTE 7 DAGER:\n" + ("\n".join(linjer) if linjer else "ingen avtaler")
+        linjer.append(f"- {UKEDAG[d.weekday()]} {d:%d.%m}: {status_tekst(dag_info(sb, alle, d))}")
+    return "KALENDERSTATUS NESTE 7 DAGER (bare tilgjengelighet, ingen detaljer):\n" + "\n".join(linjer)
 
 
 def lokal_plan(sb: "Styrkeboka", pid: int, dager: int = 7) -> dict:

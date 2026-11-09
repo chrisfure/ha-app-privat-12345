@@ -579,7 +579,11 @@ def test_ukeplan_rundt_kalender(sb):
     assert reise_fra.isoformat() not in datoer and (reise_fra + timedelta(days=1)).isoformat() not in datoer
     assert (i_dag + timedelta(days=4)).isoformat() not in datoer
     assert styrke[0]["okter"][0]["dag_id"] == sb.neste_dag(pid)["id"]
-    assert "BORTE" in ukeplan.kalender_tekst(sb, pid)
+    kt = ukeplan.kalender_tekst(sb, pid)
+    assert "borte hjemmefra" in kt
+    # AI-en får bare status – aldri titler eller steder fra kalenderen
+    for h in ukeplan.hendelser(sb, pid):
+        assert h["tittel"] not in kt and (not h.get("sted") or h["sted"] not in kt)
     # AI-plan valideres mot programmet
     ai_plan = ukeplan.valider_ai_plan(sb, pid, {"oppsummering": "ok", "dager": [
         {"dato": i_dag.isoformat(), "okter": [{"type": "styrke", "dag_id": prog["dager"][0]["id"]}, {"type": "styrke", "dag_id": 99999}]}]})
@@ -587,3 +591,25 @@ def test_ukeplan_rundt_kalender(sb):
     ukeplan.lagre(sb, pid, ai_plan)
     assert ukeplan.hent(sb, pid)["kilde"] == "ai"
     assert ukeplan.neste_styrkedato(sb, pid, prog["dager"][0]["id"]) == i_dag.isoformat()
+
+
+def test_spill_ringer_niva_og_merker(sb):
+    import spill
+    pid = sb.profiler()[0]["id"]
+    sb.lagre_program(pid, sb.foreslaa_program(pid), kilde="mal")
+    tom = spill.status(sb, pid)
+    assert tom["niva"]["nr"] == 1 and tom["okter"] == 0 and not tom["nye_merker"]
+    assert [r["nokkel"] for r in tom["ringer"]][:2] == ["styrke", "aktivitet"]
+    for i in range(2):
+        o = sb.start_okt(pid, sb.neste_dag(pid)["id"])
+        oo = o["ovelser"][0]
+        sb.logg_sett(o["id"], {"okt_ovelse_id": oo["id"], "vekt": 40 + i * 5, "reps": 8})
+        sb.avslutt_okt(o["id"], {})
+    s = spill.status(sb, pid)
+    assert s["okter"] == 2 and s["ringer"][0]["verdi"] == 2
+    assert s["niva"]["xp"] >= 2 * spill.XP_OKT
+    assert any(m["nokkel"] == "okt1" and m["oppnadd"] for m in s["merker"])
+    assert {m["nokkel"] for m in s["nye_merker"]} >= {"okt1"}       # feires én gang …
+    assert not spill.status(sb, pid)["nye_merker"]                   # … og ikke igjen
+    assert sum(d["styrke"] for d in s["dager"]) == 1 and len(s["dager"]) == 7
+    assert spill.niva(0)["nr"] == 1 and spill.niva(400)["nr"] == 2 and spill.niva(1199)["nr"] == 2

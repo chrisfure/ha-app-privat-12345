@@ -212,7 +212,7 @@
     v.innerHTML = "";
     oppdaterOktPrikk();
 
-    if (ov.dagsform && !ov.aktiv) v.append(dagsformKort(ov.dagsform));
+    if (ov.spill && !ov.aktiv) v.append(spillKort(ov.spill));
     if (ov.aktiv) {
       const a = ov.aktiv;
       const pst = a.nokkeltall.planlagt ? Math.min(100, Math.round(100 * a.nokkeltall.sett / a.nokkeltall.planlagt)) : 0;
@@ -263,16 +263,8 @@
         el("p", {}, `${ov.mangler_startvekt} øvelser i programmet mangler startvekt. Svar på et par spørsmål, så ${aiPaa() ? "foreslår treneren" : "regner appen ut"} vekt på alle.`),
         el("button", { class: "knapp ai", style: "flex:none", onclick: startvekterArk }, ikon("gnist"), "Finn startvekter")));
     }
-    // uke
-    const u = ov.uke;
-    v.append(el("div", { class: "kort" },
-      el("div", { class: "uke" },
-        el("div", { class: "uke-tekst" }, `${u.okter} av ${u.plan} økter denne uka`,
-          el("small", {}, u.okter >= u.plan ? "Ukemålet er nådd – sterkt!" : u.okter ? `${u.plan - u.okter} igjen` : "Helsedirektoratet anbefaler styrke minst 2 dager i uka"),
-          u.aktivitetsminutter ? el("small", {}, `${u.aktivitetsminutter} av 150 aktivitetsminutter (styrke, løping, gåing m.m.)`) : null),
-        u.uker_paa_rad > 1 ? el("span", { class: "flamme" }, ikon("flamme"), `${u.uker_paa_rad} uker`) : null),
-      el("div", { class: "uke-prikker" }, Array.from({ length: Math.max(u.plan, u.okter) }, (_, i) => el("span", { class: i < u.okter ? "gjort" : "" })))));
-
+    if (ov.dagsform && !ov.aktiv) v.append(dagsformKort(ov.dagsform));
+    if (ov.spill?.nye_merker?.length || ov.spill?.nytt_niva) feir(ov.spill);
     const knapper = el("div", { class: "knapperad" });
     if (aiPaa()) knapper.append(el("button", { class: "knapp ai-lys", onclick: () => sporTreneren() }, ikon("snakk"), "Spør treneren"));
     if (ov.sist) knapper.append(el("button", { class: "knapp noytral", onclick: () => visOktDetalj(ov.sist.id, "trening") }, ikon("klokke"), "Forrige økt"));
@@ -875,6 +867,108 @@
             if (!$("v-okt").hidden && okt) visOkt(okt.id); else if (fane === "program") visProgram(); else visTrening();
           } catch (e) { feil(e); }
         } }, ikon("sjekk"), "Lagre")));
+  }
+
+  // ================================================================ SPILL: RINGER, UKE-KJEDE, NIVÅ OG MERKER
+  const RINGFARGE = { styrke: "var(--oransje)", aktivitet: "var(--gronn)", sovn: "var(--blaa)", sett: "var(--gul)" };
+  const ringVerdi = (r) => r.nokkel === "sovn" ? `${tall(r.verdi)} av ${tall(r.maal)} t` : `${tusen(r.verdi)} av ${tusen(r.maal)} ${r.enhet}`;
+
+  function ringerSvg(ringer, str = 168) {
+    const s = svgEl("svg", { viewBox: "0 0 168 168", width: str, height: str, class: "ringer", role: "img",
+      "aria-label": ringer.map((r) => `${r.navn}: ${ringVerdi(r)}`).join(", ") });
+    const tykk = 15, mellom = 4;
+    const buer = [];
+    ringer.forEach((r, i) => {
+      const rad = 84 - tykk / 2 - 2 - i * (tykk + mellom);
+      const omkrets = 2 * Math.PI * rad;
+      const g = svgEl("g", { transform: "rotate(-90 84 84)", style: `--ring:${RINGFARGE[r.nokkel]}` });
+      g.append(svgEl("circle", { cx: 84, cy: 84, r: rad, class: "ring-spor", "stroke-width": tykk }));
+      const andel = Math.max(0, Math.min(1, r.andel));
+      const bue = svgEl("circle", { cx: 84, cy: 84, r: rad, class: `ring-bue ${r.andel >= 1 ? "lukket" : ""}`, "stroke-width": tykk,
+        "stroke-dasharray": `${omkrets} ${omkrets}`, "stroke-dashoffset": omkrets });
+      g.append(bue);
+      // en ekstra runde vises som en lysere bue oppå når du er over målet
+      if (r.andel > 1) g.append(svgEl("circle", { cx: 84, cy: 84, r: rad, class: "ring-bue ekstra", "stroke-width": tykk,
+        "stroke-dasharray": `${omkrets} ${omkrets}`, "stroke-dashoffset": omkrets * (1 - Math.min(1, r.andel - 1)) }));
+      s.append(g);
+      buer.push([bue, omkrets * (1 - (andel || 0.0001))]);
+    });
+    requestAnimationFrame(() => requestAnimationFrame(() => buer.forEach(([b, mål]) => b.setAttribute("stroke-dashoffset", mål))));
+    return s;
+  }
+
+  function ukeKjede(sp) {
+    const plan = new Set((ov.ukeplan?.dager || []).filter((d) => d.okter.some((o) => o.type === "styrke")).map((d) => d.dato));
+    const aktiv = (d) => d.styrke || d.aktivitet;
+    const rad = el("div", { class: "kjede" });
+    sp.dager.forEach((d, i) => {
+      if (i) rad.append(el("span", { class: `ledd ${aktiv(d) && aktiv(sp.dager[i - 1]) ? "fylt" : ""}` }));
+      const cls = ["ledd-dag", d.styrke ? "styrke" : "", d.aktivitet ? "aktivitet" : "", d.i_dag ? "i-dag" : "",
+        d.fremtid && plan.has(d.dato) ? "planlagt" : "", d.fremtid ? "fremtid" : ""].join(" ");
+      const navn = new Date(d.dato).toLocaleDateString("nb-NO", { weekday: "short" }).slice(0, 2);
+      rad.append(el("span", { class: cls, title: `${ukedag(d.dato)}${d.styrke ? " · styrke" : ""}${d.aktivitet ? " · kondisjon" : ""}${plan.has(d.dato) && d.fremtid ? " · planlagt økt" : ""}` },
+        el("span", { class: "sirkel" }, d.styrke ? ikon("manual") : d.aktivitet ? ikon("lop") : null),
+        el("small", {}, d.i_dag ? "i dag" : navn)));
+    });
+    return rad;
+  }
+
+  function spillKort(sp) {
+    const n = sp.niva;
+    const xpBar = el("div", { class: "xp-bar" }, el("div", { style: `width:${Math.round(n.andel * 100)}%` }));
+    const nm = sp.neste_merke;
+    const kort = el("div", { class: `kort spill ${sp.alle_lukket ? "alle-lukket" : ""}` },
+      el("div", { class: "spill-topp" },
+        el("div", { class: "niva-sirkel", title: `${tusen(n.xp)} XP totalt` }, el("small", {}, "nivå"), el("b", {}, n.nr)),
+        el("div", { class: "niva-tekst" },
+          el("div", { class: "niva-navn" }, n.navn),
+          xpBar,
+          el("small", {}, `${tusen(n.xp - n.fra)} / ${tusen(n.til - n.fra)} XP til nivå ${n.nr + 1}`, sp.xp_uka ? el("span", { class: "xp-uka" }, ` · +${tusen(sp.xp_uka)} denne uka`) : null)),
+        sp.rekke ? el("div", { class: "rekke", title: `Ukemålet nådd ${sp.rekke} uker på rad (beste: ${sp.beste_rekke})` }, el("span", {}, "🔥"), el("b", {}, sp.rekke), el("small", {}, sp.rekke === 1 ? "uke" : "uker")) : null),
+      el("div", { class: "ring-rad" },
+        el("div", { class: "ring-boks" }, ringerSvg(sp.ringer),
+          sp.alle_lukket ? el("span", { class: "ring-midt" }, "⭐") : null),
+        el("ul", { class: "ring-forklaring" }, sp.ringer.map((r) => el("li", { style: `--ring:${RINGFARGE[r.nokkel]}` },
+          el("span", { class: "ring-navn" }, r.navn, r.andel >= 1 ? el("span", { class: "hake" }, "✓") : null),
+          el("b", {}, ringVerdi(r)),
+          el("small", {}, r.andel >= 1 ? "Ringen er lukket!" : `${Math.round(r.andel * 100)} %`))))),
+      ukeKjede(sp),
+      sp.rekorder_uka.length ? el("div", { class: "rekord-linje" }, "⚡ ", el("b", {}, `${sp.rekorder_uka.length} ${sp.rekorder_uka.length === 1 ? "ny rekord" : "nye rekorder"} denne uka: `), sp.rekorder_uka.join(", ")) : null,
+      el("button", { class: "merke-linje", onclick: () => merkerArk(sp) },
+        el("span", { class: "merke-ikoner" }, sp.merker.filter((m) => m.oppnadd).slice(-4).map((m) => el("span", {}, m.ikon))),
+        nm ? el("span", { class: "neste-merke" },
+          el("small", {}, `Neste merke: ${nm.ikon} ${nm.tittel}`),
+          el("span", { class: "minibar" }, el("span", { style: `width:${Math.round(nm.fremdrift * 100)}%` })))
+          : el("span", { class: "neste-merke" }, el("small", {}, "Alle merker er tatt – sterkt!")),
+        el("span", { class: "merke-antall" }, `${sp.oppnadd}/${sp.merker.length}`)));
+    return kort;
+  }
+
+  function merkerArk(sp) {
+    const n = sp.niva;
+    aapneArk(el("h3", {}, "🏅 Merker og nivå"),
+      el("p", { class: "hint" }, `Nivå ${n.nr} – ${n.navn} · ${tusen(n.xp)} XP. Du får 100 XP per økt, 2 per arbeidssett, 25 per ny rekord (inntil tre per økt), 150 når du når ukemålet, og litt for løping og gåing.`),
+      el("div", { class: "merke-grid" }, sp.merker.map((m) => el("div", { class: `merke-kort ${m.oppnadd ? "har" : ""}` },
+        el("span", { class: "merke-emoji" }, m.ikon),
+        el("b", {}, m.tittel), el("small", {}, m.beskrivelse),
+        m.oppnadd ? el("small", { class: "tatt" }, "Oppnådd") : el("span", { class: "minibar" }, el("span", { style: `width:${Math.round(m.fremdrift * 100)}%` }))))),
+      el("p", { class: "forklaring", style: "font-size:13px" }, `${tusen(sp.okter)} økter · ${tusen(sp.totalt_kg)} kg løftet · ${sp.rekorder} rekorder · beste rekke ${sp.beste_rekke} uker`),
+      el("div", { class: "ark-knapper" }, el("button", { class: "knapp", onclick: lukkArk }, "Lukk")));
+  }
+
+  function feir(sp) {
+    const nye = sp.nye_merker || [];
+    const rot = el("div", { class: "konfetti", "aria-hidden": "true" });
+    for (let i = 0; i < 40; i++) rot.append(el("i", { style: `--x:${Math.random() * 100}vw;--d:${0.6 + Math.random() * 1.4}s;--r:${Math.random() * 720 - 360}deg;--f:${["var(--oransje)", "var(--gronn)", "var(--blaa)", "var(--gul)", "var(--rosa)", "var(--lilla)"][i % 6]}` }));
+    document.body.append(rot);
+    setTimeout(() => rot.remove(), 2600);
+    vibrer([20, 40, 20]);
+    aapneArk(el("div", { class: "feiring" },
+      el("div", { class: "feiring-emoji" }, nye[0]?.ikon || "⬆️"),
+      el("h3", {}, sp.nytt_niva ? `Nivå ${sp.niva.nr}: ${sp.niva.navn}!` : nye.length > 1 ? "Nye merker!" : "Nytt merke!"),
+      nye.map((m) => el("p", {}, el("b", {}, `${m.ikon} ${m.tittel}`), ` – ${m.beskrivelse.toLowerCase()}`)),
+      sp.nytt_niva && !nye.length ? el("p", {}, "Du har gått opp et nivå. Fortsett sånn!") : null,
+      el("button", { class: "knapp", onclick: lukkArk }, "Yes!")));
   }
 
   // ================================================================ DAGSFORM OG UKEPLAN

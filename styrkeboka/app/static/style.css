@@ -589,3 +589,109 @@ body.har-hvile .toast { bottom: calc(166px + env(safe-area-inset-bottom)); }
 .uke-liste small.kal { opacity: .85; }
 .uke-liste .hviledag { color: var(--dempet); font-weight: 800; font-size: 14px; }
 .merkelapp.lop { background: var(--oransje-lys); color: var(--oransje-blekk); }
+
+/* ---------------------------------------------------------------- spill: ringer, uke-kjede, nivå og merker */
+.spill { display: flex; flex-direction: column; gap: 16px; position: relative; overflow: hidden; }
+.spill::before {
+  content: ""; position: absolute; inset: -40% -30% auto auto; width: 260px; height: 260px; border-radius: 50%;
+  background: radial-gradient(circle, var(--aksent-lys) 0%, transparent 70%); pointer-events: none;
+}
+.spill > * { position: relative; }
+.spill-topp { display: flex; align-items: center; gap: 12px; }
+.niva-sirkel {
+  width: 56px; height: 56px; flex: none; border-radius: 50%; display: grid; place-items: center; align-content: center;
+  background: conic-gradient(from 200deg, var(--oransje), var(--gul), var(--gronn), var(--blaa), var(--lilla), var(--oransje));
+  color: #fff; box-shadow: 0 4px 14px rgba(0,0,0,.12); position: relative;
+}
+.niva-sirkel::before { content: ""; position: absolute; inset: 4px; border-radius: 50%; background: var(--blekk); }
+.niva-sirkel > * { position: relative; line-height: 1; color: var(--flate); }
+.niva-sirkel small { font-size: 9px; font-weight: 900; text-transform: uppercase; letter-spacing: .08em; opacity: .8; }
+.niva-sirkel b { font-size: 22px; font-weight: 900; }
+.niva-tekst { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 5px; }
+.niva-navn { font-weight: 900; font-size: 18px; letter-spacing: -.01em; }
+.niva-tekst small { color: var(--dempet); font-weight: 700; font-size: 12.5px; }
+.xp-uka { color: var(--opp-blekk); }
+.xp-bar { height: 8px; border-radius: 99px; background: var(--flate-2); overflow: hidden; }
+.xp-bar > div { height: 100%; border-radius: inherit; background: linear-gradient(90deg, var(--gul), var(--oransje)); transition: width 1s ease; }
+.rekke { display: flex; flex-direction: column; align-items: center; line-height: 1.05; padding: 6px 10px; border-radius: 16px; background: var(--oransje-lys); color: var(--oransje-blekk); }
+.rekke span { font-size: 18px; }
+.rekke b { font-size: 18px; font-weight: 900; }
+.rekke small { font-size: 11px; font-weight: 800; }
+
+.ring-rad { display: flex; align-items: center; gap: 16px; }
+.ring-boks { position: relative; flex: none; width: 168px; height: 168px; }
+.ring-boks svg.ringer { display: block; overflow: visible; width: 100%; height: 100%; }
+.ring-spor { fill: none; stroke: var(--ring); opacity: .16; }
+.ring-bue { fill: none; stroke: var(--ring); stroke-linecap: round; transition: stroke-dashoffset 1.3s cubic-bezier(.2,.8,.2,1); }
+.ring-bue.lukket { filter: drop-shadow(0 0 5px var(--ring)); }
+.ring-bue.ekstra { stroke: #fff; opacity: .35; mix-blend-mode: soft-light; }
+.ring-midt { position: absolute; inset: 0; display: grid; place-items: center; font-size: 30px; animation: sprett 1.6s ease-in-out infinite; }
+@keyframes sprett { 0%,100% { transform: scale(1); } 50% { transform: scale(1.15); } }
+.ring-forklaring { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; min-width: 0; flex: 1; }
+.ring-forklaring li { display: flex; flex-direction: column; padding-left: 12px; border-left: 4px solid var(--ring); }
+.ring-navn { font-size: 12px; font-weight: 900; text-transform: uppercase; letter-spacing: .06em; color: var(--ring); display: flex; gap: 6px; align-items: center; }
+.ring-forklaring b { font-size: 15.5px; font-weight: 900; font-variant-numeric: tabular-nums; }
+.ring-forklaring small { color: var(--dempet); font-weight: 700; font-size: 12px; }
+.hake { display: inline-grid; place-items: center; width: 16px; height: 16px; border-radius: 50%; background: var(--ring); color: #fff; font-size: 10px; }
+.alle-lukket { box-shadow: var(--skygge), 0 0 0 2px var(--gul) inset; }
+
+/* uke-kjeden: sirklene møtes når du trener flere dager på rad */
+.kjede { display: flex; align-items: flex-start; }
+.ledd { flex: 1; height: 6px; margin-top: 15px; background: var(--flate-2); border-radius: 99px; margin-inline: -3px; transition: background .4s; }
+.ledd.fylt { background: linear-gradient(90deg, var(--oransje), var(--gronn)); }
+.ledd-dag { display: flex; flex-direction: column; align-items: center; gap: 4px; z-index: 1; }
+.ledd-dag small { font-size: 11px; font-weight: 800; color: var(--dempet); text-transform: capitalize; }
+.ledd-dag .sirkel {
+  width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center;
+  background: var(--flate-2); border: 3px solid var(--flate-2); color: #fff; transition: transform .3s;
+}
+.ledd-dag .sirkel svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
+.ledd-dag.styrke .sirkel { background: var(--oransje); border-color: var(--oransje); }
+.ledd-dag.aktivitet .sirkel { background: var(--gronn); border-color: var(--gronn); }
+.ledd-dag.styrke.aktivitet .sirkel { background: var(--oransje); border-color: var(--gronn); }
+.ledd-dag.planlagt .sirkel { background: transparent; border: 3px dashed var(--oransje); }
+.ledd-dag.i-dag small { color: var(--blekk); font-weight: 900; }
+.ledd-dag.i-dag .sirkel { box-shadow: 0 0 0 3px var(--flate), 0 0 0 5px var(--aksent); }
+.ledd-dag.i-dag:not(.styrke):not(.aktivitet) .sirkel { animation: puls 2s ease-in-out infinite; }
+.ledd-dag.fremtid:not(.planlagt) .sirkel { opacity: .6; }
+
+.rekord-linje { font-size: 13.5px; font-weight: 700; padding: 8px 12px; border-radius: 14px; background: var(--gul-lys); color: var(--gul-blekk); }
+.merke-linje {
+  display: flex; align-items: center; gap: 10px; width: 100%; padding: 10px 12px; border: 0; border-radius: 16px;
+  background: var(--flate-2); color: inherit; font: inherit; text-align: left; cursor: pointer;
+}
+.merke-ikoner { display: flex; }
+.merke-ikoner span { width: 30px; height: 30px; display: grid; place-items: center; border-radius: 50%; background: var(--flate); margin-left: -8px; font-size: 16px; box-shadow: 0 0 0 2px var(--flate-2); }
+.merke-ikoner span:first-child { margin-left: 0; }
+.neste-merke { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 5px; }
+.neste-merke small { font-weight: 800; font-size: 12.5px; color: var(--dempet); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.minibar { display: block; height: 6px; border-radius: 99px; background: var(--linje); overflow: hidden; }
+.minibar span { display: block; height: 100%; background: var(--aksent); border-radius: inherit; }
+.merke-antall { font-weight: 900; font-size: 13px; color: var(--aksent-blekk); }
+
+.merke-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; margin: 8px 0; }
+.merke-kort { display: flex; flex-direction: column; gap: 3px; padding: 12px; border-radius: 18px; background: var(--flate-2); }
+.merke-kort:not(.har) .merke-emoji { filter: grayscale(1); opacity: .45; }
+.merke-kort.har { background: var(--gul-lys); }
+.merke-emoji { font-size: 28px; }
+.merke-kort b { font-size: 14px; }
+.merke-kort small { font-size: 12px; color: var(--dempet); font-weight: 700; }
+.merke-kort .tatt { color: var(--gul-blekk); font-weight: 900; }
+.merke-kort .minibar { margin-top: 4px; }
+
+.feiring { text-align: center; display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 8px 0; }
+.feiring-emoji { font-size: 64px; animation: sprett 1.2s ease-in-out infinite; }
+.feiring .knapp { margin-top: 10px; min-width: 160px; }
+.konfetti { position: fixed; inset: 0; pointer-events: none; z-index: 200; overflow: hidden; }
+.konfetti i { position: absolute; top: -12px; left: var(--x); width: 8px; height: 14px; border-radius: 2px; background: var(--f); animation: fall var(--d) ease-in forwards; }
+@keyframes fall { to { transform: translateY(105vh) rotate(var(--r)); opacity: .8; } }
+
+@media (max-width: 370px) {
+  .ring-boks { width: 140px; height: 140px; }
+  .ring-rad { gap: 12px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ring-bue, .xp-bar > div { transition: none; }
+  .ring-midt, .feiring-emoji { animation: none; }
+  .konfetti { display: none; }
+}
