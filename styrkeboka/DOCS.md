@@ -129,6 +129,8 @@ AI-en får **aldri** titler eller steder fra kalenderen – bare status per dag:
 
 Bruker AI-en du har i Home Assistant (en «AI-oppgave»-entitet, `ai_task.*`, f.eks. fra Anthropic-integrasjonen). Velg hvilken under Innstillinger, eller la appen velge automatisk.
 
+Du kan velge en egen **AI til planlegging** under Innstillinger. Den brukes til å lage og justere program, ny blokk, ukeplan og startvekter. Tips, oppsummeringer og spørsmål bruker den vanlige. Tips: lag to AI-oppgaver i Anthropic-integrasjonen – en rask (Haiku) til det daglige og en kraftigere (Sonnet) til planlegging.
+
 * **Lag program** og **Juster med AI** – du ser alltid forslaget (og hva som er endret) før noe lagres. AI-en kan bare velge øvelser fra biblioteket.
 * **Tips før økta** – kort og konkret, ut fra forrige gang.
 * **Oppsummering etter økta** – automatisk eller på knappen.

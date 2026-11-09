@@ -2008,9 +2008,15 @@
     if (!S.ai_tilgjengelig) aiKort.append(el("div", { class: "info-boks obs" }, ikon("advarsel"), "Ingen kontakt med Home Assistant akkurat nå – AI er ikke tilgjengelig."));
     const velg = el("select", { onchange: () => lagreInn({ ai_entitet: velg.value }) }, el("option", { value: "" }, "Velg automatisk"));
     aiKort.append(felt("Hvilken AI i Home Assistant", velg, "Bruker «AI-oppgave»-entiteter (ai_task) fra f.eks. Anthropic-integrasjonen. Navn sendes aldri – bare mål, utstyr, hensyn og treningsdata."));
+    const velgPlan = el("select", { onchange: () => lagreInn({ ai_entitet_plan: velgPlan.value }) }, el("option", { value: "" }, "Samme som over"));
+    aiKort.append(felt("AI til planlegging", velgPlan, "Brukes når treneren lager eller justerer program, ny blokk, ukeplan og startvekter – oppgavene der en kraftigere modell (f.eks. Sonnet) gir best resultat. Tips, oppsummeringer og spørsmål bruker AI-en over."));
     api("api/ai/entiteter").then((r) => {
-      for (const e of r.entiteter) velg.append(el("option", { value: e.entity_id }, `${e.navn} (${e.entity_id})`));
+      for (const e of r.entiteter) {
+        velg.append(el("option", { value: e.entity_id }, `${e.navn} (${e.entity_id})`));
+        velgPlan.append(el("option", { value: e.entity_id }, `${e.navn} (${e.entity_id})`));
+      }
       velg.value = S.innstillinger.ai_entitet || "";
+      velgPlan.value = S.innstillinger.ai_entitet_plan || "";
     }).catch(() => {});
     aiKort.append(el("div", { class: "liste-rad", style: "min-height:0;padding:0" }, el("span", { class: "tekst" }, el("b", {}, "Oppsummering etter hver økt"), el("small", {}, "Automatisk når du fullfører")), bryter(S.innstillinger.ai_auto_oppsummering, (x) => lagreInn({ ai_auto_oppsummering: x }))));
     aiKort.append(el("div", { class: "liste-rad", style: "min-height:0;padding:0" }, el("span", { class: "tekst" }, el("b", {}, "Tips når økta starter"), el("small", {}, "Ellers trykker du på knappen selv")), bryter(S.innstillinger.ai_auto_tips, (x) => lagreInn({ ai_auto_tips: x }))));

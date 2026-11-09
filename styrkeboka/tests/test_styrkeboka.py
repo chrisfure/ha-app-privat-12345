@@ -630,3 +630,18 @@ def test_treningsanalyse_til_ai(sb):
     t = ai.treningsanalyse(sb, pid)
     assert "Oppmøte" in t and "PROGRESJON" in t and "kg e1RM" in t and "Opplevd tyngde" in t
     assert "TRENINGSANALYSE" in ai.oppgave_lag_program(sb, pid, None)
+
+
+def test_egen_ai_til_planlegging(sb):
+    import asyncio
+    from ha import HAKobling
+    sb.lagre_innstillinger({"ai_entitet": "ai_task.rask", "ai_entitet_plan": "ai_task.smart"})
+    k = HAKobling.__new__(HAKobling)
+    k.sb = sb
+    assert asyncio.run(k._velg_entitet("lag program")) == "ai_task.smart"
+    assert asyncio.run(k._velg_entitet("ukeplan")) == "ai_task.smart"
+    assert asyncio.run(k._velg_entitet("tips til økt")) == "ai_task.rask"
+    sb.lagre_innstillinger({"ai_entitet_plan": ""})
+    assert asyncio.run(k._velg_entitet("ny blokk")) == "ai_task.rask"
+    with pytest.raises(Feil):
+        sb.lagre_innstillinger({"ai_entitet_plan": "ikke gyldig"})

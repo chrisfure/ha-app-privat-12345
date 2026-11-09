@@ -21,6 +21,7 @@ TYPER = {"stang": "Vektstang", "manualer": "Manualer", "maskin": "Apparat", "kab
          "kettlebell": "Kettlebell", "kroppsvekt": "Kroppsvekt", "strikk": "Strikk"}
 STANDARD_INNSTILLINGER = {
     "ai_entitet": "",          # tom = velg automatisk
+    "ai_entitet_plan": "",     # AI til planlegging (program, blokk, ukeplan, startvekter); tom = samme som over
     "ai_paa": True,
     "ai_auto_oppsummering": True,
     "ai_auto_tips": False,
@@ -105,7 +106,7 @@ class Styrkeboka:
                 v = d[k]
                 if isinstance(STANDARD_INNSTILLINGER[k], bool):
                     v = bool(v)
-                elif k == "ai_entitet":
+                elif k in ("ai_entitet", "ai_entitet_plan"):
                     v = str(v or "").strip()
                     if v and not re.fullmatch(r"(ai_task|conversation)\.[a-z0-9_]+", v):
                         raise Feil("Ugyldig AI-entitet")

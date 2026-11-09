@@ -1,5 +1,9 @@
 # Endringslogg
 
+## 0.13.0
+
+- Egen AI til planlegging: velg en kraftigere modell (f.eks. Claude Sonnet) for program, justering, ny blokk, ukeplan og startvekter, mens tips, oppsummeringer og spørsmål bruker den raske og billige.
+
 ## 0.12.0
 
 - AI-treneren får en treningsanalyse når den lager program, ny blokk, ukeplan eller svarer på spørsmål: oppmøte siste 12 uker, progresjon per øvelse (med stillstand markert), harde sett per muskelgruppe, opplevd tyngde og formtrend (søvn, HRV, hvilepuls, stress siste 7 mot 28 dager).

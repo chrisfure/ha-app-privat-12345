@@ -525,7 +525,12 @@ class HAKobling:
         ut.sort(key=lambda x: (not x["entity_id"].startswith("ai_task."), "claude" not in x["entity_id"], x["navn"]))
         return ut
 
-    async def _velg_entitet(self) -> str | None:
+    # oppgaver som krever mest vurdering – kan gå til en kraftigere modell
+    PLANLEGGING = {"lag program", "juster program", "ny blokk", "ukeplan", "startvekter"}
+
+    async def _velg_entitet(self, oppgave: str = "") -> str | None:
+        if oppgave in self.PLANLEGGING and self.sb.inn.get("ai_entitet_plan"):
+            return self.sb.inn["ai_entitet_plan"]
         valgt = self.sb.inn.get("ai_entitet") or ""
         if valgt:
             return valgt
@@ -538,10 +543,10 @@ class HAKobling:
             raise Feil("AI-treneren er slått av i innstillingene")
         if not self.aktiv:
             raise Feil("Ingen kontakt med Home Assistant – AI er ikke tilgjengelig")
-        entitet = await self._velg_entitet()
+        entitet = await self._velg_entitet(oppgave)
         if not entitet:
             raise Feil("Fant ingen AI i Home Assistant. Sett opp en AI-integrasjon (f.eks. Anthropic) med «AI-oppgave».")
-        tidsavbrudd = aiohttp.ClientTimeout(total=150)
+        tidsavbrudd = aiohttp.ClientTimeout(total=240)
         try:
             if entitet.startswith("ai_task."):
                 body = {"task_name": f"Styrkeboka: {oppgave}", "instructions": instruksjoner, "entity_id": entitet}
