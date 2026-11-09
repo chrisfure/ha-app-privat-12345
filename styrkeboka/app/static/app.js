@@ -872,9 +872,10 @@
     const typeIkon = { rolig: "lop", langtur: "lop", intervall: "flamme", lopgaa: "lop" };
     return el("div", { class: "kort lope-kort" },
       el("div", { class: "kort-hode" }, el("h2", {}, "Løping denne uka"), el("span", { class: "merkelapp aksent" }, `Uke ${l.uke} av ${l.uker}${l.lett_uke ? " · lettere" : ""}`)),
+      profil()?.garmin_eksport?.loping ? el("p", { class: "forklaring", style: "font-size:13px;margin-top:-6px" }, "⌚ Turene ligger i Garmin-kalenderen – start dem fra «Treningskalender» på klokka.") : null,
       el("ul", { class: "lope-liste" }, l.plan.map((o, i) => el("li", { class: o.gjort ? "gjort" : i === l.plan.findIndex((x) => !x.gjort) ? "neste" : "" },
         el("span", { class: "lope-ikon" }, ikon(o.gjort ? "sjekk" : typeIkon[o.type] || "lop")),
-        el("span", { class: "tekst" }, el("b", {}, o.tittel, el("span", { class: "akt-navn" }, ` · ${o.minutter} min`)),
+        el("span", { class: "tekst" }, el("b", {}, o.dag ? `${o.dag[0].toUpperCase()}${o.dag.slice(1)}: ` : "", o.tittel, el("span", { class: "akt-navn" }, ` · ${o.minutter} min`)),
           o.gjort && o.logget ? el("small", {}, `Gjort ${dato(o.logget.start)}${o.logget.km ? ` · ${tall(o.logget.km)} km` : ""}${o.logget.tempo ? ` · ${o.logget.tempo} /km` : ""}`)
             : el("small", {}, o.beskrivelse), !o.gjort ? el("small", { class: "puls" }, `Puls: ${o.puls}`) : null)))),
       l.neste ? el("p", { class: "forklaring", style: "font-size:13px" }, "Turer fra klokka krysses av automatisk. Legg helst intervallene minst en dag før en tung beinøkt.") : el("p", { class: "forklaring" }, "Alle løpeturene denne uka er gjort – bra! 🏃"),
@@ -889,7 +890,7 @@
       const status = x.fra <= i_dag && x.til >= i_dag ? "Pågår" : x.fra > i_dag ? "Kommer" : "Ferdig";
       return el("div", { class: "versjon" },
         el("span", { class: "tekst" }, el("b", {}, `${dato(x.fra)} – ${dato(x.til, true)}`),
-          el("small", {}, `${x.okter_per_uke} ${x.okter_per_uke === 1 ? "tur" : "turer"} i uka · ${d.nivaa[x.niva]} · mål: ${d.maal[x.maal].toLowerCase()}`)),
+          el("small", {}, `${(x.lopedager || []).map((i) => ["man", "tir", "ons", "tor", "fre", "lør", "søn"][i]).join(", ") || `${x.okter_per_uke} turer`} · ${d.nivaa[x.niva]} · mål: ${d.maal[x.maal].toLowerCase()}`)),
         el("span", { class: `merkelapp ${status === "Pågår" ? "opp" : ""}` }, status),
         el("button", { class: "ikonknapp", "aria-label": "Endre", onclick: () => lopeperiodeArk(x, d) }, ikon("blyant")));
     };
@@ -915,13 +916,22 @@
       } }, n)));
       return e;
     };
+    v.lopedager = [...(v.lopedager?.length ? v.lopedager : ({ 1: [5], 2: [1, 5], 3: [1, 3, 6] })[v.okter_per_uke || 2])];
+    const DAGER = ["Man", "Tir", "Ons", "Tor", "Fre", "Lør", "Søn"];
+    const dagvelger = el("div", { class: "chips" }, DAGER.map((n, i) => el("button", { class: `chip liten ${v.lopedager.includes(i) ? "valgt" : ""}`, onclick: (e) => {
+      if (v.lopedager.includes(i)) { if (v.lopedager.length > 1) v.lopedager = v.lopedager.filter((x) => x !== i); }
+      else if (v.lopedager.length < 3) v.lopedager = [...v.lopedager, i].sort();
+      else { visToast("Maks 3 løpedager"); return; }
+      for (const [j, b] of [...dagvelger.children].entries()) b.classList.toggle("valgt", v.lopedager.includes(j));
+      void e;
+    } }, n)));
     const maal = el("div", { class: "chips" }, Object.entries(d.maal).map(([k, n]) => el("button", { class: `chip liten ${v.maal === k ? "valgt" : ""}`, onclick: (ev) => {
       v.maal = k; for (const b of maal.children) b.classList.toggle("valgt", b === ev.currentTarget);
     } }, n)));
     aapneArk(el("h3", {}, ikon("lop"), x ? "Endre løpeperiode" : "Ny løpeperiode"),
       el("p", { class: "hint" }, "I perioden får du en ukeplan for løping på forsiden: rolige turer, én intervalløkt (4×4-metoden) og en langtur, med gradvis økning og en lettere uke hver fjerde uke. Turer fra klokka krysses av automatisk."),
       el("div", { class: "skjema" }, el("div", { class: "felt-rad" }, felt("Fra", fra), felt("Til", til)), hurtig,
-        el("div", { class: "felt" }, el("span", {}, "Løpeturer i uka"), seg({ 1: "1", 2: "2", 3: "3" }, "okter_per_uke")),
+        el("div", { class: "felt" }, el("span", {}, "Løpedager (1–3)"), dagvelger),
         el("div", { class: "felt" }, el("span", {}, "Nivå"), seg({ nybegynner: "Ny (løp/gå)", vanlig: "Av og til", erfaren: "Jevnlig" }, "niva")),
         el("div", { class: "felt" }, el("span", {}, "Mål"), maal),
         el("div", { class: "liste-rad", style: "min-height:0;padding:0" }, el("span", { class: "tekst" }, el("b", {}, "Juster styrketreningen"), el("small", {}, "Ett sett mindre på hjelpeøvelser for bein i perioden, så beina tåler løpingen. Hovedøvelsene endres ikke.")),
@@ -1320,6 +1330,12 @@
     v.append(k);
     v.append(el("div", { class: "knapperad" },
       el("button", { class: "knapp noytral liten", style: "flex:1", onclick: () => endreOktArk(o, () => visOktDetalj(oid, fra)) }, ikon("blyant"), "Endre dato og notat"),
+      Object.keys(profil()?.koblinger || {}).length && o.status === "fullfort" ? (o.garmin_sendt
+        ? el("span", { class: "merkelapp opp", style: "align-self:center" }, ikon("sjekk"), "I Garmin")
+        : el("button", { class: "knapp noytral liten", onclick: async (e) => {
+          e.currentTarget.disabled = true;
+          try { await post(`api/okter/${o.id}/garmin`); visToast("Økta er sendt til Garmin Connect"); visOktDetalj(oid, fra); } catch (er) { feil(er); visOktDetalj(oid, fra); }
+        } }, "⌚ Send til Garmin")) : null,
       el("button", { class: "knapp fare liten", onclick: async () => {
         if (!(await bekreft("Slette økten?", "Økten og alle settene slettes for godt.", "Slett", true))) return;
         try { await slett(`api/okter/${o.id}`); tilbake(); } catch (e) { feil(e); }
@@ -1530,6 +1546,28 @@
     }
     liste.append(el("button", { class: "legg-til", style: "margin-top:10px", onclick: () => aktivitetArk(null) }, ikon("pluss"), "Registrer aktivitet"));
     v.append(liste);
+
+    // Garmin Connect
+    if (koblet) {
+      const g = k.garmin_eksport || {};
+      const lagre_ = async (endring) => {
+        try {
+          const r = await put(`api/profiler/${pid}/garmin`, { ...g, ...endring });
+          Object.assign(g, r.garmin_eksport);
+          await lastStart();
+          if (r.lagt_inn) visToast(`${r.lagt_inn} løpeturer lagt i Garmin-kalenderen`);
+          else if (r.fjernet) visToast(`${r.fjernet} løpeturer fjernet fra Garmin-kalenderen`);
+          visKropp();
+        } catch (e) { feil(e); visKropp(); }
+      };
+      v.append(el("div", { class: "kort" },
+        el("h2", {}, "Til Garmin Connect"),
+        el("div", { class: "liste-rad", style: "min-height:0;padding:0" }, el("span", { class: "tekst" }, el("b", {}, "Send styrkeøkter"), el("small", {}, "Fullførte økter legges inn som aktivitet i Garmin Connect, med navn og varighet.")), bryter(g.okter, (x) => lagre_({ okter: x }))),
+        el("div", { class: "liste-rad", style: "min-height:0;padding:0" }, el("span", { class: "tekst" }, el("b", {}, "Løpeturer til klokka"), el("small", {}, "Turene i løpeplanen legges i Garmin-kalenderen 2 uker fram, med oppvarming, drag og pulssoner – klokka guider deg.")), bryter(g.loping, (x) => lagre_({ loping: x }))),
+        g.loping && k.garmin_lagt_inn?.length ? el("p", { class: "forklaring", style: "font-size:13px" }, "I Garmin-kalenderen: " + k.garmin_lagt_inn.map((x) => `${dato(x.dato)} ${x.nokkel.split(":")[2]}`).join(" · ")) : null,
+        g.loping && !k.garmin_lagt_inn?.length ? el("p", { class: "forklaring", style: "font-size:13px" }, "Ingen løpeturer å legge inn ennå – legg inn en løpeperiode under Program.") : null,
+        g.okter ? el("p", { class: "forklaring", style: "font-size:13px" }, "Tips: Registrerer du styrkeøkta på klokka også, blir den liggende dobbelt i Garmin.") : null));
+    }
 
     // kroppsprofil og puls
     const p = profil();

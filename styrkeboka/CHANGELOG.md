@@ -1,5 +1,11 @@
 # Endringslogg
 
+## 0.7.0
+
+- Til Garmin Connect (via Home Assistant): fullførte styrkeøkter kan sendes som aktivitet, automatisk eller med «Send til Garmin» på en økt.
+- Løpeturer til klokka: turene i løpeplanen legges i Garmin-kalenderen 2 uker fram som strukturerte økter (oppvarming, drag, pauser og pulssoner). Endrer du perioden, oppdateres kalenderen.
+- Løpeperioder har nå faste løpedager (1–3 i uka), og ukeplanen viser hvilken dag hver tur er.
+
 ## 0.6.0
 
 - Fanen «Kropp» heter nå «Helse».

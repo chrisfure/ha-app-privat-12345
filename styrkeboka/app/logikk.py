@@ -243,6 +243,9 @@ class Styrkeboka:
             rad["hoyde_cm"] = h if h and 100 <= h <= 230 else None
         if "kjonn" in d:
             rad["kjonn"] = d["kjonn"] if d["kjonn"] in ("mann", "kvinne") else None
+        if "garmin_eksport" in d:
+            g = d["garmin_eksport"] or {}
+            rad["garmin_eksport"] = {"okter": bool(g.get("okter")), "loping": bool(g.get("loping"))}
         if "koblinger" in d:
             k = d["koblinger"] or {}
             rad["koblinger"] = {n: str(v) for n, v in k.items()

@@ -22,6 +22,15 @@ NIVAA = {"nybegynner": "Nybegynner (løp/gå)", "vanlig": "Løper av og til", "e
 MAAL = {"form": "Bedre form", "5km": "5 km", "10km": "10 km", "halvmaraton": "Halvmaraton"}
 LANGTUR_TAK = {"form": 60, "5km": 50, "10km": 75, "halvmaraton": 110}
 BEIN_HJELP = {"utfall", "sete", "bakside_iso", "forside_iso", "legger"}
+UKEDAGER = ["mandag", "tirsdag", "onsdag", "torsdag", "fredag", "lørdag", "søndag"]
+# standarddager: rolige turer og intervall midt i uka, langtur i helga
+STANDARD_DAGER = {1: [5], 2: [1, 5], 3: [1, 3, 6]}
+
+
+def lopedager(p: dict) -> list[int]:
+    dager = sorted({int(d) for d in (p.get("lopedager") or []) if str(d).isdigit() and 0 <= int(d) <= 6})
+    n = int(p.get("okter_per_uke") or 2)
+    return dager[:3] if dager else STANDARD_DAGER.get(n, [1, 5])
 
 # løp/gå-progresjon (løp min, gå min, repetisjoner) – uke 1 til 8
 LOP_GAA = [(1, 1.5, 10), (1.5, 1.5, 8), (2, 1.5, 7), (3, 1.5, 6), (5, 2, 4), (8, 2, 3), (12, 2, 2), (25, 0, 1)]
@@ -104,8 +113,10 @@ def lagre_periode(sb: "Styrkeboka", pid: int, d: dict, lid: int | None = None) -
         raise Feil("Til-datoen må være etter fra-datoen")
     if (til - fra).days > 366:
         raise Feil("En løpeperiode kan vare maks ett år")
-    rad = {"profil_id": pid, "fra": fra.isoformat(), "til": til.isoformat(),
-           "okter_per_uke": max(1, min(3, int(d.get("okter_per_uke") or 2))),
+    dager = sorted({int(x) for x in (d.get("lopedager") or []) if str(x).isdigit() and 0 <= int(x) <= 6})[:3]
+    n = len(dager) if dager else max(1, min(3, int(d.get("okter_per_uke") or 2)))
+    rad = {"profil_id": pid, "fra": fra.isoformat(), "til": til.isoformat(), "okter_per_uke": n,
+           "lopedager": dager or STANDARD_DAGER[n],
            "niva": d.get("niva") if d.get("niva") in NIVAA else "vanlig",
            "maal": d.get("maal") if d.get("maal") in MAAL else "form",
            "juster_styrke": 1 if d.get("juster_styrke", True) else 0}
@@ -131,6 +142,11 @@ def status(sb: "Styrkeboka", pid: int) -> dict:
     uker_totalt = (_mandag(date.fromisoformat(p["til"])) - start).days // 7 + 1
     makspuls = kropp.avledet(sb, pid).get("makspuls")
     plan = ukeplan(p, uke, makspuls)
+    dager = lopedager(p)
+    for i, o in enumerate(plan):
+        if i < len(dager):
+            o["dag"] = UKEDAGER[dager[i]]
+            o["dato"] = (_mandag(i_dag) + timedelta(days=dager[i])).isoformat()
     # løpeturer denne uka (minst 10 min) krysses av i rekkefølge
     mandag = sb.lokal(naa()).replace(hour=0, minute=0, second=0, microsecond=0) - timedelta(days=i_dag.weekday())
     turer = [kropp.berik(a) for a in sb.db.alle(
@@ -169,3 +185,75 @@ def ai_tekst(sb: "Styrkeboka", pid: int) -> str:
     return (f"Løpeperiode aktiv: uke {a['uke']} av {a['uker']}, {p['okter_per_uke']} turer i uka, nivå {NIVAA[p['niva']].lower()}, "
             f"mål {MAAL[p['maal']].lower()}. Denne uka: " + "; ".join(f"{o['tittel']} ({'gjort' if o['gjort'] else 'gjenstår'})" for o in a["plan"])
             + (". Ett sett mindre på hjelpeøvelser for bein i perioden." if p.get("juster_styrke") else "."))
+
+
+# --------------------------------------------------------------------------- Garmin-økter
+def _steg(nr: int, typ: str, sek: float | None, sone: int | None = None, barn: bool = False) -> dict:
+    typer = {"warmup": 1, "cooldown": 2, "interval": 3, "recovery": 4}
+    st = {"type": "ExecutableStepDTO", "stepOrder": nr, "stepType": {"stepTypeId": typer[typ], "stepTypeKey": typ},
+          "endCondition": {"conditionTypeId": 2, "conditionTypeKey": "time"} if sek else {"conditionTypeId": 1, "conditionTypeKey": "lap.button"},
+          "endConditionValue": round(sek) if sek else None,
+          "targetType": {"workoutTargetTypeId": 4, "workoutTargetTypeKey": "heart.rate.zone"} if sone else
+                        {"workoutTargetTypeId": 1, "workoutTargetTypeKey": "no.target"}}
+    if sone:
+        st["zoneNumber"] = sone
+    if barn:
+        st["childStepId"] = 1
+    return st
+
+
+def garmin_okt(o: dict, navn_prefiks: str = "Styrkeboka") -> dict:
+    """Bygger en strukturert Garmin-løpeøkt (oppvarming, drag/pauser med pulssoner, nedjogg)."""
+    sport = {"sportTypeId": 1, "sportTypeKey": "running"}
+    steg: list[dict] = []
+    if o["type"] == "intervall":
+        import re
+        m = re.search(r"(\d+)×(\d+)", o["tittel"])
+        drag, minutter = (int(m.group(1)), int(m.group(2))) if m else (4, 4)
+        steg = [_steg(1, "warmup", 600, 2),
+                {"type": "RepeatGroupDTO", "stepOrder": 2, "stepType": {"stepTypeId": 6, "stepTypeKey": "repeat"},
+                 "numberOfIterations": drag, "smartRepeat": False, "childStepId": 1,
+                 "workoutSteps": [_steg(3, "interval", minutter * 60, 4, True), _steg(4, "recovery", 180, 1, True)]},
+                _steg(5, "cooldown", 300, None)]
+    elif o["type"] == "lopgaa":
+        import re
+        m = re.search(r"(\d+) × \(([\d,]+) min løp \+ ([\d,]+) min gange\)", o["beskrivelse"])
+        if m:
+            reps, lop, gaa = int(m.group(1)), float(m.group(2).replace(",", ".")), float(m.group(3).replace(",", "."))
+            steg = [_steg(1, "warmup", 300, None),
+                    {"type": "RepeatGroupDTO", "stepOrder": 2, "stepType": {"stepTypeId": 6, "stepTypeKey": "repeat"},
+                     "numberOfIterations": reps, "smartRepeat": False, "childStepId": 1,
+                     "workoutSteps": [_steg(3, "interval", lop * 60, 2, True), _steg(4, "recovery", gaa * 60, None, True)]},
+                    _steg(5, "cooldown", 300, None)]
+        else:
+            steg = [_steg(1, "warmup", 300, None), _steg(2, "interval", (o["minutter"] - 10) * 60, 2), _steg(3, "cooldown", 300, None)]
+    else:
+        steg = [_steg(1, "interval", o["minutter"] * 60, 2)]
+    return {"workoutName": f"{navn_prefiks}: {o['tittel']}"[:60], "description": o["beskrivelse"][:500],
+            "sportType": sport, "workoutSegments": [{"segmentOrder": 1, "sportType": sport, "workoutSteps": steg}]}
+
+
+def planlagte_garmin_okter(sb: "Styrkeboka", pid: int, uker_frem: int = 2) -> list[dict]:
+    """Løpeturer som skal ligge i Garmin-kalenderen: fra i dag og «uker_frem» uker fram, i alle perioder."""
+    import kropp
+    i_dag = sb.lokal(naa()).date()
+    makspuls = kropp.avledet(sb, pid).get("makspuls")
+    ut = []
+    for p in perioder(sb, pid):
+        start = _mandag(date.fromisoformat(p["fra"]))
+        slutt = date.fromisoformat(p["til"])
+        dager = lopedager(p)
+        for u in range(uker_frem + 1):
+            mandag = _mandag(i_dag) + timedelta(weeks=u)
+            if mandag + timedelta(days=6) < start or mandag > slutt:
+                continue
+            uke = (mandag - start).days // 7 + 1
+            for i, o in enumerate(ukeplan(p, uke, makspuls)):
+                if i >= len(dager):
+                    break
+                dato = mandag + timedelta(days=dager[i])
+                if dato < i_dag or dato < date.fromisoformat(p["fra"]) or dato > slutt:
+                    continue
+                ut.append({"periode_id": p["id"], "dato": dato.isoformat(), "okt": o,
+                           "nokkel": f"{p['id']}:{o['type']}:{o['tittel']}:{o['minutter']}"})
+    return ut

@@ -25,6 +25,29 @@ class FalskAI:
     def __init__(self, sb):
         self.sb = sb
 
+    @staticmethod
+    def garmin_konto(p):
+        return (p.get("koblinger") or {}).get("aktiviteter")
+
+    async def synk_garmin_lopeokter(self, p):
+        import loping
+        from db import naa
+        if not (p.get("garmin_eksport") or {}).get("loping"):
+            n = self.sb.db.verdi("SELECT COUNT(*) FROM garmin_okter WHERE profil_id = ?", (p["id"],))
+            self.sb.db.kjor("DELETE FROM garmin_okter WHERE profil_id = ?", (p["id"],))
+            return {"lagt_inn": 0, "fjernet": n}
+        self.sb.db.kjor("DELETE FROM garmin_okter WHERE profil_id = ?", (p["id"],))
+        x = loping.planlagte_garmin_okter(self.sb, p["id"])
+        for o in x:
+            self.sb.db.kjor("INSERT INTO garmin_okter (profil_id, periode_id, dato, nokkel, workout_id, tid) VALUES (?,?,?,?,?,?)",
+                            (p["id"], o["periode_id"], o["dato"], o["nokkel"], "1", naa().isoformat()))
+        return {"lagt_inn": len(x), "fjernet": 0}
+
+    async def send_okt_til_garmin(self, oid, tving=False):
+        from db import naa
+        self.sb.db.oppdater("okter", oid, {"garmin_sendt": naa().isoformat()})
+        return True
+
     async def kilder(self, profil):
         return {"kilder": {"aktiviteter": [{"entity_id": "sensor.test_last_activities", "navn": "Test Garmin Last activities", "state": "0"}],
                            "vekt": [{"entity_id": "sensor.test_weight", "navn": "Test Garmin Weight", "state": "81.4", "enhet": "kg"}],

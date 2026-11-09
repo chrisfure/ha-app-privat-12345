@@ -290,6 +290,36 @@ class API:
                 return {"importert": 0, "maalinger": 0}
             return await self.ai.synk_profil(sb.profil(req.int("pid")), historikk=bool(req.data.get("historikk")))
 
+        # ---- Garmin-eksport
+        @r("PUT", "/api/profiler/{pid}/garmin")
+        async def garmin_eksport(req):
+            p = sb.lagre_profil({"garmin_eksport": req.data}, req.int("pid"))
+            res = {}
+            if hasattr(self.ai, "synk_garmin_lopeokter"):
+                if p["garmin_eksport"]["okter"] or p["garmin_eksport"]["loping"]:
+                    if not self.ai.garmin_konto(p):
+                        raise Feil("Koble profilen til Garmin-sensorene først (Helse → Hent data fra Home Assistant)")
+                try:
+                    res = await self.ai.synk_garmin_lopeokter(p)
+                except Exception as e:  # noqa: BLE001
+                    log.warning("Løpeøkter til Garmin: %s", e)
+                    raise Feil(f"Lagret, men klarte ikke å legge løpeturer i Garmin: {e}") from e
+            return {"garmin_eksport": p["garmin_eksport"], **res}
+
+        @r("POST", "/api/okter/{oid}/garmin")
+        async def okt_til_garmin(req):
+            if not hasattr(self.ai, "send_okt_til_garmin"):
+                raise Feil("Garmin er ikke tilgjengelig")
+            await self.ai.send_okt_til_garmin(req.int("oid"), tving=True)
+            return {"okt": sb.okt(req.int("oid"))}
+
+        async def _lope_synk(pid: int) -> None:
+            if hasattr(self.ai, "synk_garmin_lopeokter"):
+                try:
+                    await self.ai.synk_garmin_lopeokter(sb.profil(pid))
+                except Exception as e:  # noqa: BLE001
+                    log.warning("Løpeøkter til Garmin: %s", e)
+
         # ---- løpeperioder
         @r("GET", "/api/profiler/{pid}/loping")
         async def loping_status(req):
@@ -297,18 +327,25 @@ class API:
 
         @r("POST", "/api/profiler/{pid}/loping")
         async def ny_periode(req):
-            return {"periode": loping.lagre_periode(sb, req.int("pid"), req.data)}
+            p = loping.lagre_periode(sb, req.int("pid"), req.data)
+            await _lope_synk(req.int("pid"))
+            return {"periode": p}
 
         @r("PATCH", "/api/loping/{lid}")
         async def endre_periode(req):
             p = sb.db.en("SELECT * FROM loepeperioder WHERE id = ?", (req.int("lid"),))
             if not p:
                 raise Feil("Fant ikke perioden")
-            return {"periode": loping.lagre_periode(sb, p["profil_id"], {**p, **req.data}, p["id"])}
+            ny = loping.lagre_periode(sb, p["profil_id"], {**p, **req.data}, p["id"])
+            await _lope_synk(p["profil_id"])
+            return {"periode": ny}
 
         @r("DELETE", "/api/loping/{lid}")
         async def slett_periode(req):
+            p = sb.db.en("SELECT profil_id FROM loepeperioder WHERE id = ?", (req.int("lid"),))
             sb.db.slett("loepeperioder", req.int("lid"))
+            if p:
+                await _lope_synk(p["profil_id"])
             return {"ok": True}
 
         # ---- startvekter

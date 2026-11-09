@@ -56,13 +56,22 @@ Anslagene er litt forsiktige med vilje. Etter første økt er det din egen fremg
 
 ### Løpeperioder
 
-Under **Program → Løping i perioder** kan du legge inn en periode (f.eks. «Sommer (juni–august)» eller «8 uker fra mandag») med 1–3 løpeturer i uka:
+Under **Program → Løping i perioder** kan du legge inn en periode (f.eks. «Sommer (juni–august)» eller «8 uker fra mandag») og velge 1–3 faste løpedager:
 
 * **Ukeplan på forsiden** – rolig tur, intervalløkt (4×4 min i sone 4, med kortere drag i starten) og langtur, med gradvis økning og en lettere uke hver fjerde uke. Nybegynnere får løp/gå-intervaller.
 * **Pulssoner** regnes fra estimert makspuls (krever fødselsår i profilen).
 * **Turer fra klokka krysses av automatisk.** Uten klokke: «Registrer løpetur selv».
 * **Juster styrketreningen** (på som standard): ett sett mindre på hjelpeøvelser for bein i perioden. Hovedøvelsene endres ikke.
 * Legg helst intervalløkta minst en dag før en tung beinøkt.
+
+### Til Garmin Connect
+
+Er profilen koblet til Garmin (Helse → Hent data fra Home Assistant), finner du **Helse → Til Garmin Connect**:
+
+* **Send styrkeøkter** – fullførte økter legges inn som aktivitet («Styrketrening: Helkropp A») med starttid og varighet. Eldre økter kan sendes med «Send til Garmin» i økt-detaljene. Registrerer du økta på klokka også, blir den liggende dobbelt.
+* **Løpeturer til klokka** – turene i løpeplanen legges i Garmin-kalenderen to uker fram, som strukturerte økter med oppvarming, drag, pauser og pulssoner (klokkas egne soner). Start dem fra treningskalenderen på klokka. Endres eller slettes perioden, oppdateres kalenderen.
+
+Bruker tjenestene `garmin_connect.create_activity`, `create_workout` og `delete_workout` fra Garmin Connect-integrasjonen.
 
 ### Treningsblokker
 

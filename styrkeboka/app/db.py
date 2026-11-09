@@ -106,13 +106,18 @@ CREATE TABLE IF NOT EXISTS loepeperioder (
   juster_styrke INTEGER DEFAULT 1, opprettet TEXT
 );
 
+CREATE TABLE IF NOT EXISTS garmin_okter (
+  id INTEGER PRIMARY KEY, profil_id INTEGER NOT NULL, periode_id INTEGER, dato TEXT NOT NULL, nokkel TEXT NOT NULL,
+  workout_id TEXT, schedule_id TEXT, tid TEXT, UNIQUE (profil_id, dato)
+);
+
 CREATE TABLE IF NOT EXISTS ai_logg (
   id INTEGER PRIMARY KEY, profil_id INTEGER, okt_id INTEGER, tid TEXT NOT NULL, type TEXT,
   sporsmal TEXT, svar TEXT
 );
 """
 
-JSON_FELT = {"utstyr", "muskler", "maal", "ai_tips", "ai_oppsummering", "data", "kjente_loft", "koblinger"}
+JSON_FELT = {"utstyr", "muskler", "maal", "ai_tips", "ai_oppsummering", "data", "kjente_loft", "koblinger", "lopedager", "garmin_eksport"}
 
 
 class Database:
@@ -134,9 +139,11 @@ class Database:
             "programmer": [("blokk_nr", "INTEGER DEFAULT 1"), ("blokk_start", "TEXT"), ("blokk_uker", "INTEGER DEFAULT 6"),
                            ("lett_uke", "INTEGER DEFAULT 1")],
             "programovelser": [("fast", "INTEGER DEFAULT 0")],
-            "okter": [("lett", "INTEGER DEFAULT 0"), ("blokk_nr", "INTEGER")],
+            "okter": [("lett", "INTEGER DEFAULT 0"), ("blokk_nr", "INTEGER"), ("garmin_sendt", "TEXT")],
+            "loepeperioder": [("lopedager", "TEXT DEFAULT '[]'")],
             "profiler": [("kroppsvekt", "REAL"), ("kjente_loft", "TEXT DEFAULT '[]'"), ("fodselsaar", "INTEGER"),
-                         ("hoyde_cm", "REAL"), ("kjonn", "TEXT"), ("koblinger", "TEXT DEFAULT '{}'")],
+                         ("hoyde_cm", "REAL"), ("kjonn", "TEXT"), ("koblinger", "TEXT DEFAULT '{}'"),
+                         ("garmin_eksport", "TEXT DEFAULT '{}'")],
         }
         for tabell, kolonner in nye.items():
             finnes = {r[1] for r in self.con.execute(f"PRAGMA table_info({tabell})")}

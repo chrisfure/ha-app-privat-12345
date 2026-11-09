@@ -369,3 +369,58 @@ def test_oppvarming_per_kroppsdel(sb):
     okt = sb.start_okt(pid, prog["dager"][0]["id"])
     med = [oo for oo in okt["ovelser"] if oo["oppvarming"]]
     assert len(med) >= 2 and okt["generell_oppvarming"]["bevegelser"]
+
+
+
+def test_garmin_eksport(sb, monkeypatch):
+    import asyncio
+    import types
+    from datetime import timedelta
+    if "aiohttp" not in sys.modules:
+        fake = types.ModuleType("aiohttp")
+        fake.ClientTimeout = lambda **k: None
+        fake.ClientError = Exception
+        fake.ClientSession = object
+        sys.modules["aiohttp"] = fake
+    import ha
+    import kropp
+    import loping
+    pid = sb.profiler()[0]["id"]
+    sb.lagre_profil({"koblinger": {"aktiviteter": "sensor.x_last_activities"}, "garmin_eksport": {"okter": True, "loping": True}}, pid)
+    k = ha.HAKobling(sb)
+    k.aktiv = True
+    kall = []
+
+    async def fake_tjeneste(domene, tjeneste, data, svar=False):
+        kall.append((tjeneste, data))
+        return {"workout_id": 100 + len(kall), "schedule_id": 1} if svar else None
+    monkeypatch.setattr(k, "_tjeneste", fake_tjeneste)
+    # styrkeøkt sendes én gang
+    o = sb.start_okt(pid, None)
+    sb.legg_til_ovelse(o["id"], {"ovelse": "benkpress"})
+    oo = sb.okt(o["id"])["ovelser"][0]
+    sb.logg_sett(o["id"], {"okt_ovelse_id": oo["id"], "vekt": 60, "reps": 8})
+    sb.avslutt_okt(o["id"], {})
+    assert asyncio.run(k.send_okt_til_garmin(o["id"]))
+    assert not asyncio.run(k.send_okt_til_garmin(o["id"]))
+    assert kall[0][0] == "create_activity" and kall[0][1]["activity_type"] == "fitness_equipment"
+    # og den importeres ikke tilbake som egen aktivitet
+    assert not kropp.importer_garmin(sb, pid, {"activityId": 5, "activityName": "Styrketrening: Fri økt", "activityType": "fitness_equipment", "startTime": _naa_iso(0)})
+    # løpeturer legges i kalenderen, uten duplikater
+    i_dag = sb.lokal(sb_naa()).date()
+    per = loping.lagre_periode(sb, pid, {"fra": i_dag.isoformat(), "til": (i_dag + timedelta(weeks=6)).isoformat(), "lopedager": [0, 2, 4, 6], "niva": "vanlig"})
+    assert per["okter_per_uke"] == 3 and per["lopedager"] == [0, 2, 4]
+    kall.clear()
+    r = asyncio.run(k.synk_garmin_lopeokter(sb.profil(pid)))
+    assert r["lagt_inn"] >= 3 and all(c[0] == "create_workout" for c in kall)
+    assert asyncio.run(k.synk_garmin_lopeokter(sb.profil(pid))) == {"lagt_inn": 0, "fjernet": 0}
+    # endrer perioden -> gamle fjernes og nye legges inn
+    loping.lagre_periode(sb, pid, {**per, "lopedager": [1]}, per["id"])
+    r = asyncio.run(k.synk_garmin_lopeokter(sb.profil(pid)))
+    assert r["fjernet"] >= 3 and r["lagt_inn"] >= 1
+    # slår av -> alt fremtidig fjernes
+    sb.lagre_profil({"garmin_eksport": {"okter": True, "loping": False}}, pid)
+    r = asyncio.run(k.synk_garmin_lopeokter(sb.profil(pid)))
+    assert r["lagt_inn"] == 0 and not sb.db.alle("SELECT * FROM garmin_okter")
+    steg = loping.garmin_okt({"type": "intervall", "tittel": "Intervall 4×4 min", "beskrivelse": "", "minutter": 35})["workoutSegments"][0]["workoutSteps"]
+    assert steg[1]["numberOfIterations"] == 4 and steg[1]["workoutSteps"][0]["zoneNumber"] == 4

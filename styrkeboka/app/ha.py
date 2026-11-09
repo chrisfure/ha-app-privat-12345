@@ -82,6 +82,11 @@ class HAKobling:
                 for hva, data in ko:
                     if hva in ("okt_startet", "okt_fullfort"):
                         await self._fyr_hendelse(hva, data)
+                    if hva == "okt_fullfort" and data:
+                        try:
+                            await self.send_okt_til_garmin(data["oppsummering"]["okt"]["id"])
+                        except Exception as e:  # noqa: BLE001
+                            log.warning("Kunne ikke sende økt til Garmin: %s", e)
             except Exception as e:  # noqa: BLE001
                 log.warning("Publisering feilet: %s", e)
             self._publiser_naa.clear()
@@ -235,6 +240,7 @@ class HAKobling:
 
     async def _synk_loop(self) -> None:
         await asyncio.sleep(20)
+        runde = 0
         while True:
             for p in self.sb.profiler():
                 if p.get("koblinger"):
@@ -242,7 +248,84 @@ class HAKobling:
                         await self.synk_profil(p)
                     except Exception as e:  # noqa: BLE001
                         log.warning("Henting av kroppsdata feilet for profil %s: %s", p["id"], e)
+                if runde % 4 == 0 and (p.get("garmin_eksport") or {}).get("loping"):
+                    try:
+                        await self.synk_garmin_lopeokter(p)
+                    except Exception as e:  # noqa: BLE001
+                        log.warning("Løpeøkter til Garmin feilet for profil %s: %s", p["id"], e)
+            runde += 1
             await asyncio.sleep(900)
+
+    # ------------------------------------------------------------ til Garmin Connect
+    async def _tjeneste(self, domene: str, tjeneste: str, data: dict, svar: bool = False):
+        url = f"{CORE_API}/services/{domene}/{tjeneste}" + ("?return_response" if svar else "")
+        async with self._session.post(url, headers=self._hoder, json=data, timeout=aiohttp.ClientTimeout(total=60)) as r:
+            tekst = await r.text()
+            if r.status >= 400:
+                raise Feil(f"Garmin svarte med feil {r.status}: {tekst[:200]}")
+            if svar:
+                import json
+                return (json.loads(tekst) or {}).get("service_response") or {}
+            return None
+
+    @staticmethod
+    def garmin_konto(p: dict) -> str | None:
+        """Garmin-sensoren som peker ut riktig Garmin-konto for profilen."""
+        k = p.get("koblinger") or {}
+        for typ in ("aktiviteter", "vekt", "hvilepuls", "vo2max", "skritt"):
+            if k.get(typ):
+                return k[typ]
+        return None
+
+    async def send_okt_til_garmin(self, oid: int, tving: bool = False) -> bool:
+        o = self.sb.okt(oid)
+        p = self.sb.profil(o["profil_id"])
+        if not self.aktiv or o["status"] != "fullfort" or (o.get("garmin_sendt") and not tving):
+            return False
+        if not tving and not (p.get("garmin_eksport") or {}).get("okter"):
+            return False
+        konto = self.garmin_konto(p)
+        if not konto:
+            raise Feil("Koble profilen til Garmin under Helse først")
+        start = self.sb.lokal(o["startet"])
+        await self._tjeneste("garmin_connect", "create_activity", {
+            "entity_id": konto, "activity_name": f"Styrketrening: {o['dag_navn']}"[:60], "activity_type": "fitness_equipment",
+            "start_datetime": start.replace(tzinfo=None).isoformat(timespec="seconds"),
+            "duration_min": max(1, o["nokkeltall"]["minutter"]), "time_zone": str(self.sb.tz)})
+        self.sb.db.oppdater("okter", oid, {"garmin_sendt": naa().isoformat(timespec="seconds")})
+        return True
+
+    async def synk_garmin_lopeokter(self, p: dict) -> dict:
+        """Holder Garmin-kalenderen i takt med løpeplanen: nye turer legges inn, endrede byttes ut."""
+        import loping
+        konto = self.garmin_konto(p)
+        if not self.aktiv or not konto:
+            return {"lagt_inn": 0, "fjernet": 0}
+        pid = p["id"]
+        i_dag = self.sb.lokal(naa()).date().isoformat()
+        aktiv = (p.get("garmin_eksport") or {}).get("loping")
+        planlagt = {x["dato"]: x for x in loping.planlagte_garmin_okter(self.sb, pid)} if aktiv else {}
+        lagret = {r["dato"]: r for r in self.sb.db.alle("SELECT * FROM garmin_okter WHERE profil_id = ? AND dato >= ?", (pid, i_dag))}
+        lagt_inn = fjernet = 0
+        for dato, r in lagret.items():
+            if dato not in planlagt or planlagt[dato]["nokkel"] != r["nokkel"]:
+                if r.get("workout_id"):
+                    try:
+                        await self._tjeneste("garmin_connect", "delete_workout", {"entity_id": konto, "workout_id": int(r["workout_id"])})
+                    except Feil as e:
+                        log.info("Klarte ikke slette Garmin-økt %s: %s", r["workout_id"], e)
+                self.sb.db.kjor("DELETE FROM garmin_okter WHERE id = ?", (r["id"],))
+                fjernet += 1
+        for dato, x in planlagt.items():
+            if dato in lagret and lagret[dato]["nokkel"] == x["nokkel"]:
+                continue
+            res = await self._tjeneste("garmin_connect", "create_workout", {
+                "entity_id": konto, "workout": loping.garmin_okt(x["okt"]), "date": dato}, svar=True)
+            self.sb.db.kjor("INSERT OR REPLACE INTO garmin_okter (profil_id, periode_id, dato, nokkel, workout_id, schedule_id, tid) "
+                            "VALUES (?, ?, ?, ?, ?, ?, ?)", (pid, x["periode_id"], dato, x["nokkel"], str(res.get("workout_id") or ""),
+                                                            str(res.get("schedule_id") or ""), naa().isoformat(timespec="seconds")))
+            lagt_inn += 1
+        return {"lagt_inn": lagt_inn, "fjernet": fjernet}
 
     # ------------------------------------------------------------ AI
     async def ai_entiteter(self) -> list[dict]:

@@ -116,6 +116,8 @@ def importer_garmin(sb: "Styrkeboka", pid: int, akt: dict) -> bool:
     gtype = str(akt.get("activityType") or "")
     if not akt.get("activityId") or gtype in HOPP_OVER:
         return False
+    if str(akt.get("activityName") or "").startswith("Styrketrening:"):
+        return False  # økter appen selv har sendt til Garmin
     typ = GARMIN_TYPER.get(gtype, "annet")
     start = fra_iso(str(akt.get("startTime") or "")) if akt.get("startTime") else None
     if not start:
@@ -278,7 +280,10 @@ def oversikt(sb: "Styrkeboka", pid: int) -> dict:
     u = uker(sb, pid, 12)
     return {"maalinger": nokkel, "avledet": avledet(sb, pid), "uker": u, "denne_uka": u[-1],
             "aktiviteter": aktiviteter(sb, pid, 60, 30), "maaletyper": MAALETYPER, "aktivitetstyper": AKTIVITETSTYPER,
-            "koblinger": sb.profil(pid).get("koblinger") or {}}
+            "koblinger": sb.profil(pid).get("koblinger") or {},
+            "garmin_eksport": sb.profil(pid).get("garmin_eksport") or {},
+            "garmin_lagt_inn": sb.db.alle("SELECT dato, nokkel FROM garmin_okter WHERE profil_id = ? AND dato >= ? ORDER BY dato",
+                                          (pid, lokal_dato(sb)))}
 
 
 def ai_tekst(sb: "Styrkeboka", pid: int) -> str:
