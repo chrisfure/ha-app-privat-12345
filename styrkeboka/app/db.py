@@ -100,6 +100,12 @@ CREATE TABLE IF NOT EXISTS aktiviteter (
 );
 CREATE INDEX IF NOT EXISTS ix_akt_profil ON aktiviteter(profil_id, start);
 
+CREATE TABLE IF NOT EXISTS loepeperioder (
+  id INTEGER PRIMARY KEY, profil_id INTEGER NOT NULL, fra TEXT NOT NULL, til TEXT NOT NULL,
+  okter_per_uke INTEGER DEFAULT 2, niva TEXT DEFAULT 'vanlig', maal TEXT DEFAULT 'form',
+  juster_styrke INTEGER DEFAULT 1, opprettet TEXT
+);
+
 CREATE TABLE IF NOT EXISTS ai_logg (
   id INTEGER PRIMARY KEY, profil_id INTEGER, okt_id INTEGER, tid TEXT NOT NULL, type TEXT,
   sporsmal TEXT, svar TEXT

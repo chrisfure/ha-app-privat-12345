@@ -254,6 +254,7 @@
         el("button", { class: "chip liten", onclick: () => startOkt(null) }, ikon("pluss"), "Fri økt")));
     }
 
+    if (ov.loping) v.append(lopeKort(ov.loping));
     if (ov.mangler_startvekt && !ov.aktiv) {
       v.append(el("div", { class: "ai-kort" },
         el("h3", {}, ikon("manual"), "Hvor tungt skal du løfte?"),
@@ -329,6 +330,16 @@
     v.append(el("div", { class: "fremdrift" }, el("div", { style: `width:${pst}%` })));
     oppdaterOktHode();
 
+    const go = okt.generell_oppvarming;
+    if (go && !hent(`oppvarmet-${okt.id}`, false)) {
+      const aapen = !okt.nokkeltall.sett;
+      v.append(el("details", { class: "oppvarm-kort", ...(aapen ? { open: true } : {}) },
+        el("summary", {}, ikon("flamme"), el("span", {}, `Oppvarming · ca. ${go.minutter} min`)),
+        el("p", {}, go.puls),
+        el("ul", {}, go.bevegelser.map((b) => el("li", {}, b))),
+        el("p", { class: "forklaring" }, go.tekst),
+        el("button", { class: "knapp sekundaer liten", onclick: () => { lagre(`oppvarmet-${okt.id}`, true); tegnOkt(); } }, ikon("sjekk"), "Ferdig oppvarmet")));
+    }
     if (okt.lett) v.append(el("div", { class: "info-boks obs" }, ikon("info"), "Lettere uke: færre sett og samme vekt som sist. Stopp med god margin – denne uka teller ikke i vektforslagene."));
     const tipsRot = el("div", { id: "tips-rot" });
     v.append(tipsRot);
@@ -856,6 +867,75 @@
         } }, ikon("sjekk"), "Lagre")));
   }
 
+  // ================================================================ LØPING
+  function lopeKort(l) {
+    const typeIkon = { rolig: "lop", langtur: "lop", intervall: "flamme", lopgaa: "lop" };
+    return el("div", { class: "kort lope-kort" },
+      el("div", { class: "kort-hode" }, el("h2", {}, "Løping denne uka"), el("span", { class: "merkelapp aksent" }, `Uke ${l.uke} av ${l.uker}${l.lett_uke ? " · lettere" : ""}`)),
+      el("ul", { class: "lope-liste" }, l.plan.map((o, i) => el("li", { class: o.gjort ? "gjort" : i === l.plan.findIndex((x) => !x.gjort) ? "neste" : "" },
+        el("span", { class: "lope-ikon" }, ikon(o.gjort ? "sjekk" : typeIkon[o.type] || "lop")),
+        el("span", { class: "tekst" }, el("b", {}, o.tittel, el("span", { class: "akt-navn" }, ` · ${o.minutter} min`)),
+          o.gjort && o.logget ? el("small", {}, `Gjort ${dato(o.logget.start)}${o.logget.km ? ` · ${tall(o.logget.km)} km` : ""}${o.logget.tempo ? ` · ${o.logget.tempo} /km` : ""}`)
+            : el("small", {}, o.beskrivelse), !o.gjort ? el("small", { class: "puls" }, `Puls: ${o.puls}`) : null)))),
+      l.neste ? el("p", { class: "forklaring", style: "font-size:13px" }, "Turer fra klokka krysses av automatisk. Legg helst intervallene minst en dag før en tung beinøkt.") : el("p", { class: "forklaring" }, "Alle løpeturene denne uka er gjort – bra! 🏃"),
+      el("button", { class: "knapp noytral liten", style: "width:100%", onclick: () => aktivitetArk(null, { type: "loping", etter: visTrening }) }, ikon("pluss"), "Registrer løpetur selv"));
+  }
+
+  async function lopePerioderKort(rot) {
+    let d;
+    try { d = await api(`api/profiler/${pid}/loping`); } catch (e) { return; }
+    const i_dag = new Date().toLocaleDateString("sv-SE");
+    const rad = (x) => {
+      const status = x.fra <= i_dag && x.til >= i_dag ? "Pågår" : x.fra > i_dag ? "Kommer" : "Ferdig";
+      return el("div", { class: "versjon" },
+        el("span", { class: "tekst" }, el("b", {}, `${dato(x.fra)} – ${dato(x.til, true)}`),
+          el("small", {}, `${x.okter_per_uke} ${x.okter_per_uke === 1 ? "tur" : "turer"} i uka · ${d.nivaa[x.niva]} · mål: ${d.maal[x.maal].toLowerCase()}`)),
+        el("span", { class: `merkelapp ${status === "Pågår" ? "opp" : ""}` }, status),
+        el("button", { class: "ikonknapp", "aria-label": "Endre", onclick: () => lopeperiodeArk(x, d) }, ikon("blyant")));
+    };
+    rot.innerHTML = "";
+    rot.append(el("div", { class: "kort" },
+      el("div", { class: "kort-hode" }, el("h2", {}, "Løping i perioder")),
+      d.perioder.length ? el("div", {}, d.perioder.map(rad)) : el("p", { class: "forklaring" }, "Vil du løpe i tillegg i en periode – f.eks. om sommeren – legger appen inn 1–3 løpeturer i uka med gradvis økning, ved siden av styrkeprogrammet."),
+      el("button", { class: "knapp sekundaer liten", style: "width:100%", onclick: () => lopeperiodeArk(null, d) }, ikon("lop"), "Legg til løpeperiode")));
+  }
+
+  function lopeperiodeArk(x, d) {
+    const iso = (dt) => dt.toLocaleDateString("sv-SE");
+    const nesteMandag = () => { const t = new Date(); t.setDate(t.getDate() + ((8 - t.getDay()) % 7 || 7)); return t; };
+    const v = x ? { ...x } : (() => { const f = nesteMandag(); const t = new Date(f); t.setDate(t.getDate() + 8 * 7 - 1); return { fra: iso(f), til: iso(t), okter_per_uke: 2, niva: "vanlig", maal: "form", juster_styrke: 1 }; })();
+    const fra = el("input", { type: "date", value: v.fra, onchange: (e) => { v.fra = e.target.value; } });
+    const til = el("input", { type: "date", value: v.til, onchange: (e) => { v.til = e.target.value; } });
+    const hurtig = el("div", { class: "chips" },
+      el("button", { class: "chip liten", onclick: () => { const f = nesteMandag(); const t = new Date(f); t.setDate(t.getDate() + 55); fra.value = v.fra = iso(f); til.value = v.til = iso(t); } }, "8 uker fra mandag"),
+      el("button", { class: "chip liten", onclick: () => { const y = new Date().getMonth() > 7 ? new Date().getFullYear() + 1 : new Date().getFullYear(); fra.value = v.fra = `${y}-06-01`; til.value = v.til = `${y}-08-31`; } }, "Sommer (juni–august)"));
+    const seg = (valg, nokkel) => {
+      const e = el("div", { class: "segment" }, Object.entries(valg).map(([k, n]) => el("button", { class: String(v[nokkel]) === String(k) ? "valgt" : "", onclick: (ev) => {
+        v[nokkel] = isNaN(+k) ? k : +k; for (const b of e.children) b.classList.toggle("valgt", b === ev.currentTarget);
+      } }, n)));
+      return e;
+    };
+    const maal = el("div", { class: "chips" }, Object.entries(d.maal).map(([k, n]) => el("button", { class: `chip liten ${v.maal === k ? "valgt" : ""}`, onclick: (ev) => {
+      v.maal = k; for (const b of maal.children) b.classList.toggle("valgt", b === ev.currentTarget);
+    } }, n)));
+    aapneArk(el("h3", {}, ikon("lop"), x ? "Endre løpeperiode" : "Ny løpeperiode"),
+      el("p", { class: "hint" }, "I perioden får du en ukeplan for løping på forsiden: rolige turer, én intervalløkt (4×4-metoden) og en langtur, med gradvis økning og en lettere uke hver fjerde uke. Turer fra klokka krysses av automatisk."),
+      el("div", { class: "skjema" }, el("div", { class: "felt-rad" }, felt("Fra", fra), felt("Til", til)), hurtig,
+        el("div", { class: "felt" }, el("span", {}, "Løpeturer i uka"), seg({ 1: "1", 2: "2", 3: "3" }, "okter_per_uke")),
+        el("div", { class: "felt" }, el("span", {}, "Nivå"), seg({ nybegynner: "Ny (løp/gå)", vanlig: "Av og til", erfaren: "Jevnlig" }, "niva")),
+        el("div", { class: "felt" }, el("span", {}, "Mål"), maal),
+        el("div", { class: "liste-rad", style: "min-height:0;padding:0" }, el("span", { class: "tekst" }, el("b", {}, "Juster styrketreningen"), el("small", {}, "Ett sett mindre på hjelpeøvelser for bein i perioden, så beina tåler løpingen. Hovedøvelsene endres ikke.")),
+          bryter(!!v.juster_styrke, (b) => { v.juster_styrke = b ? 1 : 0; }))),
+      el("div", { class: "ark-knapper" },
+        x ? el("button", { class: "knapp fare", "aria-label": "Slett periode", onclick: async () => {
+          if (!(await bekreft("Slette løpeperioden?", "Løpeturene du har gjort beholdes.", "Slett", true))) return;
+          try { await slett(`api/loping/${x.id}`); visProgram(); } catch (e) { feil(e); }
+        } }, ikon("soppel")) : el("button", { class: "knapp noytral", onclick: lukkArk }, "Avbryt"),
+        el("button", { class: "knapp", onclick: async () => {
+          try { if (x) await patch(`api/loping/${x.id}`, v); else await post(`api/profiler/${pid}/loping`, v); lukkArk(); visToast("Løpeperioden er lagret"); visProgram(); } catch (e) { feil(e); }
+        } }, "Lagre")));
+  }
+
   // ================================================================ BLOKKER
   function blokkBanner(prid, b) {
     return el("div", { class: "velkommen" },
@@ -947,6 +1027,9 @@
         el("button", { class: "knapp noytral liten", style: "flex:1", onclick: startvekterArk }, ikon("manual"), "Startvekter"),
         el("button", { class: "knapp noytral liten", style: "flex:1", onclick: ovelsesbibliotek }, ikon("info"), "Øvelsesbibliotek")));
     }
+    const lopeRot = el("div");
+    v.append(lopeRot);
+    lopePerioderKort(lopeRot);
     const andre = d.programmer.filter((x) => !x.aktiv);
     if (andre.length) {
       v.append(el("div", { class: "seksjon-tittel" }, "Andre programmer"));
@@ -1388,7 +1471,7 @@
     try { kroppData = await api(`api/profiler/${pid}/kropp`); } catch (e) { feil(e); return; }
     const k = kroppData;
     const koblet = Object.keys(k.koblinger || {}).length > 0;
-    settTittel("Kropp", koblet ? "Hentes automatisk fra Home Assistant" : "");
+    settTittel("Helse", koblet ? "Hentes automatisk fra Home Assistant" : "");
     v.innerHTML = "";
 
     if (!koblet && S.ai_tilgjengelig) {
@@ -1520,8 +1603,9 @@
     setTimeout(() => felter.vekt.focus(), 250);
   }
 
-  function aktivitetArk(a) {
-    const k = kroppData;
+  const AKT_TYPER = { loping: { navn: "Løping" }, gaing: { navn: "Gåing" }, tur: { navn: "Fjelltur" }, sykling: { navn: "Sykling" }, ski: { navn: "Ski" }, svomming: { navn: "Svømming" }, annet: { navn: "Annet" } };
+  function aktivitetArk(a, { type = null, etter = null } = {}) {
+    const k = kroppData || { aktivitetstyper: AKT_TYPER };
     if (a && a.kilde !== "manuell") {
       aapneArk(el("h3", {}, ikon("lop"), a.navn || a.typenavn), el("p", { class: "hint" }, `${ukedag(a.start)} kl. ${kl(a.start)} · hentet fra klokka`),
         el("div", { class: "nokkeltall" },
@@ -1539,7 +1623,7 @@
         } }, ikon("soppel")), el("button", { class: "knapp", onclick: lukkArk }, "Lukk")));
       return;
     }
-    let typ = a?.type || "loping";
+    let typ = a?.type || type || "loping";
     const typer = el("div", { class: "chips" }, Object.entries(k.aktivitetstyper).map(([t, x]) => el("button", { class: `chip liten ${t === typ ? "valgt" : ""}`, onclick: (e) => {
       typ = t; for (const b of typer.children) b.classList.toggle("valgt", b === e.currentTarget);
     } }, x.navn)));
@@ -1555,7 +1639,7 @@
         a ? el("button", { class: "knapp fare", onclick: async () => { try { await slett(`api/aktiviteter/${a.id}`); lukkArk(); visKropp(); } catch (e) { feil(e); } } }, ikon("soppel")) : el("button", { class: "knapp noytral", onclick: lukkArk }, "Avbryt"),
         el("button", { class: "knapp", onclick: async () => {
           const body = { type: typ, start: new Date(tid.value).toISOString(), minutter: min.value, km: km.value, snittpuls: puls.value, notat: notat.value };
-          try { if (a) await patch(`api/aktiviteter/${a.id}`, body); else await post(`api/profiler/${pid}/aktiviteter`, body); lukkArk(); visToast("Aktivitet lagret"); visKropp(); } catch (e) { feil(e); }
+          try { if (a) await patch(`api/aktiviteter/${a.id}`, body); else await post(`api/profiler/${pid}/aktiviteter`, body); lukkArk(); visToast("Aktivitet lagret"); (etter || visKropp)(); } catch (e) { feil(e); }
         } }, "Lagre")));
   }
 

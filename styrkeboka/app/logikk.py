@@ -522,7 +522,8 @@ class Styrkeboka:
         lagret = self.db.en("SELECT kg, kilde FROM startvekter WHERE profil_id = ? AND ovelse = ?", (pid, ov["nokkel"]))
         if lagret:
             kilde = {"ai": "fra AI-treneren", "manuell": "som du la inn"}.get(lagret["kilde"], "anslått")
-            return {**f, "kg": lagret["kg"], "tekst": f"Startvekt {kilde}: {P._kg(lagret['kg'])}. Juster etter første sett – "
+            kg = P.rund_til_utstyr(ov, lagret["kg"])
+            return {**f, "kg": kg, "tekst": f"Startvekt {kilde}: {P._kg(kg)}. Juster etter første sett – "
                     f"målet er {plan.get('reps_min')}–{plan.get('reps_maks')} reps med {plan.get('rir', 2)} i reserve."}
         est = self.anslag_fra_historikk(pid, ov, plan)
         if est:
@@ -677,7 +678,9 @@ class Styrkeboka:
                     if alt:
                         erstattet, ov = po["ovelse"], alt
                 brukt.add(ov["nokkel"])
-                self._sett_inn_okt_ovelse(oid, i, ov, P.lett_dose(po) if lett else po, pid, programovelse_id=po["id"],
+                import loping
+                plan = loping.juster_plan(self, pid, P.lett_dose(po) if lett else po, ov["monster"], bool(po.get("fast")))
+                self._sett_inn_okt_ovelse(oid, i, ov, plan, pid, programovelse_id=po["id"],
                                           erstattet_fra=erstattet, lett=lett)
             self.db.commit()
         okt = self.okt(oid)
@@ -703,7 +706,7 @@ class Styrkeboka:
         o = self._okt_rad(oid)
         alle_sett = self.db.alle("SELECT * FROM sett WHERE okt_id = ? ORDER BY tid, id", (oid,))
         o["ovelser"] = []
-        forste_tunge = True
+        varmet: set[str] = set()
         for oo in self.db.alle("SELECT * FROM okt_ovelser WHERE okt_id = ? ORDER BY rekkefolge, id", (oid,)):
             ov = self.ovelse(oo["ovelse"])
             oo["info"] = {k: ov.get(k) for k in ("navn", "monster", "type", "utstyr", "muskler", "tips", "egen", "instruksjon")}
@@ -714,12 +717,15 @@ class Styrkeboka:
             if oo["erstattet_fra"]:
                 oo["erstattet_navn"] = self.ovelse(oo["erstattet_fra"])["navn"]
             oo["oppvarming"] = []
-            if forste_tunge and vektbasert(ov) and ov["monster"] in P.STORE:
-                oo["oppvarming"] = P.oppvarming(oo["forslag_kg"], ov)
-                forste_tunge = False
+            region = "under" if ov["monster"] in P.UNDERKROPP else "over" if ov["monster"] in P.OVERKROPP else None
+            if region and vektbasert(ov) and ov.get("sammensatt"):
+                oo["oppvarming"] = P.oppvarming(oo["forslag_kg"], ov, kort=region in varmet)
+                if oo["oppvarming"] or oo["forslag_kg"]:
+                    varmet.add(region)
             arbeid = [s for s in oo["sett"] if not s["oppvarming"]]
             oo["ferdig"] = len(arbeid) >= oo["sett_plan"]
             o["ovelser"].append(oo)
+        o["generell_oppvarming"] = P.generell_oppvarming([x["info"]["monster"] for x in o["ovelser"]])
         arbeid = [s for s in alle_sett if not s["oppvarming"]]
         o["nokkeltall"] = {
             "sett": len(arbeid),
@@ -1067,6 +1073,7 @@ class Styrkeboka:
             "profil": p, "program": {"id": prog["id"], "navn": prog["navn"], "blokk": prog["blokk"],
                                      "dager": [{"id": d["id"], "navn": d["navn"]} for d in prog["dager"]]} if prog else None,
             "neste": neste_ut, "aktiv": aktiv, "mangler_startvekt": self.mangler_startvekt(pid) if prog else 0,
+            "loping": self._loping_kort(pid),
             "sist": {"id": sist["id"], "startet": sist["startet"], "dag_navn": sist["dag_navn"]} if sist else None,
             "uke": {"okter": st["denne_uka"], "plan": st["plan_per_uke"], "uker_paa_rad": st["uker_paa_rad"],
                     "aktivitetsminutter": self._kropp_attributter(pid)["aktivitetsminutter_uke"]},
@@ -1097,6 +1104,11 @@ class Styrkeboka:
                 },
             }
         return ut
+
+    def _loping_kort(self, pid: int) -> dict | None:
+        import loping
+        s = loping.status(self, pid)
+        return s["aktiv"]
 
     def _kropp_attributter(self, pid: int) -> dict:
         import kropp

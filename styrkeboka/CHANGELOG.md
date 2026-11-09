@@ -1,5 +1,12 @@
 # Endringslogg
 
+## 0.6.0
+
+- Fanen «Kropp» heter nå «Helse».
+- Oppvarming: generell oppvarming (5 min lett puls + bevegelighet tilpasset dagens øvelser) øverst i økta, og oppvarmingssett på første tunge øvelse for både underkropp og overkropp – med et kort tilvenningssett på neste tunge øvelse.
+- Løpeperioder: legg inn en periode (f.eks. sommeren) med 1–3 løpeturer i uka. Ukeplan med rolig tur, intervaller (4×4-metoden) og langtur, gradvis økning, lettere uke hver 4. uke og pulssoner. Turer fra klokka krysses av automatisk. Valgfritt: ett sett mindre på hjelpeøvelser for bein i perioden.
+- AI-treneren kjenner løpeperioden og ukas løpeturer.
+
 ## 0.5.0
 
 - Ny fane «Kropp»: vekt, midjemål, fettprosent, hvilepuls, VO₂max, skritt og blodtrykk med kurver over tid (vekt med 7 dagers snitt).

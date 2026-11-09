@@ -336,3 +336,36 @@ def test_ha_synk(sb, monkeypatch):
     assert [v["verdi"] for v in vekter] == [83.0, 81.2]
     assert kropp.siste(sb, pid, "skritt")["verdi"] == 8000
     assert kropp.siste(sb, pid, "hvilepuls")["verdi"] == 55
+
+
+
+def test_lopeperiode(sb):
+    from datetime import timedelta
+    import kropp
+    import loping
+    pid = sb.profiler()[0]["id"]
+    i_dag = sb.lokal(sb_naa()).date()
+    p = loping.lagre_periode(sb, pid, {"fra": (i_dag - timedelta(days=8)).isoformat(), "til": (i_dag + timedelta(weeks=7)).isoformat(),
+                                       "okter_per_uke": 3, "niva": "vanlig", "maal": "10km"})
+    s = loping.status(sb, pid)
+    a = s["aktiv"]
+    assert a and a["uke"] in (2, 3) and len(a["plan"]) == 3 and a["gjort"] == 0
+    assert [o["type"] for o in a["plan"]] == ["rolig", "intervall", "langtur"]
+    kropp.importer_garmin(sb, pid, {**GARMIN_LOP, "startTime": _naa_iso(0)})
+    assert loping.status(sb, pid)["aktiv"]["gjort"] == 1
+    # nybegynner får løp/gå, 4. uke er lettere
+    assert loping.ukeplan({"okter_per_uke": 2, "niva": "nybegynner"}, 1)[0]["type"] == "lopgaa"
+    assert loping.ukeplan({"okter_per_uke": 1, "niva": "vanlig"}, 4)[0]["minutter"] < loping.ukeplan({"okter_per_uke": 3, "niva": "vanlig"}, 5)[2]["minutter"]
+    # juster styrke: hjelpeøvelse for bein får ett sett mindre, faste øvelser ikke
+    assert loping.juster_plan(sb, pid, {"sett": 3}, "utfall", False)["sett"] == 2
+    assert loping.juster_plan(sb, pid, {"sett": 3}, "kne", True)["sett"] == 3
+    assert "Løpeperiode aktiv" in loping.ai_tekst(sb, pid)
+
+
+def test_oppvarming_per_kroppsdel(sb):
+    pid = sb.profiler()[0]["id"]
+    prog = sb.lagre_program(pid, sb.foreslaa_program(pid), kilde="mal")
+    sb.lagre_startvekter(pid, {o["ovelse"]: 60 for d in prog["dager"] for o in d["ovelser"]}, "manuell")
+    okt = sb.start_okt(pid, prog["dager"][0]["id"])
+    med = [oo for oo in okt["ovelser"] if oo["oppvarming"]]
+    assert len(med) >= 2 and okt["generell_oppvarming"]["bevegelser"]

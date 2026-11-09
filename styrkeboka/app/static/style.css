@@ -535,3 +535,25 @@ body.har-hvile .toast { bottom: calc(166px + env(safe-area-inset-bottom)); }
 .dato-boks.akt-sykling { background: var(--blaa-lys); color: var(--blaa-blekk); }
 .dato-boks.akt-ski, .dato-boks.akt-svomming { background: var(--blaa-lys); color: var(--blaa-blekk); }
 .faner button { font-size: 11.5px; }
+
+/* ---- oppvarming og løping ---- */
+.oppvarm-kort { background: var(--oransje-lys); color: var(--oransje-blekk); border-radius: 22px; padding: 14px 16px; }
+.oppvarm-kort summary { display: flex; align-items: center; gap: 8px; font-weight: 900; font-size: 16px; cursor: pointer; list-style: none; }
+.oppvarm-kort summary::-webkit-details-marker { display: none; }
+.oppvarm-kort summary svg { width: 20px; height: 20px; }
+.oppvarm-kort p { margin: 10px 0 0; font-weight: 700; line-height: 1.45; }
+.oppvarm-kort ul { margin: 8px 0 0; padding-left: 20px; font-weight: 700; display: flex; flex-direction: column; gap: 4px; }
+.oppvarm-kort .forklaring { color: inherit; opacity: .85; }
+.oppvarm-kort .knapp { margin-top: 12px; width: 100%; background: rgba(255,255,255,.55); color: inherit; }
+.lope-liste { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.lope-liste li { display: flex; gap: 12px; padding: 10px 0; border-top: 1px solid var(--linje); }
+.lope-liste li:first-child { border-top: 0; }
+.lope-liste .tekst { flex: 1; min-width: 0; }
+.lope-liste b { font-weight: 900; }
+.lope-liste small { display: block; color: var(--dempet); font-weight: 700; font-size: 13px; line-height: 1.4; margin-top: 2px; }
+.lope-liste small.puls { color: var(--oransje-blekk); }
+.lope-ikon { width: 36px; height: 36px; border-radius: 12px; display: grid; place-items: center; background: var(--flate-2); color: var(--dempet); flex: none; }
+.lope-ikon svg { width: 20px; height: 20px; }
+.lope-liste li.gjort .lope-ikon { background: var(--opp-lys); color: var(--opp-blekk); }
+.lope-liste li.gjort b { color: var(--dempet); }
+.lope-liste li.neste .lope-ikon { background: var(--oransje-lys); color: var(--oransje-blekk); }

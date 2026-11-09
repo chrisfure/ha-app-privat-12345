@@ -16,7 +16,7 @@ Alt lagres lokalt i appens egen database. Ingen navn eller treningsdata ligger i
 * **Trening** – neste økt i programmet med foreslått vekt per øvelse, valg av treningssted, ukemål og «uker på rad». Start økten, velg en annen økt eller en fri økt.
 * **Program** – det aktive programmet, «Juster med AI», redigering, tidligere versjoner og andre programmer.
 * **Historikk** – alle økter (trykk for detaljer og endring), fremgang per øvelse med graf, økter per uke og harde sett per muskelgruppe.
-* **Kropp** – målinger med kurver, løping/gåing og annen aktivitet, aktivitetsminutter og kroppsprofil.
+* **Helse** – målinger med kurver, løping/gåing og annen aktivitet, aktivitetsminutter og kroppsprofil.
 * **Mer** – profiler, treningssteder og utstyr, AI-treneren, hviletimer, egne øvelser og eksport.
 
 ## Under økta
@@ -27,7 +27,7 @@ Alt lagres lokalt i appens egen database. Ingen navn eller treningsdata ligger i
 * **Slik gjør du** viser utgangsstilling, steg for steg, pust og vanlige feil for øvelsen. Hele biblioteket finner du under Program → Øvelsesbibliotek.
 * **Bytt** gir øvelser med samme bevegelse. Velg om byttet bare gjelder i dag eller også i programmet.
 * **Mer**: endre mål for dagen (sett, reps, hvile), notat, flytt eller fjern øvelsen. Legg til øvelser underveis.
-* Oppvarmingssett foreslås for den første tunge øvelsen – trykk på dem for å logge.
+* **Oppvarming:** øverst i økta står en generell oppvarming (5 min lett puls + bevegelighet for leddene som skal jobbe). Den første tunge øvelsen for underkroppen og for overkroppen får oppvarmingssett, og neste tunge øvelse et kort tilvenningssett – trykk på dem for å logge.
 * Økta lagres fortløpende, så du kan lukke appen og fortsette senere eller på en annen enhet.
 
 ## Programmet og progresjon
@@ -54,6 +54,16 @@ Første gang du gjør en øvelse, foreslår appen vekt i denne rekkefølgen:
 
 Anslagene er litt forsiktige med vilje. Etter første økt er det din egen fremgang som styrer forslagene.
 
+### Løpeperioder
+
+Under **Program → Løping i perioder** kan du legge inn en periode (f.eks. «Sommer (juni–august)» eller «8 uker fra mandag») med 1–3 løpeturer i uka:
+
+* **Ukeplan på forsiden** – rolig tur, intervalløkt (4×4 min i sone 4, med kortere drag i starten) og langtur, med gradvis økning og en lettere uke hver fjerde uke. Nybegynnere får løp/gå-intervaller.
+* **Pulssoner** regnes fra estimert makspuls (krever fødselsår i profilen).
+* **Turer fra klokka krysses av automatisk.** Uten klokke: «Registrer løpetur selv».
+* **Juster styrketreningen** (på som standard): ett sett mindre på hjelpeøvelser for bein i perioden. Hovedøvelsene endres ikke.
+* Legg helst intervalløkta minst en dag før en tung beinøkt.
+
 ### Treningsblokker
 
 Programmet går i blokker på **6 uker** (anbefalt; kan settes til 4–8 under Program → blokklinja).
@@ -64,9 +74,9 @@ Programmet går i blokker på **6 uker** (anbefalt; kan settes til 4–8 under P
 
 Hver endring av programmet lagres som en versjon, så du alltid kan gå tilbake.
 
-## Kropp og kondisjon
+## Helse: kropp og kondisjon
 
-Fanen **Kropp** samler kroppen og all aktivitet utenom styrketreningen:
+Fanen **Helse** samler kroppen og all aktivitet utenom styrketreningen:
 
 * **Målinger med kurver** – vekt (med 7 dagers snitt), midjemål, fettprosent, hvilepuls, VO₂max, skritt og blodtrykk. Legg inn selv med «Ny måling», eller hent automatisk.
 * **Løping, gåing og annen aktivitet** – distanse, tid, tempo, puls og høydemeter. Registrer manuelt eller hent fra klokka.
@@ -75,7 +85,7 @@ Fanen **Kropp** samler kroppen og all aktivitet utenom styrketreningen:
 
 ### Automatisk henting fra Home Assistant
 
-Har du f.eks. Garmin Connect-integrasjonen, trykk **Kropp → Hent data automatisk** og velg sensorene som hører til profilen (appen foreslår ut fra navnene). Aktiviteter hentes fra sensoren med `last_activities`, og vekt, hvilepuls, VO₂max, skritt og fettprosent fra de vanlige sensorene. Første gang hentes også historikk bakover (så langt Home Assistant har den), deretter hvert kvarter.
+Har du f.eks. Garmin Connect-integrasjonen, trykk **Helse → Hent data automatisk** og velg sensorene som hører til profilen (appen foreslår ut fra navnene). Aktiviteter hentes fra sensoren med `last_activities`, og vekt, hvilepuls, VO₂max, skritt og fettprosent fra de vanlige sensorene. Første gang hentes også historikk bakover (så langt Home Assistant har den), deretter hvert kvarter.
 
 * Styrketrening registrert på klokka hoppes over – den logges i appen.
 * GPS-posisjoner lagres ikke.

@@ -261,19 +261,52 @@ def e1rm(vekt: float | None, reps: int | None) -> float | None:
     return round(vekt * (1 + reps / 30), 1) if reps > 1 else float(vekt)
 
 
-def oppvarming(kg: float | None, ovelse: dict) -> list[dict]:
-    """Enkel oppvarmingsstige for den første tunge øvelsen."""
+UNDERKROPP = {"kne", "hofte", "utfall", "sete"}
+OVERKROPP = {"press_hor", "press_vert", "trekk_hor", "trekk_vert"}
+
+
+def oppvarming(kg: float | None, ovelse: dict, kort: bool = False) -> list[dict]:
+    """Oppvarmingssett før en tung øvelse. Full stige for første tunge øvelse per kroppsdel,
+    ett tilvenningssett (kort) for neste tunge øvelse for samme kroppsdel."""
     if not kg or ovelse.get("type") not in ("stang", "manualer", "maskin") or kg < 20:
         return []
     steg = steg_for(ovelse, kg)
-    trinn = [(0.5, 8), (0.7, 5)] if kg < 60 else [(0.4, 8), (0.6, 5), (0.8, 3)]
+    if kort:
+        if kg < 40:
+            return []
+        trinn = [(0.6, 5)]
+    else:
+        trinn = [(0.5, 8), (0.7, 5)] if kg < 60 else [(0.4, 8), (0.6, 5), (0.8, 3)]
     ut = []
     for andel, r in trinn:
         v = avrund(kg * andel, steg)
         if ovelse.get("type") == "stang":
             v = max(v, 20.0)
-        ut.append({"kg": v, "reps": r})
+        if v < kg:
+            ut.append({"kg": v, "reps": r})
     return ut
+
+
+def generell_oppvarming(monstre: list[str]) -> dict:
+    """Generell oppvarming tilpasset dagens øvelser: 5 min lett puls + bevegelighet for leddene som skal jobbe."""
+    m = set(monstre)
+    bevegelser = []
+    if m & UNDERKROPP:
+        bevegelser += ["10 knebøy uten vekt, rolig og dypt", "10 utfall bakover (5 per bein)", "10 hoftehengsler med hendene på hoftene"]
+    if m & {"kne", "utfall"}:
+        bevegelser.append("Ankelmobilitet: kne mot vegg, 10 per side")
+    if m & OVERKROPP or m & {"skulderhelse", "skuldre_iso"}:
+        bevegelser += ["10 armsirkler hver vei", "15 strikk-dragninger fra hverandre (eller armhevinger mot vegg)"]
+    if m & {"press_vert", "trekk_vert"}:
+        bevegelser.append("10 «veggengler» – armene opp og ned langs veggen")
+    if not bevegelser:
+        bevegelser = ["10 knebøy uten vekt", "10 armsirkler hver vei"]
+    return {
+        "minutter": 5 + min(3, len(bevegelser) // 2),
+        "puls": "5 min lett kondisjon: rask gange, sykkel, romaskin eller hopping på stedet – til du blir varm og litt andpusten.",
+        "bevegelser": bevegelser,
+        "tekst": "Deretter gjør du oppvarmingssettene som står på de tunge øvelsene.",
+    }
 
 
 def beregn_tid(dag: list[dict]) -> int:

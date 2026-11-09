@@ -60,7 +60,10 @@ def profilkontekst(sb: Styrkeboka, pid: int, upid: int | None = None) -> str:
     if (p.get("hensyn") or "").strip():
         linjer.append(f"Hensyn/skader brukeren har oppgitt: {p['hensyn'].strip()}")
     import kropp
+    import loping
     linjer.append(kropp.ai_tekst(sb, pid))
+    if (lt := loping.ai_tekst(sb, pid)):
+        linjer.append(lt)
     return "\n".join(linjer)
 
 

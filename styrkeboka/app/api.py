@@ -8,6 +8,7 @@ from typing import Any, Awaitable, Callable, Protocol
 
 import ai
 import kropp
+import loping
 import program as P
 from db import naa
 from logikk import FARGER, TYPER, Feil, Styrkeboka
@@ -288,6 +289,27 @@ class API:
             if not hasattr(self.ai, "synk_profil"):
                 return {"importert": 0, "maalinger": 0}
             return await self.ai.synk_profil(sb.profil(req.int("pid")), historikk=bool(req.data.get("historikk")))
+
+        # ---- løpeperioder
+        @r("GET", "/api/profiler/{pid}/loping")
+        async def loping_status(req):
+            return loping.status(sb, req.int("pid"))
+
+        @r("POST", "/api/profiler/{pid}/loping")
+        async def ny_periode(req):
+            return {"periode": loping.lagre_periode(sb, req.int("pid"), req.data)}
+
+        @r("PATCH", "/api/loping/{lid}")
+        async def endre_periode(req):
+            p = sb.db.en("SELECT * FROM loepeperioder WHERE id = ?", (req.int("lid"),))
+            if not p:
+                raise Feil("Fant ikke perioden")
+            return {"periode": loping.lagre_periode(sb, p["profil_id"], {**p, **req.data}, p["id"])}
+
+        @r("DELETE", "/api/loping/{lid}")
+        async def slett_periode(req):
+            sb.db.slett("loepeperioder", req.int("lid"))
+            return {"ok": True}
 
         # ---- startvekter
         @r("GET", "/api/profiler/{pid}/startvekter")
