@@ -1,5 +1,5 @@
 name: Styrkeboka
-version: "0.7.0"
+version: "0.8.0"
 slug: styrkeboka
 description: Styrketrening med program, logging av sett og AI-trener – med full historikk.
 url: https://github.com/chrisfure/ha-app-privat-12345
@@ -13,4 +13,8 @@ panel_icon: mdi:dumbbell
 panel_title: Styrkeboka
 panel_admin: false
 homeassistant_api: true
-# Alle innstillinger gjøres inne i appen (fanen «Innstillinger»).
+# Lese og slette aktivitetsfiler fra Garmin (pulskurver) i <config>/garmin_activities
+map:
+  - type: homeassistant_config
+    read_only: false
+# Alle innstillinger gjøres inne i appen (fanen «Mer»).

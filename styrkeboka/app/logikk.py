@@ -729,6 +729,7 @@ class Styrkeboka:
             oo["ferdig"] = len(arbeid) >= oo["sett_plan"]
             o["ovelser"].append(oo)
         o["generell_oppvarming"] = P.generell_oppvarming([x["info"]["monster"] for x in o["ovelser"]])
+        o["klokke"] = self._klokke(oid, alle_sett)
         arbeid = [s for s in alle_sett if not s["oppvarming"]]
         o["nokkeltall"] = {
             "sett": len(arbeid),
@@ -741,6 +742,25 @@ class Styrkeboka:
             up = self.db.en("SELECT navn FROM utstyrsprofiler WHERE id = ?", (o["utstyrsprofil_id"],))
             o["sted"] = up["navn"] if up else None
         return o
+
+    def _klokke(self, oid: int, alle_sett: list[dict]) -> dict | None:
+        """Pulsdata fra en styrkeøkt registrert på klokka, koblet til denne økta."""
+        import kropp
+        a = self.db.en("SELECT * FROM aktiviteter WHERE okt_id = ? AND type = 'styrke'", (oid,))
+        if not a:
+            return None
+        p = kropp.puls(self, a["id"])
+        serie = (p or {}).get("data") or []
+        ut = {k: a.get(k) for k in ("id", "start", "varighet_s", "snittpuls", "makspuls", "kalorier", "belastning", "aerob_effekt", "soner")}
+        ut["puls"] = serie
+        ut["puls_start"] = (p or {}).get("start")
+        ut["puls_hentet"] = p is not None
+        if serie:
+            ut["analyse"] = kropp.puls_analyse(serie, alle_sett, p["start"])
+            t0 = fra_iso(p["start"])
+            ut["sett_tider"] = [{"t": round((fra_iso(s["tid"]) - t0).total_seconds()), "ovelse": s["ovelse"], "oppvarming": s["oppvarming"]}
+                                for s in alle_sett]
+        return ut
 
     def _minutter(self, o: dict) -> int:
         slutt = fra_iso(o["avsluttet"]) if o.get("avsluttet") else naa()

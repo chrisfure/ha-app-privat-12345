@@ -106,6 +106,10 @@ CREATE TABLE IF NOT EXISTS loepeperioder (
   juster_styrke INTEGER DEFAULT 1, opprettet TEXT
 );
 
+CREATE TABLE IF NOT EXISTS pulsdata (
+  aktivitet_id INTEGER PRIMARY KEY REFERENCES aktiviteter(id) ON DELETE CASCADE, start TEXT NOT NULL, data TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS garmin_okter (
   id INTEGER PRIMARY KEY, profil_id INTEGER NOT NULL, periode_id INTEGER, dato TEXT NOT NULL, nokkel TEXT NOT NULL,
   workout_id TEXT, schedule_id TEXT, tid TEXT, UNIQUE (profil_id, dato)
@@ -117,7 +121,7 @@ CREATE TABLE IF NOT EXISTS ai_logg (
 );
 """
 
-JSON_FELT = {"utstyr", "muskler", "maal", "ai_tips", "ai_oppsummering", "data", "kjente_loft", "koblinger", "lopedager", "garmin_eksport"}
+JSON_FELT = {"utstyr", "muskler", "maal", "ai_tips", "ai_oppsummering", "data", "kjente_loft", "koblinger", "lopedager", "garmin_eksport", "soner"}
 
 
 class Database:
@@ -141,6 +145,7 @@ class Database:
             "programovelser": [("fast", "INTEGER DEFAULT 0")],
             "okter": [("lett", "INTEGER DEFAULT 0"), ("blokk_nr", "INTEGER"), ("garmin_sendt", "TEXT")],
             "loepeperioder": [("lopedager", "TEXT DEFAULT '[]'")],
+            "aktiviteter": [("soner", "TEXT"), ("okt_id", "INTEGER")],
             "profiler": [("kroppsvekt", "REAL"), ("kjente_loft", "TEXT DEFAULT '[]'"), ("fodselsaar", "INTEGER"),
                          ("hoyde_cm", "REAL"), ("kjonn", "TEXT"), ("koblinger", "TEXT DEFAULT '{}'"),
                          ("garmin_eksport", "TEXT DEFAULT '{}'")],

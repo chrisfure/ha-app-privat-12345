@@ -256,6 +256,36 @@ class API:
                 return {"aktivitet": kropp.aktivitet(sb, a["id"])}
             return {"aktivitet": kropp.lagre_aktivitet(sb, a["profil_id"], req.data, a["id"])}
 
+        @r("GET", "/api/aktiviteter/{aid}")
+        async def hent_aktivitet(req):
+            a = kropp.aktivitet(sb, req.int("aid"))
+            if not a:
+                raise Feil("Fant ikke aktiviteten")
+            p = kropp.puls(sb, a["id"])
+            return {"aktivitet": a, "puls": (p or {}).get("data") or [], "puls_hentet": p is not None}
+
+        @r("POST", "/api/aktiviteter/{aid}/puls")
+        async def hent_aktivitet_puls(req):
+            if not hasattr(self.ai, "hent_puls"):
+                raise Feil("Garmin er ikke tilgjengelig")
+            ok = await self.ai.hent_puls(req.int("aid"))
+            p = kropp.puls(sb, req.int("aid"))
+            if not ok and not (p or {}).get("data"):
+                raise Feil("Fant ingen pulsdata for denne aktiviteten")
+            return {"puls": (p or {}).get("data") or []}
+
+        @r("POST", "/api/okter/{oid}/klokke")
+        async def okt_klokke(req):
+            oid = req.int("oid")
+            o = sb.okt(oid)
+            kropp.koble_styrke(sb, o["profil_id"])
+            if hasattr(self.ai, "synk_profil") and not sb.okt(oid).get("klokke"):
+                await self.ai.synk_profil(sb.profil(o["profil_id"]))
+            k = sb.okt(oid).get("klokke")
+            if k and not k["puls_hentet"] and hasattr(self.ai, "hent_puls"):
+                await self.ai.hent_puls(k["id"])
+            return {"okt": sb.okt(oid)}
+
         @r("DELETE", "/api/aktiviteter/{aid}")
         async def slett_aktivitet(req):
             sb.db.slett("aktiviteter", req.int("aid"))

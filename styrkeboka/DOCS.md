@@ -64,6 +64,13 @@ Under **Program → Løping i perioder** kan du legge inn en periode (f.eks. «S
 * **Juster styrketreningen** (på som standard): ett sett mindre på hjelpeøvelser for bein i perioden. Hovedøvelsene endres ikke.
 * Legg helst intervalløkta minst en dag før en tung beinøkt.
 
+### Puls fra klokka
+
+* **Styrkeøkter fra klokka kobles til økta i appen** når de starter omtrent samtidig. Økta i appen får da pulskurve med streker der settene ble logget, tid i pulssoner, kalorier og treningsbelastning – og «puls per øvelse»: snittet av pulstoppene i settene og pulsen rett før neste sett.
+* **Løpeturer og andre aktiviteter** får pulskurve, tempo (min/km) og tid i soner.
+* **AI-treneren** bruker pulsen i oppsummeringen av økta.
+* Pulskurvene hentes med `garmin_connect.download_activity` (TCX-fil) for aktiviteter de siste tre ukene. Appen leser puls og fart og **sletter fila** etterpå, så GPS-sporet ikke blir liggende i Home Assistant eller i sikkerhetskopiene. Derfor har appen tilgang til Home Assistant-mappa (`homeassistant_config`), men den bruker bare `garmin_activities`.
+
 ### Til Garmin Connect
 
 Er profilen koblet til Garmin (Helse → Hent data fra Home Assistant), finner du **Helse → Til Garmin Connect**:

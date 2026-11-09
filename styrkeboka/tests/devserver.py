@@ -43,6 +43,23 @@ class FalskAI:
                             (p["id"], o["periode_id"], o["dato"], o["nokkel"], "1", naa().isoformat()))
         return {"lagt_inn": len(x), "fjernet": 0}
 
+    async def hent_puls(self, aid):
+        import math
+        import kropp
+        a = self.sb.db.en("SELECT * FROM aktiviteter WHERE id = ?", (aid,))
+        dur = int(a.get("varighet_s") or 1800)
+        if a["type"] == "styrke":
+            sett = [r for r in self.sb.db.alle("SELECT tid FROM sett WHERE okt_id = ?", (a["okt_id"],))]
+            from db import fra_iso
+            t0 = fra_iso(a["start"])
+            tider = [(fra_iso(r["tid"]) - t0).total_seconds() for r in sett]
+            serie = [[t, int(95 + max([0] + [55 * math.exp(-((t - st + 20) ** 2) / 900) for st in tider])), None] for t in range(0, dur, 5)]
+        else:
+            serie = [[t, int(120 + 40 * (1 - math.exp(-t / 300)) + (15 if (t // 240) % 2 and a["type"] == "loping" else 0)),
+                      2.9 + (0.6 if (t // 240) % 2 else 0)] for t in range(0, dur, 5)]
+        kropp.lagre_puls(self.sb, aid, a["start"], serie)
+        return True
+
     async def send_okt_til_garmin(self, oid, tving=False):
         from db import naa
         self.sb.db.oppdater("okter", oid, {"garmin_sendt": naa().isoformat()})

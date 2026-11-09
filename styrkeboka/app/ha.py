@@ -234,9 +234,60 @@ class HAKobling:
                     continue  # dagens skritt er ikke ferdige – vent til dagen er over
                 if kropp.lagre_maaling(self.sb, pid, typ, verdi, dag.isoformat(), kilde="ha"):
                     maalt += 1
-        if importert or maalt:
+        koblet = kropp.koble_styrke(self.sb, pid)
+        hentet = 0
+        if k.get("aktiviteter"):
+            hentet = await self.hent_manglende_puls(profil, maks=6 if historikk else 3)
+        if importert or maalt or koblet:
             self._ved_endring("profil", None)
-        return {"importert": importert, "maalinger": maalt}
+        return {"importert": importert, "maalinger": maalt, "koblet": koblet, "pulskurver": hentet}
+
+    # ------------------------------------------------------------ pulskurver (TCX via garmin_connect.download_activity)
+    HA_CONFIG = "/homeassistant"
+
+    async def hent_puls(self, aid: int) -> bool:
+        """Laster ned aktivitetsfila fra Garmin, leser pulsen og sletter fila igjen."""
+        a = self.sb.db.en("SELECT * FROM aktiviteter WHERE id = ?", (aid,))
+        if not a or a["kilde"] != "garmin" or not str(a.get("ekstern_id") or "").startswith("garmin-"):
+            return False
+        konto = self.garmin_konto(self.sb.profil(a["profil_id"]))
+        if not self.aktiv or not konto:
+            return False
+        res = await self._tjeneste("garmin_connect", "download_activity", {
+            "entity_id": konto, "activity_id": int(a["ekstern_id"].split("-", 1)[1]), "file_format": "tcx"}, svar=True)
+        sti = str(res.get("file_path") or "")
+        lokal = sti.replace("/config/", f"{self.HA_CONFIG}/", 1) if sti.startswith("/config/") else sti
+        if not lokal or not os.path.exists(lokal):
+            log.warning("Fant ikke aktivitetsfila %s – mangler appen tilgang til Home Assistant-mappa?", lokal)
+            return False
+        try:
+            with open(lokal, encoding="utf-8") as f:
+                start, serie = kropp.les_tcx(f.read())
+        finally:
+            try:
+                os.remove(lokal)  # fila inneholder GPS-spor – den skal ikke bli liggende
+            except OSError as e:
+                log.info("Kunne ikke slette %s: %s", lokal, e)
+        if not serie:
+            kropp.lagre_puls(self.sb, aid, a["start"], [])
+            return False
+        kropp.lagre_puls(self.sb, aid, start or a["start"], serie)
+        return True
+
+    async def hent_manglende_puls(self, profil: dict, maks: int = 3) -> int:
+        fra = (naa() - timedelta(days=21)).isoformat(timespec="seconds")
+        kandidater = self.sb.db.alle(
+            "SELECT a.id FROM aktiviteter a LEFT JOIN pulsdata p ON p.aktivitet_id = a.id WHERE a.profil_id = ? AND a.kilde = 'garmin' "
+            "AND p.aktivitet_id IS NULL AND a.start >= ? AND (a.type != 'styrke' OR a.okt_id IS NOT NULL) ORDER BY a.start DESC LIMIT ?",
+            (profil["id"], fra, maks))
+        n = 0
+        for r in kandidater:
+            try:
+                if await self.hent_puls(r["id"]):
+                    n += 1
+            except Exception as e:  # noqa: BLE001
+                log.warning("Pulskurve for aktivitet %s feilet: %s", r["id"], e)
+        return n
 
     async def _synk_loop(self) -> None:
         await asyncio.sleep(20)

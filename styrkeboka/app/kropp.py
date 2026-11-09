@@ -35,6 +35,7 @@ AKTIVITETSTYPER = {
     "ski": {"navn": "Ski", "intensitet": "hoy"},
     "svomming": {"navn": "Svømming", "intensitet": "hoy"},
     "annet": {"navn": "Annet", "intensitet": "moderat"},
+    "styrke": {"navn": "Styrke (klokke)", "intensitet": "moderat"},
 }
 
 # Garmin-aktivitetstyper → våre typer. Styrketrening fra klokka hoppes over (logges i appen).
@@ -48,8 +49,9 @@ GARMIN_TYPER = {
     "cross_country_skiing_ws": "ski", "skate_skiing_ws": "ski", "backcountry_skiing": "ski", "cross_country_skiing": "ski",
     "resort_skiing_snowboarding_ws": "ski",
     "lap_swimming": "svomming", "open_water_swimming": "svomming",
+    "strength_training": "styrke",
 }
-HOPP_OVER = {"strength_training", "indoor_cardio", "yoga", "pilates", "breathwork"}
+HOPP_OVER = {"indoor_cardio", "yoga", "pilates", "breathwork"}
 
 
 def lokal_dato(sb: "Styrkeboka", d: datetime | str | None = None) -> str:
@@ -123,7 +125,12 @@ def importer_garmin(sb: "Styrkeboka", pid: int, akt: dict) -> bool:
     if not start:
         return False
     eid = f"garmin-{akt['activityId']}"
-    if sb.db.verdi("SELECT 1 FROM aktiviteter WHERE profil_id = ? AND ekstern_id = ?", (pid, eid)):
+    soner = [round(float(akt.get(f"hrTimeInZone_{i}") or 0)) for i in range(1, 6)]
+    soner = soner if any(soner) else None
+    finnes = sb.db.en("SELECT id, soner FROM aktiviteter WHERE profil_id = ? AND ekstern_id = ?", (pid, eid))
+    if finnes:
+        if soner and not finnes["soner"]:
+            sb.db.oppdater("aktiviteter", finnes["id"], {"soner": soner})
         return False
 
     def tall(k, f=float):
@@ -140,6 +147,7 @@ def importer_garmin(sb: "Styrkeboka", pid: int, akt: dict) -> bool:
         "kalorier": tall("calories", lambda x: int(round(float(x)))), "skritt": tall("steps", lambda x: int(float(x))),
         "moderate_min": tall("moderateIntensityMinutes", int), "hoy_min": tall("vigorousIntensityMinutes", int),
         "belastning": tall("activityTrainingLoad"), "aerob_effekt": tall("aerobicTrainingEffect"), "kilde": "garmin",
+        "soner": soner,
     })
     return True
 
@@ -195,8 +203,10 @@ def berik(a: dict) -> dict:
 
 def aktiviteter(sb: "Styrkeboka", pid: int, dager: int = 90, grense: int = 100) -> list[dict]:
     fra = til_iso(naa() - timedelta(days=dager))
+    # styrkeøkter fra klokka som er koblet til en økt i appen vises sammen med økta, ikke her
     return [berik(a) for a in sb.db.alle(
-        "SELECT * FROM aktiviteter WHERE profil_id = ? AND start >= ? ORDER BY start DESC LIMIT ?", (pid, fra, grense))]
+        "SELECT * FROM aktiviteter WHERE profil_id = ? AND start >= ? AND NOT (type = 'styrke' AND okt_id IS NOT NULL) "
+        "ORDER BY start DESC LIMIT ?", (pid, fra, grense))]
 
 
 def aktivitetsminutter(a: dict) -> float:
@@ -215,7 +225,8 @@ def uker(sb: "Styrkeboka", pid: int, antall: int = 12) -> list[dict]:
     ut = []
     for i in range(antall - 1, -1, -1):
         start, slutt = mandag - timedelta(weeks=i), mandag - timedelta(weeks=i - 1)
-        akt = [berik(a) for a in sb.db.alle("SELECT * FROM aktiviteter WHERE profil_id = ? AND start >= ? AND start < ?",
+        akt = [berik(a) for a in sb.db.alle("SELECT * FROM aktiviteter WHERE profil_id = ? AND start >= ? AND start < ? "
+                                            "AND NOT (type = 'styrke' AND okt_id IS NOT NULL)",
                                             (pid, til_iso(start), til_iso(slutt)))]
         styrke = sb.db.alle("SELECT startet, avsluttet FROM okter WHERE profil_id = ? AND status = 'fullfort' AND startet >= ? AND startet < ?",
                             (pid, til_iso(start), til_iso(slutt)))
@@ -313,3 +324,109 @@ def ai_tekst(sb: "Styrkeboka", pid: int) -> str:
     u = uker(sb, pid, 2)
     deler.append(f"Aktivitetsminutter (moderat + 2×høy, inkl. styrke) denne uka: {u[-1]['minutter']}, forrige uke: {u[0]['minutter']} (anbefalt 150–300)")
     return "\n".join(deler)
+
+
+# --------------------------------------------------------------------------- puls fra klokka
+TCX_NS = {"t": "http://www.garmin.com/xmlschemas/TrainingCenterDatabase/v2",
+          "x": "http://www.garmin.com/xmlschemas/ActivityExtension/v2"}
+
+
+def les_tcx(tekst: str, oppløsning: int = 5) -> tuple[str | None, list[list]]:
+    """Leser puls (og fart) fra en TCX-fil. GPS-posisjoner leses ikke.
+    Returnerer (starttid, [[sekunder fra start, puls, fart m/s eller None], ...]) nedskalert til «oppløsning» sekunder."""
+    import xml.etree.ElementTree as ET
+    rot = ET.fromstring(tekst.encode("utf-8") if isinstance(tekst, str) else tekst)
+    punkter = []
+    for tp in rot.iter(f"{{{TCX_NS['t']}}}Trackpoint"):
+        tid = tp.find("t:Time", TCX_NS)
+        hr = tp.find("t:HeartRateBpm/t:Value", TCX_NS)
+        if tid is None or hr is None:
+            continue
+        fart = tp.find(".//x:Speed", TCX_NS)
+        punkter.append((fra_iso(tid.text), int(float(hr.text)), float(fart.text) if fart is not None else None))
+    if not punkter:
+        return None, []
+    punkter.sort(key=lambda p: p[0])
+    start = punkter[0][0]
+    serie: list[list] = []
+    boks: list[tuple] = []
+    grense = oppløsning
+    for t, hr, fart in punkter:
+        sek = (t - start).total_seconds()
+        if sek >= grense and boks:
+            serie.append(_snitt(boks, grense - oppløsning))
+            boks = []
+            grense = (int(sek // oppløsning) + 1) * oppløsning
+        boks.append((hr, fart))
+    if boks:
+        serie.append(_snitt(boks, grense - oppløsning))
+    return til_iso(start), serie
+
+
+def _snitt(boks: list[tuple], t: float) -> list:
+    hr = round(sum(b[0] for b in boks) / len(boks))
+    farter = [b[1] for b in boks if b[1] is not None]
+    return [int(t), hr, round(sum(farter) / len(farter), 2) if farter else None]
+
+
+def lagre_puls(sb: "Styrkeboka", aid: int, start: str, serie: list[list]) -> None:
+    sb.db.kjor("INSERT OR REPLACE INTO pulsdata (aktivitet_id, start, data) VALUES (?, ?, ?)",
+               (aid, start, __import__("json").dumps(serie)))
+
+
+def puls(sb: "Styrkeboka", aid: int) -> dict | None:
+    return sb.db.en("SELECT * FROM pulsdata WHERE aktivitet_id = ?", (aid,))
+
+
+def koble_styrke(sb: "Styrkeboka", pid: int, dager: int = 30) -> int:
+    """Kobler styrkeøkter fra klokka til økter i appen som overlapper i tid."""
+    n = 0
+    fra = til_iso(naa() - timedelta(days=dager))
+    for a in sb.db.alle("SELECT * FROM aktiviteter WHERE profil_id = ? AND type = 'styrke' AND okt_id IS NULL AND start >= ?", (pid, fra)):
+        a_start = fra_iso(a["start"])
+        a_slutt = a_start + timedelta(seconds=a.get("varighet_s") or 3600)
+        beste, best_overlapp = None, 0.0
+        for o in sb.db.alle("SELECT id, startet, avsluttet FROM okter WHERE profil_id = ? AND status = 'fullfort' AND startet >= ? AND startet <= ?",
+                            (pid, til_iso(a_start - timedelta(hours=3)), til_iso(a_slutt + timedelta(hours=1)))):
+            if sb.db.verdi("SELECT 1 FROM aktiviteter WHERE okt_id = ?", (o["id"],)):
+                continue
+            o_start = fra_iso(o["startet"])
+            o_slutt = fra_iso(o["avsluttet"]) if o.get("avsluttet") else o_start + timedelta(hours=1)
+            overlapp = (min(a_slutt, o_slutt) - max(a_start, o_start)).total_seconds()
+            naer = abs((a_start - o_start).total_seconds()) < 45 * 60
+            if (overlapp > 0 or naer) and max(overlapp, 1) > best_overlapp:
+                beste, best_overlapp = o, max(overlapp, 1)
+        if beste:
+            sb.db.oppdater("aktiviteter", a["id"], {"okt_id": beste["id"]})
+            n += 1
+    return n
+
+
+def puls_analyse(serie: list[list], sett: list[dict], start: str) -> dict:
+    """Puls per øvelse: topp i hvert arbeidssett og pulsen idet neste sett starter (hvor mye du hentet deg inn)."""
+    if not serie:
+        return {}
+    t0 = fra_iso(start)
+    hrs = [p[1] for p in serie]
+
+    def vindu(fra_s: float, til_s: float) -> list[int]:
+        return [p[1] for p in serie if fra_s <= p[0] <= til_s]
+    arbeid = sorted([s for s in sett if not s.get("oppvarming")], key=lambda s: s["tid"])
+    per: dict[str, dict] = {}
+    for i, s in enumerate(arbeid):
+        t = (fra_iso(s["tid"]) - t0).total_seconds()
+        topp = vindu(t - 75, t + 20)
+        neste = arbeid[i + 1] if i + 1 < len(arbeid) else None
+        rad = per.setdefault(s["ovelse"], {"topper": [], "foer_neste": []})
+        if topp:
+            rad["topper"].append(max(topp))
+        if neste:
+            # settet tar ca. 40 s – pulsen rett før neste sett starter
+            tn = (fra_iso(neste["tid"]) - t0).total_seconds() - 40
+            foer = vindu(tn - 10, tn + 5)
+            if foer:
+                rad["foer_neste"].append(round(sum(foer) / len(foer)))
+    ut = {k: {"topp": round(sum(v["topper"]) / len(v["topper"])) if v["topper"] else None,
+              "foer_neste": round(sum(v["foer_neste"]) / len(v["foer_neste"])) if v["foer_neste"] else None}
+          for k, v in per.items()}
+    return {"snitt": round(sum(hrs) / len(hrs)), "maks": max(hrs), "min": min(hrs), "per_ovelse": ut}

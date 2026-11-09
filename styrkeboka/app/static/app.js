@@ -1304,6 +1304,30 @@
         o.opplevd ? el("span", { class: "merkelapp aksent" }, `Opplevd: ${OPPLEVD[o.opplevd]}`) : null,
         o.av ? el("span", { class: "merkelapp" }, `Registrert av ${o.av}`) : null),
       o.notat ? el("p", { class: "forklaring", style: "font-style:italic" }, `«${o.notat}»`) : null));
+    const kl_ = o.klokke;
+    const koblet = Object.keys(profil()?.koblinger || {}).length > 0;
+    if (kl_) {
+      const ana = kl_.analyse || {};
+      v.append(el("div", { class: "kort" },
+        el("div", { class: "kort-hode" }, el("h2", {}, "Puls fra klokka"), el("span", { class: "merkelapp" }, "⌚ Garmin")),
+        el("div", { class: "nokkeltall" },
+          el("div", { class: "tall-boks" }, el("span", { class: "tall-verdi" }, kl_.snittpuls || ana.snitt || "–"), el("span", { class: "tall-navn" }, "snittpuls")),
+          el("div", { class: "tall-boks" }, el("span", { class: "tall-verdi" }, kl_.makspuls || ana.maks || "–"), el("span", { class: "tall-navn" }, "makspuls")),
+          el("div", { class: "tall-boks" }, el("span", { class: "tall-verdi" }, kl_.kalorier || "–"), el("span", { class: "tall-navn" }, "kcal"))),
+        kl_.puls?.length ? pulsgraf(kl_.puls, { sett: kl_.sett_tider }) : el("button", { class: "knapp noytral liten", style: "width:100%", onclick: async (e) => {
+          e.currentTarget.disabled = true; e.currentTarget.textContent = "Henter pulskurve …";
+          try { await post(`api/okter/${o.id}/klokke`); visOktDetalj(oid, fra); } catch (er) { feil(er); visOktDetalj(oid, fra); }
+        } }, ikon("hjerte"), kl_.puls_hentet ? "Ingen pulskurve i økta fra klokka" : "Hent pulskurve"),
+        kl_.puls?.length ? el("p", { class: "forklaring", style: "font-size:12.5px" }, "Streker = sett du logget (gule = oppvarming). Pulsen bør stige i settene og falle i pausene.") : null,
+        kl_.soner ? soneStolper(kl_.soner) : null,
+        kl_.belastning ? el("p", { class: "forklaring" }, `Treningsbelastning ${Math.round(kl_.belastning)}${kl_.aerob_effekt != null ? ` · aerob effekt ${tall(kl_.aerob_effekt)}` : ""}`) : null));
+    } else if (koblet && o.status === "fullfort") {
+      v.append(el("div", { class: "info-boks" }, ikon("hjerte"), el("span", {}, "Ingen styrkeøkt fra klokka er koblet til denne økta ennå. Den kobles automatisk når Garmin har synkronisert. ",
+        el("button", { class: "lenke", onclick: async (e) => {
+          e.currentTarget.disabled = true; e.currentTarget.textContent = "Ser etter …";
+          try { const r = await post(`api/okter/${o.id}/klokke`); if (!r.okt.klokke) visToast("Fant ingen styrkeøkt fra klokka på samme tid"); visOktDetalj(oid, fra); } catch (er) { feil(er); }
+        } }, "Se etter nå"))));
+    }
     const aiRot = el("div");
     v.append(aiRot);
     if (o.ai_oppsummering) {
@@ -1321,6 +1345,8 @@
           oo.sett.map((s) => el("button", { class: s.oppvarming ? "oppv" : "", onclick: () => endreSettArk(s, oo, () => visOktDetalj(oid, fra)) },
             s.vekt != null ? `${tall(s.vekt)} × ${s.reps}` : `${s.reps}${oo.info.sekunder ? " s" : ""}`, s.rir != null ? ` @${s.rir}` : "")),
           el("button", { onclick: () => leggTilSettArk(o, oo, () => visOktDetalj(oid, fra)) }, "+")),
+        kl_?.analyse?.per_ovelse?.[oo.ovelse] ? (() => { const pa = kl_.analyse.per_ovelse[oo.ovelse]; return el("div", { class: "puls-linje" }, ikon("hjerte"),
+          [pa.topp ? `topp i settene ${pa.topp}` : null, pa.foer_neste ? `før neste sett ${pa.foer_neste}` : null].filter(Boolean).join(" · ")); })() : null,
         oo.notat ? el("div", { class: "ov-notat" }, oo.notat) : null));
     }
     if (!o.ovelser.length) k.append(el("p", { class: "tom" }, "Ingen øvelser registrert."));
@@ -1610,6 +1636,62 @@
     }
   }
 
+  function pulsgraf(serie, { sett = [] } = {}) {
+    const B = 320, H = 150, ml = 30, mr = 6, mt = 10, mb = 20;
+    const hr = serie.map((p) => p[1]);
+    let lo = Math.min(...hr), hi = Math.max(...hr);
+    lo = Math.floor((lo - 5) / 10) * 10; hi = Math.ceil((hi + 5) / 10) * 10;
+    const tMaks = Math.max(serie[serie.length - 1][0], ...sett.map((s) => s.t), 60);
+    const x = (t) => ml + (t / tMaks) * (B - ml - mr);
+    const y = (v) => mt + (1 - (v - lo) / (hi - lo)) * (H - mt - mb);
+    const svg = svgEl("svg", { viewBox: `0 0 ${B} ${H}`, role: "img", "aria-label": "Pulskurve" });
+    for (let v = lo; v <= hi; v += (hi - lo > 60 ? 20 : 10)) {
+      svg.append(svgEl("line", { class: "rutenett", x1: ml, x2: B - mr, y1: y(v), y2: y(v) }));
+      svg.append(svgEl("text", { class: "akse-tekst", x: ml - 5, y: y(v) + 3, "text-anchor": "end" }, v));
+    }
+    for (const s of sett) {
+      if (s.t < 0 || s.t > tMaks) continue;
+      svg.append(svgEl("line", { class: s.oppvarming ? "sett-strek oppv" : "sett-strek", x1: x(s.t), x2: x(s.t), y1: mt, y2: H - mb }));
+    }
+    const d = serie.map((p, i) => `${i ? "L" : "M"}${x(p[0]).toFixed(1)},${y(p[1]).toFixed(1)}`).join(" ");
+    svg.append(svgEl("path", { class: "puls-linje-graf", d }));
+    const steg = tMaks > 3600 ? 1200 : tMaks > 1800 ? 600 : 300;
+    for (let t = 0; t <= tMaks; t += steg) svg.append(svgEl("text", { class: "akse-tekst", x: x(t), y: H - 5, "text-anchor": t === 0 ? "start" : "middle" }, `${Math.round(t / 60)} min`));
+    return el("div", { class: "graf" }, svg);
+  }
+
+  function tempograf(serie) {
+    // glatt farten over ~30 s og vis tempo (min/km), raskere = høyere
+    const punkter = serie.filter((p) => p[2] && p[2] > 0.8).map((p, i, arr) => {
+      const vindu = arr.slice(Math.max(0, i - 3), i + 3);
+      return [p[0], vindu.reduce((s_, q) => s_ + q[2], 0) / vindu.length];
+    });
+    if (punkter.length < 2) return null;
+    const B = 320, H = 120, ml = 34, mr = 6, mt = 10, mb = 20;
+    const tempo = (v) => 1000 / v / 60;
+    const ts = punkter.map((p) => tempo(p[1]));
+    const lo = Math.min(...ts), hi = Math.min(Math.max(...ts), lo + 6);
+    const tMaks = punkter[punkter.length - 1][0];
+    const x = (t) => ml + (t / tMaks) * (B - ml - mr);
+    const y = (m) => mt + ((Math.min(m, hi) - lo) / Math.max(0.5, hi - lo)) * (H - mt - mb);
+    const svg = svgEl("svg", { viewBox: `0 0 ${B} ${H}`, role: "img", "aria-label": "Tempo" });
+    for (const m of [lo, (lo + hi) / 2, hi]) {
+      svg.append(svgEl("line", { class: "rutenett", x1: ml, x2: B - mr, y1: y(m), y2: y(m) }));
+      svg.append(svgEl("text", { class: "akse-tekst", x: ml - 5, y: y(m) + 3, "text-anchor": "end" }, `${Math.floor(m)}:${String(Math.round((m % 1) * 60)).padStart(2, "0")}`));
+    }
+    svg.append(svgEl("path", { class: "linje", d: punkter.map((p, i) => `${i ? "L" : "M"}${x(p[0]).toFixed(1)},${y(tempo(p[1])).toFixed(1)}`).join(" ") }));
+    return el("div", { class: "graf" }, svg);
+  }
+
+  function soneStolper(soner) {
+    const tot = soner.reduce((a, b) => a + b, 0) || 1;
+    const navn = ["Rolig", "Lett", "Moderat", "Hardt", "Maks"];
+    return el("div", { class: "soner" }, el("div", { class: "ark-etikett", style: "margin-top:6px" }, "Tid i pulssoner"),
+      soner.map((sek, i) => el("div", { class: "sone-rad" }, el("span", {}, `${i + 1} ${navn[i]}`),
+        el("span", { class: "muskel-bar" }, el("i", { class: `sone${i + 1}`, style: `width:${(100 * sek / tot).toFixed(1)}%` })),
+        el("span", {}, `${Math.round(sek / 60)} min`))));
+  }
+
   function soylegraf(punkter, mal) {
     const B = 320, H = 120, mb = 18, mt = 14;
     const maks = Math.max(mal || 0, ...punkter.map((p) => p.verdi), 1) * 1.08;
@@ -1645,6 +1727,21 @@
   function aktivitetArk(a, { type = null, etter = null } = {}) {
     const k = kroppData || { aktivitetstyper: AKT_TYPER };
     if (a && a.kilde !== "manuell") {
+      const pulsRot = el("div", { style: "margin-top:10px" }, el("div", { class: "laster" }, "Henter pulskurve …"));
+      const tegnPuls = (serie) => {
+        pulsRot.innerHTML = "";
+        if (serie.length) {
+          pulsRot.append(el("div", { class: "ark-etikett" }, "Puls"), pulsgraf(serie));
+          const tg = serie.some((p) => p[2]) && ["loping", "gaing", "tur"].includes(a.type) ? tempograf(serie) : null;
+          if (tg) pulsRot.append(el("div", { class: "ark-etikett" }, "Tempo (min/km)"), tg);
+        }
+      };
+      api(`api/aktiviteter/${a.id}`).then(async (r) => {
+        if (r.puls.length) { tegnPuls(r.puls); return; }
+        if (r.puls_hentet) { pulsRot.innerHTML = ""; return; }
+        try { const p = await post(`api/aktiviteter/${a.id}/puls`); tegnPuls(p.puls); }
+        catch (e) { pulsRot.innerHTML = ""; pulsRot.append(el("p", { class: "forklaring" }, `Pulskurve: ${e.message}`)); }
+      }).catch(() => { pulsRot.innerHTML = ""; });
       aapneArk(el("h3", {}, ikon("lop"), a.navn || a.typenavn), el("p", { class: "hint" }, `${ukedag(a.start)} kl. ${kl(a.start)} · hentet fra klokka`),
         el("div", { class: "nokkeltall" },
           el("div", { class: "tall-boks" }, el("span", { class: "tall-verdi" }, a.km ? tall(a.km) : "–"), el("span", { class: "tall-navn" }, "km")),
@@ -1655,6 +1752,8 @@
           el("div", { class: "tall-boks" }, el("span", { class: "tall-verdi" }, a.makspuls || "–"), el("span", { class: "tall-navn" }, "makspuls")),
           el("div", { class: "tall-boks" }, el("span", { class: "tall-verdi" }, a.hoydemeter ? Math.round(a.hoydemeter) : "–"), el("span", { class: "tall-navn" }, "høydemeter"))),
         el("p", { class: "forklaring", style: "margin-top:10px" }, [a.kalorier ? `${a.kalorier} kcal` : null, a.skritt ? `${tusen(a.skritt)} skritt` : null, a.aerob_effekt != null ? `aerob effekt ${tall(a.aerob_effekt)}` : null, `${Math.round((a.moderate_min || 0) + 2 * (a.hoy_min || 0))} aktivitetsminutter`].filter(Boolean).join(" · ")),
+        a.soner ? soneStolper(a.soner) : null,
+        pulsRot,
         el("div", { class: "ark-knapper" }, el("button", { class: "knapp fare", onclick: async () => {
           if (!(await bekreft("Fjerne aktiviteten?", "Den hentes ikke inn igjen automatisk.", "Fjern", true))) return;
           try { await slett(`api/aktiviteter/${a.id}`); visKropp(); } catch (e) { feil(e); }
@@ -1662,7 +1761,7 @@
       return;
     }
     let typ = a?.type || type || "loping";
-    const typer = el("div", { class: "chips" }, Object.entries(k.aktivitetstyper).map(([t, x]) => el("button", { class: `chip liten ${t === typ ? "valgt" : ""}`, onclick: (e) => {
+    const typer = el("div", { class: "chips" }, Object.entries(k.aktivitetstyper).filter(([t]) => t !== "styrke").map(([t, x]) => el("button", { class: `chip liten ${t === typ ? "valgt" : ""}`, onclick: (e) => {
       typ = t; for (const b of typer.children) b.classList.toggle("valgt", b === e.currentTarget);
     } }, x.navn)));
     const tid = el("input", { type: "datetime-local", value: tilLokalInput(a?.start || Date.now() - 36e5) });

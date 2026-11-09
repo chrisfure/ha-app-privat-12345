@@ -557,3 +557,14 @@ body.har-hvile .toast { bottom: calc(166px + env(safe-area-inset-bottom)); }
 .lope-liste li.gjort .lope-ikon { background: var(--opp-lys); color: var(--opp-blekk); }
 .lope-liste li.gjort b { color: var(--dempet); }
 .lope-liste li.neste .lope-ikon { background: var(--oransje-lys); color: var(--oransje-blekk); }
+
+/* ---- puls ---- */
+.graf .puls-linje-graf { stroke: var(--ned); stroke-width: 1.8; fill: none; stroke-linejoin: round; }
+.graf .sett-strek { stroke: var(--aksent); stroke-width: 1.5; opacity: .55; }
+.graf .sett-strek.oppv { stroke: var(--gull); }
+.puls-linje { display: flex; align-items: center; gap: 6px; margin-top: 6px; font-size: 13px; font-weight: 800; color: var(--ned-blekk); }
+.puls-linje svg { width: 15px; height: 15px; }
+.sone-rad { display: grid; grid-template-columns: 86px 1fr 48px; gap: 10px; align-items: center; font-weight: 800; font-size: 13px; margin-top: 6px; }
+.sone-rad span:last-child { text-align: right; color: var(--dempet); font-variant-numeric: tabular-nums; }
+.muskel-bar > i.sone1 { background: #9AA5B1; } .muskel-bar > i.sone2 { background: #2E9CC0; }
+.muskel-bar > i.sone3 { background: #3E9E6E; } .muskel-bar > i.sone4 { background: #E07A4F; } .muskel-bar > i.sone5 { background: #D0473B; }

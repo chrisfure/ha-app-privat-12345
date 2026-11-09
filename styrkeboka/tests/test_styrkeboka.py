@@ -267,7 +267,6 @@ def test_garmin_import_og_ukesminutter(sb):
     assert kropp.importer_garmin(sb, pid, lop)
     assert not kropp.importer_garmin(sb, pid, lop)  # ingen duplikat
     assert kropp.importer_garmin(sb, pid, {**GARMIN_GAA, "startTime": _naa_iso(0)})
-    assert not kropp.importer_garmin(sb, pid, {"activityId": 9, "activityType": "strength_training", "startTime": _naa_iso(0)})
     rader = sb.db.alle("SELECT * FROM aktiviteter")
     assert "startLatitude" not in rader[0] and len(rader) == 2
     u = kropp.uker(sb, pid, 1)[-1]
@@ -424,3 +423,53 @@ def test_garmin_eksport(sb, monkeypatch):
     assert r["lagt_inn"] == 0 and not sb.db.alle("SELECT * FROM garmin_okter")
     steg = loping.garmin_okt({"type": "intervall", "tittel": "Intervall 4×4 min", "beskrivelse": "", "minutter": 35})["workoutSegments"][0]["workoutSteps"]
     assert steg[1]["numberOfIterations"] == 4 and steg[1]["workoutSteps"][0]["zoneNumber"] == 4
+
+
+
+def test_klokke_styrke_og_puls(sb):
+    from datetime import timedelta
+    import kropp
+    from db import fra_iso, til_iso
+    pid = sb.profiler()[0]["id"]
+    o = sb.start_okt(pid, None)
+    sb.legg_til_ovelse(o["id"], {"ovelse": "benkpress"})
+    oo = sb.okt(o["id"])["ovelser"][0]
+    for _ in range(3):
+        sb.logg_sett(o["id"], {"okt_ovelse_id": oo["id"], "vekt": 60, "reps": 8})
+    sb.avslutt_okt(o["id"], {})
+    okt = sb.okt(o["id"])
+    start = fra_iso(okt["startet"]) - timedelta(minutes=2)
+    # spre settene utover 6 minutter
+    for i, s in enumerate(sb.db.alle("SELECT id FROM sett WHERE okt_id = ? ORDER BY id", (o["id"],))):
+        sb.db.kjor("UPDATE sett SET tid = ? WHERE id = ?", (til_iso(start + timedelta(minutes=2 + 2 * i)), s["id"]))
+    assert kropp.importer_garmin(sb, pid, {"activityId": 77, "activityName": "Styrke", "activityType": "strength_training",
+                                           "startTime": til_iso(start), "duration": 900, "averageHR": 110, "maxHR": 150,
+                                           "hrTimeInZone_1": 300, "hrTimeInZone_2": 400, "hrTimeInZone_3": 200})
+    assert kropp.koble_styrke(sb, pid) == 1
+    a = sb.db.en("SELECT * FROM aktiviteter WHERE ekstern_id = 'garmin-77'")
+    assert a["okt_id"] == o["id"] and a["soner"][1] == 400
+    # koblet styrke vises ikke i aktivitetslista og teller ikke dobbelt
+    assert not [x for x in kropp.aktiviteter(sb, pid) if x["type"] == "styrke"]
+    # pulskurve: topp rundt hvert sett, lav puls i pausene
+    serie = []
+    for sek in range(0, 900, 5):
+        naer_sett = any(abs(sek - (120 + 120 * i)) < 30 for i in range(3))
+        serie.append([sek, 145 if naer_sett else 100, None])
+    kropp.lagre_puls(sb, a["id"], til_iso(start), serie)
+    k = sb.okt(o["id"])["klokke"]
+    assert k["snittpuls"] == 110 and k["puls"] and len(k["sett_tider"]) == 3
+    pa = k["analyse"]["per_ovelse"]["benkpress"]
+    assert pa["topp"] == 145 and pa["foer_neste"] == 100
+    import ai
+    assert "PULS FRA KLOKKA" in ai.oppgave_oppsummering(sb, o["id"], [])
+
+
+def test_les_tcx_uten_gps():
+    import kropp
+    punkter = "".join(f'<Trackpoint><Time>2026-11-09T10:00:{i:02d}Z</Time><Position><LatitudeDegrees>59.8</LatitudeDegrees></Position>'
+                      f'<HeartRateBpm><Value>{100 + i}</Value></HeartRateBpm></Trackpoint>' for i in range(12))
+    tcx = ('<TrainingCenterDatabase xmlns="http://www.garmin.com/xmlschemas/TrainingCenterDatabase/v2"><Activities><Activity><Lap><Track>'
+           + punkter + '</Track></Lap></Activity></Activities></TrainingCenterDatabase>')
+    start, serie = kropp.les_tcx(tcx)
+    assert start.startswith("2026-11-09T10:00:00") and serie[0] == [0, 102, None] and len(serie) == 3
+    assert all(len(p) == 3 for p in serie)

@@ -241,10 +241,30 @@ def oppgave_oppsummering(sb: Styrkeboka, oid: int, rekorder: list[dict]) -> str:
         f"ØKTEN ({o['dag_navn']}, {o['nokkeltall']['minutter']} min"
         + (f", opplevd tyngde {o['opplevd']}/5" if o.get("opplevd") else "") + "):\n" + "\n".join(gjort),
         f"Brukerens notat: {o['notat']}" if o.get("notat") else "",
+        _puls_tekst(sb, o),
         "Rekorder: " + "; ".join(f"{r['ovelse']} – {r['tekst']}" for r in rekorder) if rekorder else "",
         "TIDLIGERE ØKTER:\n" + historikkontekst(sb, o["profil_id"], 5),
         'Svar KUN med JSON: {"oppsummering": "2-3 setninger", "neste_gang": ["...", "..."]}',
     ] if x)
+
+
+def _puls_tekst(sb: Styrkeboka, o: dict) -> str:
+    k = o.get("klokke")
+    if not k:
+        return ""
+    deler = [f"PULS FRA KLOKKA: snitt {k.get('snittpuls') or '?'}, maks {k.get('makspuls') or '?'}"]
+    if k.get("kalorier"):
+        deler.append(f"{k['kalorier']} kcal")
+    if k.get("soner"):
+        deler.append("tid i soner 1–5 (min): " + ", ".join(str(round(s / 60)) for s in k["soner"]))
+    a = k.get("analyse") or {}
+    if a.get("per_ovelse"):
+        deler.append("per øvelse (pulstopp i sett / puls rett før neste sett): " + "; ".join(
+            f"{sb.ovelse(n)['navn']} {v['topp'] or '?'}/{v['foer_neste'] or '?'}" for n, v in a["per_ovelse"].items()))
+    makspuls = __import__("kropp").avledet(sb, o["profil_id"]).get("makspuls")
+    if makspuls:
+        deler.append(f"estimert makspuls {makspuls}")
+    return ", ".join(deler) + ". Kommenter gjerne hvile og intensitet ut fra pulsen."
 
 
 def oppgave_sporsmal(sb: Styrkeboka, pid: int, sporsmal: str, oid: int | None = None, ovelse: str | None = None) -> str:

@@ -1,5 +1,15 @@
 # Endringslogg
 
+## 0.8.0
+
+- Styrkeøkter du starter på klokka kobles automatisk til økta i appen (samme tidspunkt). Appen har settene, klokka pulsen – nå ser du begge sammen.
+- Pulskurve fra klokka i økta, med streker der hvert sett ble logget, tid i pulssoner, kalorier og treningsbelastning.
+- Puls per øvelse: snittet av pulstoppene i settene og pulsen rett før neste sett (hvor mye du henter deg inn i pausene).
+- Løpeturer og andre aktiviteter får pulskurve, tempo og tid i soner.
+- AI-oppsummeringen bruker pulsen (f.eks. om hvilen var lang nok).
+- Pulskurver hentes som aktivitetsfil (TCX) fra Garmin via Home Assistant; appen leser pulsen og sletter fila igjen, så GPS-spor ikke blir liggende. Krever lese/skrivetilgang til Home Assistant-mappa.
+- «Send styrkeøkter til Garmin» er fortsatt tilgjengelig, men bør være av når du starter økta på klokka.
+
 ## 0.7.0
 
 - Til Garmin Connect (via Home Assistant): fullførte styrkeøkter kan sendes som aktivitet, automatisk eller med «Send til Garmin» på en økt.
