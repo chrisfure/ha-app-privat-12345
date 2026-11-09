@@ -61,9 +61,15 @@ def profilkontekst(sb: Styrkeboka, pid: int, upid: int | None = None) -> str:
         linjer.append(f"Hensyn/skader brukeren har oppgitt: {p['hensyn'].strip()}")
     import kropp
     import loping
+    import dagsform
+    import ukeplan
     linjer.append(kropp.ai_tekst(sb, pid))
     if (lt := loping.ai_tekst(sb, pid)):
         linjer.append(lt)
+    if (dt := dagsform.ai_tekst(sb, pid)):
+        linjer.append(dt)
+    if (kt := ukeplan.kalender_tekst(sb, pid)):
+        linjer.append(kt)
     return "\n".join(linjer)
 
 
@@ -206,6 +212,40 @@ def oppgave_startvekter(sb: Styrkeboka, pid: int, lokalt: dict) -> str:
     ])
 
 
+def oppgave_ukeplan(sb: Styrkeboka, pid: int, onske: str = "") -> str:
+    import ukeplan
+    prog = sb.aktivt_program(pid)
+    neste = sb.neste_dag(pid, prog) if prog else None
+    dager = ""
+    if prog:
+        ider = [d["id"] for d in prog["dager"]]
+        start = ider.index(neste["id"]) if neste else 0
+        rekke = [prog["dager"][(start + i) % len(ider)] for i in range(len(ider))]
+        dager = "\n".join(f"- dag_id {d['id']}: {d['navn']} ({', '.join(o['navn'] for o in d['ovelser'][:6])})" for d in rekke)
+    lokal = ukeplan.lokal_plan(sb, pid)
+    i_dag = sb.lokal(__import__("db").naa()).date()
+    return "\n\n".join(x for x in [
+        ROLLE,
+        "OPPGAVE: Lag en treningsplan for de neste 7 dagene (fra og med i dag) som gir best mulig fremgang og passer med "
+        "kalenderen, dagsformen og løpeplanen. Plasser styrkeøktene i programrekkefølgen under (neste først), helst med "
+        "minst én dag mellom; unngå dager brukeren er borte/reiser eller har svært lange dager; legg ikke harde intervaller "
+        "dagen før en tung beinøkt; ved lav dagsform i dag: lettere start på uka. Løpeturer fra løpeplanen kan flyttes "
+        "om kalenderen krever det. Legg gjerne inn et kort notat per dag (f.eks. «lang jobbdag – kort økt» eller «hviledag»).",
+        f"I DAG: {ukeplan.UKEDAG[i_dag.weekday()]} {i_dag.isoformat()}",
+        "OM BRUKEREN:\n" + profilkontekst(sb, pid),
+        "PROGRAMDAGER I REKKEFØLGE:\n" + dager if dager else "",
+        f"MÅL: {sb.profil(pid).get('dager_per_uke')} styrkeøkter per uke",
+        "APPENS EGET FORSLAG (forbedre det gjerne):\n" + "\n".join(
+            f"- {d['dato']} {d['ukedag']}: " + (", ".join(o.get('navn') or o.get('tittel') for o in d['okter']) or "hvile")
+            + (f" [{d['notat']}]" if d['notat'] else "") for d in lokal["dager"]),
+        "SISTE ØKTER:\n" + historikkontekst(sb, pid, 4),
+        f"BRUKERENS ØNSKER: {onske.strip()}" if onske.strip() else "",
+        'Svar KUN med JSON: {"oppsummering": "2-3 setninger om uka", "dager": [{"dato": "YYYY-MM-DD", '
+        '"okter": [{"type": "styrke", "dag_id": 123} eller {"type": "lop", "tittel": "Rolig tur", "minutter": 30} eller '
+        '{"type": "annet", "tittel": "Mobilitet 15 min"}], "notat": "kort"}]}. Ta med alle 7 dagene.',
+    ] if x)
+
+
 def oppgave_tips(sb: Styrkeboka, oid: int) -> str:
     o = sb.okt(oid)
     plan = []
@@ -288,6 +328,9 @@ def oppgave_sporsmal(sb: Styrkeboka, pid: int, sporsmal: str, oid: int | None = 
                      f"Appens instruksjon – start: {ins.get('start', '')} Steg: {' '.join(ins.get('steg') or [])} "
                      f"Vanlige feil: {'; '.join(ins.get('feil') or [])}. Teknikkpunkter: {'; '.join(ov.get('tips') or [])}")
     deler.append("SISTE ØKTER:\n" + historikkontekst(sb, pid, 4))
+    import ukeplan
+    if (ut := ukeplan.ai_tekst(sb, pid)):
+        deler.append(ut)
     tidligere = sb.db.alle("SELECT sporsmal, svar FROM ai_logg WHERE profil_id = ? AND type = 'sporsmal' AND tid >= ? ORDER BY id DESC LIMIT 3",
                            (pid, til_iso(naa() - timedelta(hours=3))))
     if tidligere:

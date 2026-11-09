@@ -530,3 +530,60 @@ def test_garmin_styrkeokter(sb, monkeypatch):
     kall.clear()
     r = asyncio.run(k.synk_garmin_styrke(sb.profil(pid)))
     assert r["fjernet"] == len(prog["dager"]) and not sb.db.alle("SELECT * FROM garmin_styrke")
+
+
+def test_dagsform(sb):
+    from datetime import date, timedelta
+    import dagsform
+    import kropp
+    pid = sb.profiler()[0]["id"]
+    assert dagsform.status(sb, pid) is None
+    i_dag = date.fromisoformat(kropp.lokal_dato(sb))
+    for i in range(1, 10):
+        kropp.lagre_maaling(sb, pid, "hrv", 45, (i_dag - timedelta(days=i)).isoformat(), "ha")
+        kropp.lagre_maaling(sb, pid, "hvilepuls", 55, (i_dag - timedelta(days=i)).isoformat(), "ha")
+    kropp.lagre_maaling(sb, pid, "beredskap", 85, kilde="ha")
+    kropp.lagre_maaling(sb, pid, "sovn_score", 85, kilde="ha")
+    assert dagsform.status(sb, pid)["niva"] == "god"
+    kropp.lagre_maaling(sb, pid, "beredskap", 30, kilde="ha")
+    kropp.lagre_maaling(sb, pid, "sovn_score", 50, kilde="ha")
+    kropp.lagre_maaling(sb, pid, "hrv", 30, kilde="ha")
+    s = dagsform.status(sb, pid)
+    assert s["niva"] == "lav" and any("HRV" in g for g in s["grunner"])
+    assert "DAGSFORM" in dagsform.ai_tekst(sb, pid)
+    # lettere økt
+    prog = sb.lagre_program(pid, sb.foreslaa_program(pid), kilde="mal")
+    o = sb.start_okt(pid, prog["dager"][0]["id"])
+    for_ = o["ovelser"][1]["sett_plan"]
+    o2 = sb.lettere_okt(o["id"])
+    assert o2["ovelser"][1]["sett_plan"] < for_
+
+
+def test_ukeplan_rundt_kalender(sb):
+    from datetime import timedelta
+    import ukeplan
+    pid = sb.profiler()[0]["id"]
+    sb.lagre_profil({"dager_per_uke": 3}, pid)
+    prog = sb.lagre_program(pid, sb.foreslaa_program(pid), kilde="mal")
+    i_dag = sb.lokal(sb_naa()).date()
+    reise_fra, reise_til = i_dag + timedelta(days=1), i_dag + timedelta(days=3)
+    sb.db.lagre_innstilling(f"kalender-{pid}", {"tid": "x", "hendelser": [
+        {"kalender": "calendar.tripit", "tittel": "Reise - Bergen", "start": reise_fra.isoformat(), "slutt": reise_til.isoformat(),
+         "heldag": True, "sted": "Bergen"},
+        {"kalender": "calendar.jobb", "tittel": "Vakt", "start": f"{(i_dag + timedelta(days=4)).isoformat()}T07:00:00+01:00",
+         "slutt": f"{(i_dag + timedelta(days=4)).isoformat()}T19:00:00+01:00", "heldag": False, "sted": ""}]})
+    plan = ukeplan.lokal_plan(sb, pid)
+    styrke = [d for d in plan["dager"] if any(o["type"] == "styrke" for o in d["okter"])]
+    datoer = {d["dato"] for d in styrke}
+    assert len(styrke) == 3
+    assert reise_fra.isoformat() not in datoer and (reise_fra + timedelta(days=1)).isoformat() not in datoer
+    assert (i_dag + timedelta(days=4)).isoformat() not in datoer
+    assert styrke[0]["okter"][0]["dag_id"] == sb.neste_dag(pid)["id"]
+    assert "BORTE" in ukeplan.kalender_tekst(sb, pid)
+    # AI-plan valideres mot programmet
+    ai_plan = ukeplan.valider_ai_plan(sb, pid, {"oppsummering": "ok", "dager": [
+        {"dato": i_dag.isoformat(), "okter": [{"type": "styrke", "dag_id": prog["dager"][0]["id"]}, {"type": "styrke", "dag_id": 99999}]}]})
+    assert len(ai_plan["dager"][0]["okter"]) == 1 and len(ai_plan["dager"]) == 7
+    ukeplan.lagre(sb, pid, ai_plan)
+    assert ukeplan.hent(sb, pid)["kilde"] == "ai"
+    assert ukeplan.neste_styrkedato(sb, pid, prog["dager"][0]["id"]) == i_dag.isoformat()

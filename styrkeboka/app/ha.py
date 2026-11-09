@@ -87,7 +87,7 @@ class HAKobling:
                             await self.send_okt_til_garmin(data["oppsummering"]["okt"]["id"])
                         except Exception as e:  # noqa: BLE001
                             log.warning("Kunne ikke sende økt til Garmin: %s", e)
-                    if hva in ("okt_fullfort", "program", "startvekter") and data and data.get("profil_id"):
+                    if hva in ("okt_fullfort", "program", "startvekter", "ukeplan") and data and data.get("profil_id"):
                         try:
                             p = self.sb.profil(data["profil_id"])
                             if (p.get("garmin_eksport") or {}).get("styrke"):
@@ -143,9 +143,15 @@ class HAKobling:
         tilstander = await self._tilstander()
         andre = [p["navn"].lower() for p in self.sb.profiler() if p["id"] != profil["id"]]
         mitt = profil["navn"].lower()
-        kilder: dict[str, list[dict]] = {k: [] for k in ("aktiviteter", "vekt", "hvilepuls", "vo2max", "skritt", "fettprosent")}
+        kilder: dict[str, list[dict]] = {k: [] for k in ("aktiviteter", *kropp.KOBLBARE_TALL, *kropp.KOBLBARE_TEKST, "kalendere")}
+        monstre = [("sovn_score", "sleep_score"), ("sovn_min", "total_sleep_duration"), ("stress", "avg_stress_level"),
+                   ("body_battery", "body_battery_highest"), ("hrv", "hrv_last_night_average"), ("restitusjon", "recovery_time"),
+                   ("hrv_status", "hrv_status"), ("treningsstatus", "training_status")]
         for s in tilstander:
             eid = s.get("entity_id", "")
+            if eid.startswith("calendar."):
+                kilder["kalendere"].append({"entity_id": eid, "navn": str((s.get("attributes") or {}).get("friendly_name") or eid), "state": s.get("state")})
+                continue
             if not eid.startswith("sensor."):
                 continue
             a = s.get("attributes") or {}
@@ -153,7 +159,12 @@ class HAKobling:
             tekst = f"{eid} {navn}".lower()
             enhet = str(a.get("unit_of_measurement") or "").lower()
             rad = {"entity_id": eid, "navn": navn, "state": s.get("state"), "enhet": a.get("unit_of_measurement")}
-            if isinstance(a.get("last_activities"), list):
+            treff = next((typ for typ, m in monstre if m in eid), None)
+            if treff:
+                kilder[treff].append(rad)
+            elif eid.endswith("training_readiness") or "treningsberedskap" in tekst:
+                kilder["beredskap"].append(rad)
+            elif isinstance(a.get("last_activities"), list):
                 kilder["aktiviteter"].append(rad)
             elif a.get("device_class") == "weight" or (enhet == "kg" and ("weight" in tekst or "vekt" in tekst)):
                 if "power" not in tekst:
@@ -182,7 +193,15 @@ class HAKobling:
                 p += 0.5
             return p
         forslag = {}
+        mine_kal = [x["entity_id"] for x in kilder["kalendere"]
+                    if any(o in f"{x['entity_id']} {x['navn']}".lower() for o in ("jobb", "work", "tripit", "reise"))
+                    and not any(n and n in f"{x['entity_id']} {x['navn']}".lower() for n in andre)]
+        kilder["kalendere"].sort(key=lambda x: (x["entity_id"] not in mine_kal, x["navn"]))
+        if mine_kal:
+            forslag["kalendere"] = mine_kal[:4]
         for typ, liste in kilder.items():
+            if typ == "kalendere":
+                continue
             liste.sort(key=lambda r: -poeng(r, typ))
             if liste and poeng(liste[0], typ) > -1:
                 forslag[typ] = liste[0]["entity_id"]
@@ -218,7 +237,7 @@ class HAKobling:
                     if isinstance(akt, dict) and kropp.importer_garmin(self.sb, pid, akt):
                         importert += 1
         # målinger
-        for typ in ("vekt", "hvilepuls", "vo2max", "skritt", "fettprosent"):
+        for typ in kropp.KOBLBARE_TALL:
             eid = k.get(typ)
             if not eid or eid not in tilstander:
                 continue
@@ -233,7 +252,7 @@ class HAKobling:
                     continue
                 dag = self.sb.lokal(fra_iso(tid)).date()
                 # vekt og fett: dagen målingen kom; daglige verdier: dagen de gjelder
-                if typ in ("hvilepuls", "vo2max") and not historikk and tid == st.get("last_changed"):
+                if typ in kropp.DAGLIGE and tid == st.get("last_changed"):
                     dag = self.sb.lokal(naa()).date()
                 if igaar:
                     dag -= timedelta(days=1)
@@ -241,6 +260,20 @@ class HAKobling:
                     continue  # dagens skritt er ikke ferdige – vent til dagen er over
                 if kropp.lagre_maaling(self.sb, pid, typ, verdi, dag.isoformat(), kilde="ha"):
                     maalt += 1
+        # tekstverdier (HRV-status, treningsstatus)
+        status = {}
+        for typ in kropp.KOBLBARE_TEKST:
+            eid = k.get(typ)
+            if eid and eid in tilstander and tilstander[eid].get("state") not in (None, "unknown", "unavailable"):
+                status[typ] = tilstander[eid]["state"]
+        if status:
+            self.sb.db.lagre_innstilling(f"status-{pid}", {**status, "tid": naa().isoformat(timespec="seconds")})
+        # kalendere
+        if k.get("kalendere"):
+            try:
+                await self.hent_kalender(profil)
+            except Exception as e:  # noqa: BLE001
+                log.warning("Kalender feilet: %s", e)
         koblet = kropp.koble_styrke(self.sb, pid)
         hentet = 0
         if k.get("aktiviteter"):
@@ -248,6 +281,26 @@ class HAKobling:
         if importert or maalt or koblet:
             self._ved_endring("profil", None)
         return {"importert": importert, "maalinger": maalt, "koblet": koblet, "pulskurver": hentet}
+
+    # ------------------------------------------------------------ kalender
+    async def hent_kalender(self, profil: dict, dager: int = 14) -> int:
+        """Henter hendelser fra valgte kalendere og lagrer dem (bare tittel, tid og sted) til ukeplanen og AI-treneren."""
+        from urllib.parse import quote
+        fra = naa() - timedelta(days=1)
+        til = naa() + timedelta(days=dager)
+        hendelser = []
+        for eid in (profil.get("koblinger") or {}).get("kalendere") or []:
+            url = f"{CORE_API}/calendars/{eid}?start={quote(fra.isoformat())}&end={quote(til.isoformat())}"
+            async with self._session.get(url, headers=self._hoder) as r:
+                if r.status != 200:
+                    continue
+                for h in await r.json():
+                    s, e = h.get("start") or {}, h.get("end") or {}
+                    hendelser.append({"kalender": eid, "tittel": str(h.get("summary") or "")[:100],
+                                      "start": s.get("dateTime") or s.get("date"), "slutt": e.get("dateTime") or e.get("date"),
+                                      "heldag": "dateTime" not in s, "sted": str(h.get("location") or "")[:80]})
+        self.sb.db.lagre_innstilling(f"kalender-{profil['id']}", {"tid": naa().isoformat(timespec="seconds"), "hendelser": hendelser})
+        return len(hendelser)
 
     # ------------------------------------------------------------ pulskurver (TCX via garmin_connect.download_activity)
     HA_CONFIG = "/homeassistant"
@@ -403,6 +456,11 @@ class HAKobling:
         trent_i_dag = any(self.sb.lokal(o["startet"]).date() == i_dag for o in self.sb.db.alle(
             "SELECT startet FROM okter WHERE profil_id = ? AND status = 'fullfort' ORDER BY startet DESC LIMIT 3", (pid,)))
         dato = (i_dag + timedelta(days=1 if trent_i_dag else 0)).isoformat()
+        if neste:
+            import ukeplan
+            planlagt = ukeplan.neste_styrkedato(self.sb, pid, neste["id"])
+            if planlagt and planlagt >= i_dag.isoformat() and not (planlagt == i_dag.isoformat() and trent_i_dag):
+                dato = planlagt
         rader = self.sb.db.alle("SELECT * FROM garmin_styrke WHERE profil_id = ?", (pid,))
         for r in rader:
             riktig = neste and r["dag_id"] == neste["id"] and r["schedule_dato"] == dato

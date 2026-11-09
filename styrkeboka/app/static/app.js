@@ -212,6 +212,7 @@
     v.innerHTML = "";
     oppdaterOktPrikk();
 
+    if (ov.dagsform && !ov.aktiv) v.append(dagsformKort(ov.dagsform));
     if (ov.aktiv) {
       const a = ov.aktiv;
       const pst = a.nokkeltall.planlagt ? Math.min(100, Math.round(100 * a.nokkeltall.sett / a.nokkeltall.planlagt)) : 0;
@@ -276,6 +277,7 @@
     if (aiPaa()) knapper.append(el("button", { class: "knapp ai-lys", onclick: () => sporTreneren() }, ikon("snakk"), "Spør treneren"));
     if (ov.sist) knapper.append(el("button", { class: "knapp noytral", onclick: () => visOktDetalj(ov.sist.id, "trening") }, ikon("klokke"), "Forrige økt"));
     if (knapper.children.length) v.append(knapper);
+    if (ov.ukeplan) v.append(ukeplanKort(ov.ukeplan));
   }
 
   function oppdaterOktPrikk() {
@@ -340,6 +342,13 @@
         el("ul", {}, go.bevegelser.map((b) => el("li", {}, b))),
         el("p", { class: "forklaring" }, go.tekst),
         el("button", { class: "knapp sekundaer liten", onclick: () => { lagre(`oppvarmet-${okt.id}`, true); tegnOkt(); } }, ikon("sjekk"), "Ferdig oppvarmet")));
+    }
+    const df = ov?.dagsform;
+    if (df && df.niva !== "god" && !okt.nokkeltall.sett && !okt.lett && !hent(`lettere-${okt.id}`, false)) {
+      v.append(el("div", { class: `info-boks ${df.niva === "lav" ? "obs" : ""}` }, ikon("hjerte"),
+        el("span", {}, `${df.tittel}: ${df.rad} `, el("button", { class: "lenke", onclick: async () => {
+          try { okt = (await post(`api/okter/${okt.id}/lettere`)).okt; lagre(`lettere-${okt.id}`, true); visToast("Økta er gjort lettere"); tegnOkt(); } catch (e) { feil(e); }
+        } }, "Gjør økta lettere"))));
     }
     if (okt.lett) v.append(el("div", { class: "info-boks obs" }, ikon("info"), "Lettere uke: færre sett og samme vekt som sist. Stopp med god margin – denne uka teller ikke i vektforslagene."));
     const tipsRot = el("div", { id: "tips-rot" });
@@ -866,6 +875,55 @@
             if (!$("v-okt").hidden && okt) visOkt(okt.id); else if (fane === "program") visProgram(); else visTrening();
           } catch (e) { feil(e); }
         } }, ikon("sjekk"), "Lagre")));
+  }
+
+  // ================================================================ DAGSFORM OG UKEPLAN
+  function dagsformKort(d) {
+    const v = d.verdier;
+    const chip = (verdi, tekst) => verdi == null ? null : el("span", { class: "merkelapp" }, tekst);
+    return el("div", { class: `kort dagsform ${d.niva}` },
+      el("div", { class: "kort-hode" }, el("h2", {}, d.tittel), el("span", { class: "dagsform-prikk" })),
+      el("p", { class: "dagsform-rad" }, d.rad),
+      el("div", { class: "chips" },
+        chip(v.beredskap, `Beredskap ${v.beredskap}`), chip(v.sovn_score, `Søvn ${v.sovn_score}`),
+        chip(v.sovn_min, `${tall(Math.round(v.sovn_min / 6) / 10)} t søvn`), chip(v.hrv, `HRV ${v.hrv}${d.hrv_snitt ? ` (snitt ${d.hrv_snitt})` : ""}`),
+        chip(v.body_battery, `Body Battery ${v.body_battery}`), chip(v.stress, `Stress ${v.stress}`), chip(v.restitusjon, `Restitusjon ${v.restitusjon} t`)),
+      d.grunner.length ? el("p", { class: "forklaring", style: "font-size:13px" }, `Fordi: ${d.grunner.join(", ")}.`) : null);
+  }
+
+  function ukeplanKort(u) {
+    const i_dag = new Date().toLocaleDateString("sv-SE");
+    const rad = (d) => el("li", { class: `${d.dato === i_dag ? "i-dag" : ""} ${d.borte ? "borte" : ""}` },
+      el("span", { class: "uke-dag" }, d.dato === i_dag ? "I dag" : `${d.ukedag.slice(0, 3)} ${+d.dato.slice(8, 10)}.`),
+      el("span", { class: "tekst" },
+        d.okter.length ? el("span", { class: "chips" }, d.okter.map((o) => el("span", { class: `merkelapp ${o.type === "styrke" ? "aksent" : o.type === "lop" ? "lop" : ""}` },
+          o.type === "lop" ? `🏃 ${o.tittel}${o.minutter ? ` ${o.minutter} min` : ""}` : o.navn || o.tittel))) : el("span", { class: "hviledag" }, d.borte ? "Borte" : "Hvile"),
+        d.notat ? el("small", {}, d.notat) : null,
+        d.kalender?.length ? el("small", { class: "kal" }, d.kalender.slice(0, 2).join(" · ")) : null));
+    return el("div", { class: "kort ukeplan" },
+      el("div", { class: "kort-hode" }, el("h2", {}, "De neste 7 dagene"), el("span", { class: `merkelapp ${u.kilde === "ai" ? "ai" : ""}` }, u.kilde === "ai" ? ikon("gnist") : null, u.kilde === "ai" ? "AI" : "Forslag")),
+      u.oppsummering ? el("p", { class: "forklaring", style: "font-size:13px" }, u.oppsummering) : null,
+      el("ul", { class: "uke-liste" }, u.dager.map(rad)),
+      el("div", { class: "knapperad" },
+        aiPaa() ? el("button", { class: "knapp ai-lys liten", style: "flex:1", onclick: ukeplanAiArk }, ikon("gnist"), u.kilde === "ai" ? "Ny plan med AI" : "Planlegg uka med AI") : null,
+        u.kilde === "ai" ? el("button", { class: "knapp noytral liten", onclick: async () => { try { await slett(`api/profiler/${pid}/ukeplan`); visTrening(); } catch (e) { feil(e); } } }, "Appens forslag") : null),
+      !Object.keys(profil()?.koblinger?.kalendere || {}).length ? el("p", { class: "forklaring", style: "font-size:12.5px" }, "Tips: velg jobb- og reisekalenderen under Helse → Hent data, så planlegges uka rundt den.") : null);
+  }
+
+  function ukeplanAiArk() {
+    const onske = el("textarea", { placeholder: "Valgfritt: f.eks. «vil helst trene morgen», «onsdag passer ikke», «vil løpe langtur søndag»", rows: 3 });
+    const knapp = el("button", { class: "knapp ai" }, ikon("gnist"), "Lag ukeplan");
+    const status = el("div");
+    knapp.addEventListener("click", async () => {
+      knapp.disabled = true;
+      status.innerHTML = ""; status.append(el("div", { style: "margin-top:12px" }, aiLaster("Treneren ser på kalenderen, dagsformen og programmet …")));
+      try { await post(`api/profiler/${pid}/ukeplan/ai`, { onske: onske.value }); lukkArk(); visToast("Ukeplanen er klar"); visTrening(); }
+      catch (e) { knapp.disabled = false; status.innerHTML = ""; feil(e); }
+    });
+    aapneArk(el("h3", {}, ikon("kalender"), "Planlegg uka"),
+      el("p", { class: "hint" }, "Treneren plasserer styrkeøktene og løpeturene de neste 7 dagene rundt kalenderen din, dagsformen og løpeplanen. Neste styrkeøkt legges også i Garmin-kalenderen på riktig dag."),
+      el("div", { class: "skjema" }, el("label", { class: "felt" }, onske)), status,
+      el("div", { class: "ark-knapper" }, el("button", { class: "knapp noytral", onclick: lukkArk }, "Avbryt"), knapp));
   }
 
   // ================================================================ LØPING
@@ -1791,7 +1849,9 @@
     if (r.feil) { visToast(r.feil); return; }
     const naa_ = profil().koblinger || {};
     const valg = { ...r.forslag, ...naa_ };
-    const navn = { aktiviteter: "Aktiviteter (løping, gåing m.m.)", vekt: "Vekt", hvilepuls: "Hvilepuls", vo2max: "VO₂max", skritt: "Skritt per dag", fettprosent: "Fettprosent" };
+    const navn = { aktiviteter: "Aktiviteter (løping, gåing m.m.)", vekt: "Vekt", hvilepuls: "Hvilepuls", vo2max: "VO₂max", skritt: "Skritt per dag", fettprosent: "Fettprosent",
+      sovn_score: "Søvnscore", sovn_min: "Søvnlengde", hrv: "HRV (natt)", hrv_status: "HRV-status", body_battery: "Body Battery", stress: "Stress",
+      beredskap: "Treningsberedskap", restitusjon: "Restitusjonstid", treningsstatus: "Treningsstatus" };
     const felter = Object.entries(navn).map(([typ, tekst]) => {
       const liste = r.kilder[typ] || [];
       const sel = el("select", { onchange: () => { valg[typ] = sel.value; } }, el("option", { value: "" }, liste.length ? "Ikke hent" : "Fant ingen sensor"),
@@ -1800,12 +1860,17 @@
       if (!liste.length) sel.disabled = true;
       return felt(tekst, sel);
     });
+    valg.kalendere = [...(naa_.kalendere || r.forslag.kalendere || [])];
+    const kalVelger = el("div", { class: "chips" }, (r.kilder.kalendere || []).map((x) => el("button", { class: `chip liten ${valg.kalendere.includes(x.entity_id) ? "valgt" : ""}`, onclick: (e) => {
+      valg.kalendere = valg.kalendere.includes(x.entity_id) ? valg.kalendere.filter((y) => y !== x.entity_id) : [...valg.kalendere, x.entity_id];
+      e.currentTarget.classList.toggle("valgt", valg.kalendere.includes(x.entity_id));
+    } }, x.navn)));
     const knapp = el("button", { class: "knapp" }, "Lagre og hent");
     knapp.addEventListener("click", async () => {
       knapp.disabled = true;
       knapp.textContent = "Henter historikk …";
       try {
-        const res = await put(`api/profiler/${pid}/koblinger`, { koblinger: Object.fromEntries(Object.entries(valg).filter(([, x]) => x)) });
+        const res = await put(`api/profiler/${pid}/koblinger`, { koblinger: Object.fromEntries(Object.entries(valg).filter(([, x]) => Array.isArray(x) ? x.length : x)) });
         lukkArk(); await lastStart();
         visToast(`Koblet! Hentet ${res.importert} aktiviteter og ${res.maalinger} målinger.`);
         visKropp();
@@ -1814,7 +1879,10 @@
     aapneArk(el("h3", {}, ikon("hjerte"), "Hent fra Home Assistant"),
       el("p", { class: "hint" }, `Velg sensorene som hører til ${profil().navn}. Forslagene er gjettet ut fra navnene – sjekk at det stemmer. Data hentes hvert kvarter, og første gang hentes også historikk bakover.`),
       el("div", { class: "skjema" }, felter),
-      el("p", { class: "forklaring", style: "margin-top:10px;font-size:13px" }, "Styrketrening registrert på klokka hoppes over, siden den logges her i appen. Startposisjon (GPS) lagres ikke."),
+      el("div", { class: "ark-etikett" }, "Kalendere å planlegge rundt"),
+      el("p", { class: "forklaring", style: "font-size:13px;margin-bottom:8px" }, "F.eks. jobb og reiser. Tittel, tid og sted brukes til ukeplanen og sendes til AI-treneren når den planlegger."),
+      kalVelger,
+      el("p", { class: "forklaring", style: "margin-top:10px;font-size:13px" }, "Startposisjon (GPS) lagres ikke."),
       el("div", { class: "ark-knapper" }, el("button", { class: "knapp noytral", onclick: lukkArk }, "Avbryt"), knapp));
   }
 

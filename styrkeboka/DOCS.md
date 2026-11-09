@@ -108,6 +108,16 @@ Har du f.eks. Garmin Connect-integrasjonen, trykk **Helse → Hent data automati
 * GPS-posisjoner lagres ikke.
 * Målinger du legger inn selv overskrives ikke av automatisk henting samme dag.
 
+### Dagsform: søvn, HRV, stress og restitusjon
+
+Kobler du også søvn, HRV, Body Battery, stress, treningsberedskap og restitusjonstid (Garmin-sensorene foreslås automatisk), viser forsiden et **dagsformkort** – god, middels eller lav – med grunnene og et konkret råd. HRV sammenlignes med ditt eget snitt de siste ukene. Er formen ikke god, kan du trykke **Gjør økta lettere** i økta (færre sett, litt lavere vekt).
+
+### Ukeplan rundt kalenderen
+
+Velg kalenderne dine (jobb, reiser, f.eks. TripIt) i samme ark. Forsiden viser **de neste 7 dagene** med styrkeøkter og løpeturer: dager du er borte (reise, kurs, ferie, hytte – eller heldagshendelser med sted) og svært lange dager hoppes over, og øktene spres med hvile mellom. Jobbvakter teller som opptatte timer, ikke som borte. **Planlegg uka med AI** lager en mer gjennomtenkt plan ut fra kalender, dagsform, løpeplan og ønsker du skriver. Neste styrkeøkt legges i Garmin-kalenderen på dagen fra ukeplanen.
+
+Kalenderhendelsene (titler, tider og sted) sendes til AI-en når den planlegger – velg derfor bare kalendere du er komfortabel med.
+
 ## AI-treneren
 
 Bruker AI-en du har i Home Assistant (en «AI-oppgave»-entitet, `ai_task.*`, f.eks. fra Anthropic-integrasjonen). Velg hvilken under Innstillinger, eller la appen velge automatisk.
@@ -117,7 +127,7 @@ Bruker AI-en du har i Home Assistant (en «AI-oppgave»-entitet, `ai_task.*`, f.
 * **Oppsummering etter økta** – automatisk eller på knappen.
 * **Spør treneren** – fra forsiden, under økta eller fra en øvelse.
 
-AI-en får mål, erfaring, utstyr, hensyn du har skrevet og de siste øktene – **aldri navn**. Appen fungerer fullt ut uten AI.
+AI-en får mål, erfaring, utstyr, hensyn du har skrevet, de siste øktene, dagsformen og kalenderen for de neste 7 dagene – **aldri navn**. Appen fungerer fullt ut uten AI.
 
 ## Home Assistant
 

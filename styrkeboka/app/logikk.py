@@ -248,9 +248,13 @@ class Styrkeboka:
             rad["garmin_eksport"] = {"okter": bool(g.get("okter")), "loping": bool(g.get("loping")), "styrke": bool(g.get("styrke"))}
         if "koblinger" in d:
             k = d["koblinger"] or {}
+            import kropp
+            gyldige = {"aktiviteter", *kropp.KOBLBARE_TALL, *kropp.KOBLBARE_TEKST}
             rad["koblinger"] = {n: str(v) for n, v in k.items()
-                                if n in ("aktiviteter", "vekt", "hvilepuls", "vo2max", "skritt", "fettprosent")
-                                and isinstance(v, str) and re.fullmatch(r"sensor\.[a-z0-9_]+", v)}
+                                if n in gyldige and isinstance(v, str) and re.fullmatch(r"sensor\.[a-z0-9_]+", v)}
+            kal = [str(x) for x in (k.get("kalendere") or []) if isinstance(x, str) and re.fullmatch(r"calendar\.[a-z0-9_]+", x)]
+            if kal:
+                rad["koblinger"]["kalendere"] = kal[:6]
         if "utstyrsprofil_id" in d:
             rad["utstyrsprofil_id"] = _int(d["utstyrsprofil_id"])
         if pid is None:
@@ -917,6 +921,20 @@ class Styrkeboka:
         self._varsle("okt_fullfort", {"profil_id": o["profil_id"], "oppsummering": res})
         return res
 
+    def lettere_okt(self, oid: int) -> dict:
+        """Gjør resten av økta lettere (dagsform): halvparten av settene, samme vekt som sist, mer i reserve."""
+        o = self._okt_rad(oid)
+        for oo in self.db.alle("SELECT * FROM okt_ovelser WHERE okt_id = ?", (oid,)):
+            if self.db.verdi("SELECT COUNT(*) FROM sett WHERE okt_ovelse_id = ? AND oppvarming = 0", (oo["id"],)):
+                continue
+            ny = P.lett_dose(oo)
+            ov = self.ovelse(oo["ovelse"])
+            tidl = self.tidligere_sett(o["profil_id"], ov["nokkel"], oid)
+            f = P.lett_forslag(self.forslag(o["profil_id"], ov, ny, tidl), tidl)
+            self.db.oppdater("okt_ovelser", oo["id"], {"sett_plan": ny["sett_plan"], "rir": ny["rir"], "forslag_kg": f["kg"],
+                                                       "forslag_tekst": "Lettere i dag: færre sett og samme vekt som sist – stopp med god margin."})
+        return self.okt(oid)
+
     def avbryt_okt(self, oid: int) -> None:
         o = self._okt_rad(oid)
         self.db.slett("okter", oid)
@@ -1120,6 +1138,8 @@ class Styrkeboka:
                                      "dager": [{"id": d["id"], "navn": d["navn"]} for d in prog["dager"]]} if prog else None,
             "neste": neste_ut, "aktiv": aktiv, "mangler_startvekt": self.mangler_startvekt(pid) if prog else 0,
             "loping": self._loping_kort(pid),
+            "dagsform": __import__("dagsform").status(self, pid),
+            "ukeplan": __import__("ukeplan").hent(self, pid) if (prog or (p.get("koblinger") or {}).get("kalendere")) else None,
             "sist": {"id": sist["id"], "startet": sist["startet"], "dag_navn": sist["dag_navn"]} if sist else None,
             "uke": {"okter": st["denne_uka"], "plan": st["plan_per_uke"], "uker_paa_rad": st["uker_paa_rad"],
                     "aktivitetsminutter": self._kropp_attributter(pid)["aktivitetsminutter_uke"]},

@@ -1,5 +1,13 @@
 # Endringslogg
 
+## 0.10.0
+
+- Dagsform: søvn (score og lengde), HRV mot ditt eget snitt, Body Battery, stress, treningsberedskap og restitusjonstid hentes fra klokka. Forsiden viser dagsformen med råd, og «Gjør økta lettere» når formen er lav.
+- Kalendere: velg jobb- og reisekalender. Ny ukeplan for de neste 7 dagene legger styrkeøkter og løpeturer rundt reiser, lange dager og dagsformen.
+- «Planlegg uka med AI»: AI-treneren lager ukeplanen ut fra kalender, dagsform, løpeplan og ønskene dine.
+- AI-treneren bruker dagsform og kalender i alle råd og svar.
+- Neste styrkeøkt legges i Garmin-kalenderen på dagen fra ukeplanen.
+
 ## 0.9.0
 
 - Styrkeøkter til klokka: hver økt i programmet ligger i Garmin som strukturert styrkeøkt med øvelser, sett, reps, vekt, hvile og oppvarmingssett – oppdatert med dagens vektforslag etter hver økt. Neste økt legges i Garmin-kalenderen, så klokka guider deg og Garmin-aktiviteten får øvelser og vekter.

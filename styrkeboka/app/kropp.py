@@ -25,7 +25,21 @@ MAALETYPER = {
     "skritt": {"navn": "Skritt", "enhet": "skritt/dag", "min": 0, "maks": 100000, "desimaler": 0},
     "blodtrykk_sys": {"navn": "Blodtrykk (over)", "enhet": "mmHg", "min": 60, "maks": 260, "desimaler": 0},
     "blodtrykk_dia": {"navn": "Blodtrykk (under)", "enhet": "mmHg", "min": 30, "maks": 160, "desimaler": 0},
+    # dagsform (typisk fra klokka)
+    "sovn_score": {"navn": "Søvnscore", "enhet": "poeng", "min": 0, "maks": 100, "desimaler": 0},
+    "sovn_min": {"navn": "Søvn", "enhet": "min", "min": 0, "maks": 1000, "desimaler": 0},
+    "hrv": {"navn": "HRV (natt)", "enhet": "ms", "min": 5, "maks": 250, "desimaler": 0},
+    "body_battery": {"navn": "Body Battery (morgen)", "enhet": "%", "min": 0, "maks": 100, "desimaler": 0},
+    "stress": {"navn": "Stress (snitt)", "enhet": "nivå", "min": 0, "maks": 100, "desimaler": 0},
+    "beredskap": {"navn": "Treningsberedskap", "enhet": "%", "min": 0, "maks": 100, "desimaler": 0},
+    "restitusjon": {"navn": "Restitusjonstid", "enhet": "t", "min": 0, "maks": 120, "desimaler": 0},
 }
+# sensorer som kan kobles: tallverdier lagres som målinger, tekstverdier som status
+KOBLBARE_TALL = ["vekt", "hvilepuls", "vo2max", "skritt", "fettprosent", "sovn_score", "sovn_min", "hrv", "body_battery",
+                 "stress", "beredskap", "restitusjon"]
+KOBLBARE_TEKST = ["hrv_status", "treningsstatus"]
+# verdier som gjelder «i dag» (natt/morgen) – lagres på dagens dato når de hentes
+DAGLIGE = {"hvilepuls", "vo2max", "sovn_score", "sovn_min", "hrv", "body_battery", "stress", "beredskap", "restitusjon"}
 
 AKTIVITETSTYPER = {
     "loping": {"navn": "Løping", "intensitet": "hoy"},

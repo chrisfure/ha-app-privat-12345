@@ -351,6 +351,45 @@ class API:
                 except Exception as e:  # noqa: BLE001
                     log.warning("Løpeøkter til Garmin: %s", e)
 
+        # ---- dagsform og ukeplan
+        @r("GET", "/api/profiler/{pid}/dagsform")
+        async def dagsform_status(req):
+            import dagsform
+            return {"dagsform": dagsform.status(sb, req.int("pid"))}
+
+        @r("GET", "/api/profiler/{pid}/ukeplan")
+        async def hent_ukeplan(req):
+            import ukeplan
+            return {"ukeplan": ukeplan.hent(sb, req.int("pid"))}
+
+        @r("POST", "/api/profiler/{pid}/ukeplan/ai")
+        async def ai_ukeplan(req):
+            import ukeplan
+            pid = req.int("pid")
+            p = sb.profil(pid)
+            if hasattr(self.ai, "hent_kalender") and (p.get("koblinger") or {}).get("kalendere"):
+                try:
+                    await self.ai.hent_kalender(p)
+                except Exception as e:  # noqa: BLE001
+                    log.warning("Kalender: %s", e)
+            data = ai.les_json(await self.ai.spor("ukeplan", ai.oppgave_ukeplan(sb, pid, str(req.data.get("onske") or ""))))
+            plan = ukeplan.valider_ai_plan(sb, pid, data)
+            ukeplan.lagre(sb, pid, plan)
+            sb.logg_ai(pid, "ukeplan", str(req.data.get("onske") or ""), plan["oppsummering"])
+            sb._varsle("ukeplan", {"profil_id": pid})  # noqa: SLF001
+            return {"ukeplan": plan}
+
+        @r("DELETE", "/api/profiler/{pid}/ukeplan")
+        async def nullstill_ukeplan(req):
+            import ukeplan
+            sb.db.kjor("DELETE FROM innstillinger WHERE nokkel = ?", (f"ukeplan-{req.int('pid')}",))
+            sb._varsle("ukeplan", {"profil_id": req.int("pid")})  # noqa: SLF001
+            return {"ukeplan": ukeplan.hent(sb, req.int("pid"))}
+
+        @r("POST", "/api/okter/{oid}/lettere")
+        async def lettere(req):
+            return {"okt": sb.lettere_okt(req.int("oid"))}
+
         # ---- løpeperioder
         @r("GET", "/api/profiler/{pid}/loping")
         async def loping_status(req):

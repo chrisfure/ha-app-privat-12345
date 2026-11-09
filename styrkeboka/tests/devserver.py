@@ -107,6 +107,16 @@ class FalskAI:
 
     async def spor(self, oppgave, instruksjoner):
         await asyncio.sleep(0.4)
+        if "ukeplan" in oppgave:
+            import ukeplan
+            pid = self.sb.profiler()[0]["id"]
+            lok = ukeplan.lokal_plan(self.sb, pid)
+            for d in lok["dager"]:
+                if not d["okter"] and not d["borte"]:
+                    d["okter"] = [{"type": "annet", "tittel": "Mobilitet 15 min"}]
+                    d["notat"] = "Rolig dag"
+                    break
+            return json.dumps({"oppsummering": "Tre styrkeøkter lagt rundt reisen, med hviledag før langturen.", "dager": lok["dager"]}, ensure_ascii=False)
         if "startvekter" in oppgave:
             import re as _re
             vekter = {m.group(1): float(m.group(2)) * 1.05 for m in _re.finditer(r"- (\S+) \(.*?appens anslag: ([\d.]+) kg", instruksjoner)}
