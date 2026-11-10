@@ -27,6 +27,25 @@ UKEDAGER = ["mandag", "tirsdag", "onsdag", "torsdag", "fredag", "lørdag", "søn
 STANDARD_DAGER = {1: [5], 2: [1, 5], 3: [1, 3, 6]}
 
 
+LOPENDE_TIL = "2099-12-31"   # «til jeg skrur av»
+
+
+def lopende(p: dict) -> bool:
+    return (p.get("til") or "") >= "2090"
+
+
+def har_molle(sb: "Styrkeboka") -> bool:
+    return any("tredemolle" in (u.get("utstyr") or []) for u in sb.utstyrsprofiler())
+
+
+MOLLE_TIPS = {
+    "rolig": "På tredemølle: 1 % stigning og en fart der du kan prate.",
+    "langtur": "På tredemølle: 1 % stigning, rolig fart – varier gjerne stigningen litt underveis.",
+    "intervall": "På tredemølle: 1 % stigning. Øk farten i dragene og gå eller jogg rolig på båndet i pausene.",
+    "lopgaa": "På tredemølle: 1 % stigning – bytt mellom rolig jogg og rask gange på båndet.",
+}
+
+
 def lopedager(p: dict) -> list[int]:
     dager = sorted({int(d) for d in (p.get("lopedager") or []) if str(d).isdigit() and 0 <= int(d) <= 6})
     n = int(p.get("okter_per_uke") or 2)
@@ -105,14 +124,16 @@ def aktiv_periode(sb: "Styrkeboka", pid: int, dag: date | None = None) -> dict |
 
 def lagre_periode(sb: "Styrkeboka", pid: int, d: dict, lid: int | None = None) -> dict:
     from logikk import Feil
+    apen = bool(d.get("lopende")) or not d.get("til") or str(d.get("til")) >= "2090"
     try:
-        fra, til = date.fromisoformat(str(d.get("fra"))[:10]), date.fromisoformat(str(d.get("til"))[:10])
+        fra = date.fromisoformat(str(d.get("fra"))[:10]) if d.get("fra") else sb.lokal(naa()).date()
+        til = date.fromisoformat(LOPENDE_TIL if apen else str(d.get("til"))[:10])
     except ValueError as e:
         raise Feil("Velg fra- og til-dato") from e
     if til < fra:
         raise Feil("Til-datoen må være etter fra-datoen")
-    if (til - fra).days > 366:
-        raise Feil("En løpeperiode kan vare maks ett år")
+    if not apen and (til - fra).days > 366:
+        raise Feil("En tidsbegrenset løpeperiode kan vare maks ett år")
     dager = sorted({int(x) for x in (d.get("lopedager") or []) if str(x).isdigit() and 0 <= int(x) <= 6})[:3]
     n = len(dager) if dager else max(1, min(3, int(d.get("okter_per_uke") or 2)))
     rad = {"profil_id": pid, "fra": fra.isoformat(), "til": til.isoformat(), "okter_per_uke": n,
@@ -134,16 +155,20 @@ def status(sb: "Styrkeboka", pid: int) -> dict:
     i_dag = sb.lokal(naa()).date()
     p = aktiv_periode(sb, pid, i_dag)
     kommende = [x for x in perioder(sb, pid) if x["fra"] > i_dag.isoformat()]
-    ut = {"perioder": perioder(sb, pid), "kommende": kommende[:3], "aktiv": None, "nivaa": NIVAA, "maal": MAAL}
+    molle = har_molle(sb)
+    ut = {"perioder": [{**x, "lopende": lopende(x)} for x in perioder(sb, pid)], "kommende": kommende[:3], "aktiv": None,
+          "nivaa": NIVAA, "maal": MAAL, "har_molle": molle}
     if not p:
         return ut
     start = _mandag(date.fromisoformat(p["fra"]))
     uke = (_mandag(i_dag) - start).days // 7 + 1
-    uker_totalt = (_mandag(date.fromisoformat(p["til"])) - start).days // 7 + 1
+    uker_totalt = None if lopende(p) else (_mandag(date.fromisoformat(p["til"])) - start).days // 7 + 1
     makspuls = kropp.avledet(sb, pid).get("makspuls")
     plan = ukeplan(p, uke, makspuls)
     dager = lopedager(p)
     for i, o in enumerate(plan):
+        if molle:
+            o["molle"] = MOLLE_TIPS.get(o["type"])
         if i < len(dager):
             o["dag"] = UKEDAGER[dager[i]]
             o["dato"] = (_mandag(i_dag) + timedelta(days=dager[i])).isoformat()
@@ -152,15 +177,16 @@ def status(sb: "Styrkeboka", pid: int) -> dict:
     turer = [kropp.berik(a) for a in sb.db.alle(
         "SELECT * FROM aktiviteter WHERE profil_id = ? AND type = 'loping' AND start >= ? AND varighet_s >= 600 ORDER BY start",
         (pid, til_iso(mandag)))]
+    turer = [t for t in turer if sb.lokal(t["start"]).date().isoformat() >= p["fra"]]   # turer fra før løpingen ble lagt inn teller ikke
     for i, o in enumerate(plan):
         o["gjort"] = i < len(turer)
         if o["gjort"]:
             t = turer[i]
             o["logget"] = {"id": t["id"], "start": t["start"], "km": t["km"], "minutter": t["minutter"], "tempo": t["tempo"]}
     neste = next((o for o in plan if not o["gjort"]), None)
-    ut["aktiv"] = {"periode": p, "uke": uke, "uker": uker_totalt, "plan": plan, "neste": neste,
+    ut["aktiv"] = {"periode": {**p, "lopende": lopende(p)}, "uke": uke, "uker": uker_totalt, "plan": plan, "neste": neste,
                    "gjort": sum(1 for o in plan if o["gjort"]), "lett_uke": uke % 4 == 0,
-                   "neste_uke": ukeplan(p, uke + 1, makspuls) if uke < uker_totalt else []}
+                   "neste_uke": ukeplan(p, uke + 1, makspuls) if uker_totalt is None or uke < uker_totalt else []}
     return ut
 
 
@@ -179,12 +205,13 @@ def ai_tekst(sb: "Styrkeboka", pid: int) -> str:
     if not a:
         if s["kommende"]:
             k = s["kommende"][0]
-            return f"Planlagt løpeperiode fra {k['fra']} til {k['til']} ({k['okter_per_uke']} turer/uke)."
+            return f"Planlagt løping fra {k['fra']} ({k['okter_per_uke']} turer/uke)."
         return ""
     p = a["periode"]
-    return (f"Løpeperiode aktiv: uke {a['uke']} av {a['uker']}, {p['okter_per_uke']} turer i uka, nivå {NIVAA[p['niva']].lower()}, "
+    return (f"Løping i opplegget: uke {a['uke']}{f' av ' + str(a['uker']) if a['uker'] else ''}, {p['okter_per_uke']} turer i uka, nivå {NIVAA[p['niva']].lower()}, "
             f"mål {MAAL[p['maal']].lower()}. Denne uka: " + "; ".join(f"{o['tittel']} ({'gjort' if o['gjort'] else 'gjenstår'})" for o in a["plan"])
-            + (". Ett sett mindre på hjelpeøvelser for bein i perioden." if p.get("juster_styrke") else "."))
+            + (". Ett sett mindre på hjelpeøvelser for bein mens løpingen pågår." if p.get("juster_styrke") else ".")
+            + (" Har tredemølle hjemme – turene kan tas inne." if s.get("har_molle") else ""))
 
 
 # --------------------------------------------------------------------------- Garmin-økter

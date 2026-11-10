@@ -27,6 +27,7 @@ UTSTYR = {
     "maskiner": "Apparater (beinpress, nedtrekk o.l.)",
     "trekkstang": "Stang for pull-ups",
     "strikk": "Treningsstrikk",
+    "tredemolle": "Tredemølle",
 }
 
 MONSTER = {
@@ -250,6 +251,10 @@ BIBLIOTEK: list[dict] = [
     _o("kabelkryss", "Kabelkryss", "bryst_iso", "kabel", ["kabel"], ["bryst"], 1, True, False,
        ["Ett steg frem", "Lett bøy i albuene", "Klem hendene sammen foran deg"]),
     # ---------------------------------------------------------------- kondisjon og intervaller (brukes i HIIT, AMRAP og EMOM)
+    _o("tredemolle-lop", "Løp på tredemølle", "kondisjon", "kroppsvekt", ["tredemolle"], ["lar_forside", "legger", "sete"], 1, True, False,
+       ["1 % stigning ligner løping ute", "Se fram, ikke ned på båndet", "Korte, lette steg midt på båndet"]),
+    _o("tredemolle-motbakke", "Motbakke på tredemølle", "kondisjon", "kroppsvekt", ["tredemolle"], ["sete", "legger", "lar_bakside"], 1, True, False,
+       ["8–12 % stigning, rask gange", "Ikke hold i rekkverket", "Hele foten i båndet, press fra setet"]),
     _o("sprellemann", "Sprellemann", "kondisjon", "kroppsvekt", [], ["legger", "skuldre"], 1, True, False,
        ["Land mykt på fremre del av foten", "Armene helt opp", "Finn en jevn rytme"]),
     _o("jogg-pa-stedet", "Jogg på stedet", "kondisjon", "kroppsvekt", [], ["legger", "lar_forside"], 1, True, False,

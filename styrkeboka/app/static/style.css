@@ -799,3 +799,54 @@ body.har-intervall { overflow: hidden; }
 .iv-liste li.neste { outline: 2px dashed color-mix(in srgb, var(--fase) 60%, transparent); outline-offset: -2px; }
 @media (min-height: 760px) { .iv-skjerm { gap: 14px; } }
 @media (prefers-reduced-motion: reduce) { .iv-ring-bue, .iv-prog > div { transition: none; } .pauset .iv-tid { animation: none; opacity: .6; } }
+
+/* ---------------------------------------------------------------- klokke og sensorer */
+.kobling-liste { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.kobling { border-radius: 16px; background: var(--flate-2); overflow: hidden; }
+.kobling.apen { box-shadow: 0 0 0 2px var(--aksent) inset; }
+.kobling-rad { width: 100%; display: flex; align-items: center; gap: 10px; padding: 10px 12px; text-align: left; color: inherit; min-height: 56px; }
+.kobling-rad .tekst, .kobling-valg .tekst, .kobling-status .tekst { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.kobling-rad .tekst b { font-weight: 900; }
+.kobling-rad .tekst small, .kobling-valg small, .kobling-status small { color: var(--dempet); font-weight: 700; font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.kobling:not(.paa) .kobling-rad .tekst b { color: var(--dempet); }
+.kobling-prikk { width: 22px; height: 22px; flex: none; border-radius: 50%; display: grid; place-items: center; font-size: 12px; font-weight: 900; color: #fff; background: transparent; border: 2px dashed var(--linje); }
+.kobling.paa .kobling-prikk, .kobling-prikk.paa { background: var(--gronn); border: 0; }
+.kobling-verdi { flex: none; font-weight: 900; font-size: 14px; font-variant-numeric: tabular-nums; padding: 3px 9px; border-radius: 10px; background: var(--flate); max-width: 40%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.kobling-pil svg { width: 16px; height: 16px; color: var(--dempet); display: block; }
+.kobling-detalj { padding: 0 12px 12px; display: flex; flex-direction: column; gap: 6px; }
+.kobling-valg { width: 100%; display: flex; align-items: center; gap: 10px; padding: 9px 10px; border-radius: 12px; background: var(--flate); text-align: left; color: inherit; min-height: 48px; }
+.kobling-valg b { font-size: 14.5px; }
+.kobling-valg .radio { width: 20px; height: 20px; flex: none; border-radius: 50%; border: 2px solid var(--linje); }
+.kobling-valg.valgt { box-shadow: 0 0 0 2px var(--aksent) inset; }
+.kobling-valg.valgt .radio { border-color: var(--aksent); background: radial-gradient(circle, var(--aksent) 45%, transparent 50%); }
+.kobling-valg .kobling-verdi { background: var(--flate-2); }
+.kobling-detalj input[type="search"] { margin-top: 4px; min-height: 44px; font-size: 14px; width: 100%; border: 0; border-radius: 12px; padding: 0 12px; background: var(--flate); color: var(--blekk); }
+.kobling-treff { display: flex; flex-direction: column; gap: 6px; }
+.kobling-status { display: flex; align-items: center; gap: 12px; width: 100%; padding: 12px 16px; border-radius: 20px; background: var(--flate); box-shadow: var(--skygge); text-align: left; color: inherit; }
+
+/* ---------------------------------------------------------------- løping i opplegget */
+.loping-kort h2 { display: inline-flex; align-items: center; gap: 8px; }
+.loping-kort h2 svg { width: 20px; height: 20px; }
+.loping-kort.paa { box-shadow: var(--skygge), 4px 0 0 var(--oransje) inset; }
+.loping-status { margin: 0; font-weight: 700; color: var(--dempet); }
+.loping-status b { color: var(--blekk); }
+.loping-uke { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.loping-uke li { display: flex; align-items: center; gap: 10px; font-weight: 800; }
+.loping-uke li small { margin-left: auto; color: var(--dempet); font-weight: 700; }
+.loping-uke .prikk { width: 22px; height: 22px; border-radius: 50%; border: 2px solid var(--oransje); display: grid; place-items: center; font-size: 12px; color: #fff; flex: none; }
+.loping-uke li.gjort .prikk { background: var(--oransje); }
+.loping-uke li.gjort { color: var(--dempet); }
+.loping-hurtig { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.loping-hurtig .knapp { flex-direction: column; gap: 0; padding: 10px 4px; min-height: 68px; }
+.loping-hurtig .knapp b { font-size: 24px; line-height: 1.1; }
+.loping-hurtig .knapp small { font-size: 12.5px; font-weight: 800; }
+.dag-velger { display: grid; grid-template-columns: repeat(7, 1fr); gap: 5px; }
+.dag-velger button { min-height: 46px; border-radius: 14px; background: var(--flate-2); color: var(--dempet); font-weight: 900; font-size: 13.5px; text-transform: capitalize; }
+.dag-velger button.valgt { background: var(--oransje); color: #fff; }
+.lope-liste small.molle { color: var(--dempet); font-style: italic; }
+button.merkelapp { cursor: pointer; }
+
+/* ---------------------------------------------------------------- økt registrert fra klokka */
+.klokke-okt { box-shadow: var(--skygge), 0 0 0 2px var(--gronn) inset; gap: 10px; }
+.klokke-okt .knapperad { flex-wrap: wrap; }
+.klokke-okt .knapperad .knapp { flex: 1 1 auto; }

@@ -70,9 +70,17 @@ class FalskAI:
                            "vekt": [{"entity_id": "sensor.test_weight", "navn": "Test Garmin Weight", "state": "81.4", "enhet": "kg"}],
                            "hvilepuls": [{"entity_id": "sensor.test_rhr", "navn": "Test Resting heart rate", "state": "56"}],
                            "vo2max": [], "skritt": [{"entity_id": "sensor.test_yesterday_steps", "navn": "Test Yesterday steps", "state": "8123"}],
-                           "fettprosent": []},
+                           "fettprosent": [],
+                           "sovn_score": [{"entity_id": "sensor.test_sleep_score", "navn": "Test Sleep score", "state": "82"},
+                                          {"entity_id": "sensor.annen_sleep_score", "navn": "Annen Sleep score", "state": "64"}],
+                           "sovn_min": [{"entity_id": "sensor.test_sleep", "navn": "Test Total sleep duration", "state": "502", "enhet": "min"}],
+                           "kalendere": [{"entity_id": "calendar.jobb", "navn": "Jobb"}, {"entity_id": "calendar.reiser", "navn": "Reiser"}]},
                 "forslag": {"aktiviteter": "sensor.test_last_activities", "vekt": "sensor.test_weight", "hvilepuls": "sensor.test_rhr",
-                            "skritt": "sensor.test_yesterday_steps"}}
+                            "skritt": "sensor.test_yesterday_steps", "sovn_score": "sensor.test_sleep_score",
+                            "sovn_min": "sensor.test_sleep", "kalendere": ["calendar.jobb"]}}
+
+    async def sok_sensorer(self, q):
+        return [{"entity_id": f"sensor.test_{q.split()[0]}_{i}", "navn": f"Test {q} {i}", "state": str(70 + i), "enhet": None} for i in range(2)]
 
     async def synk_profil(self, profil, historikk=False):
         import random
@@ -99,6 +107,10 @@ class FalskAI:
             if kropp.lagre_maaling(self.sb, pid, "hvilepuls", 56 + rnd.randint(-2, 3) + i // 40, dag.isoformat(), "ha"):
                 m += 1
             kropp.lagre_maaling(self.sb, pid, "skritt", 6000 + rnd.randint(-3000, 5000), (dag - timedelta(days=1)).isoformat(), "ha")
+        # en styrkeøkt gjort bare på klokka i går
+        kropp.importer_garmin(self.sb, pid, {"activityId": 5001, "activityName": "Styrke", "activityType": "strength_training",
+                                             "duration": 3100, "averageHR": 112, "startTime": til_iso(naa() - timedelta(hours=20))})
+        kropp.registrer_klokke_okter(self.sb, pid)
         kropp.lagre_maaling(self.sb, pid, "vo2max", 50, None, "ha")
         return {"importert": n, "maalinger": m}
 

@@ -586,6 +586,20 @@ INSTRUKSJONER: dict[str, dict] = {
          "Før kontrollert tilbake til du kjenner strekk."],
         ["Bøyer og strekker albuene", "Lener seg for langt frem", "Slipper fort tilbake"]),
     # ------------------------------------------------------------------ kondisjon og intervaller
+    "tredemolle-lop": _i(
+        "Stå på sidekantene, start båndet på lav fart og gå ut på det. Fest nødstopp-klipsen i klærne.",
+        ["Sett 1 % stigning – det tilsvarer omtrent løping ute.",
+         "Øk farten gradvis til ønsket tempo.",
+         "Løp midt på båndet med korte, lette steg og blikket fram.",
+         "Senk farten gradvis før du går av."],
+        ["Holder i rekkverket", "Ser ned på føttene", "For lange steg helt foran på båndet"], KONDIS),
+    "tredemolle-motbakke": _i(
+        "Start båndet på rolig gangfart og fest nødstopp-klipsen i klærne.",
+        ["Øk stigningen til 8–12 %.",
+         "Finn en fart der du går raskt uten å måtte holde deg fast.",
+         "Len deg lett framover fra anklene og bruk armene.",
+         "Senk stigningen og farten gradvis når du er ferdig."],
+        ["Henger i rekkverket", "Går på tå – sett hele foten i båndet"], KONDIS),
     "sprellemann": _i(
         "Stå oppreist med føttene samlet og armene langs siden.",
         ["Hopp ut til bred fotstilling og før armene ut og opp over hodet samtidig.",

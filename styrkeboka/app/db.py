@@ -155,7 +155,7 @@ class Database:
             "programmer": [("blokk_nr", "INTEGER DEFAULT 1"), ("blokk_start", "TEXT"), ("blokk_uker", "INTEGER DEFAULT 6"),
                            ("lett_uke", "INTEGER DEFAULT 1")],
             "programovelser": [("fast", "INTEGER DEFAULT 0")],
-            "okter": [("lett", "INTEGER DEFAULT 0"), ("blokk_nr", "INTEGER"), ("garmin_sendt", "TEXT")],
+            "okter": [("lett", "INTEGER DEFAULT 0"), ("blokk_nr", "INTEGER"), ("garmin_sendt", "TEXT"), ("kilde", "TEXT"), ("klokke_bekreftet", "INTEGER DEFAULT 0")],
             "loepeperioder": [("lopedager", "TEXT DEFAULT '[]'")],
             "aktiviteter": [("soner", "TEXT"), ("okt_id", "INTEGER")],
             "profiler": [("kroppsvekt", "REAL"), ("kjente_loft", "TEXT DEFAULT '[]'"), ("fodselsaar", "INTEGER"),

@@ -358,7 +358,7 @@ def test_lopeperiode(sb):
     # juster styrke: hjelpeøvelse for bein får ett sett mindre, faste øvelser ikke
     assert loping.juster_plan(sb, pid, {"sett": 3}, "utfall", False)["sett"] == 2
     assert loping.juster_plan(sb, pid, {"sett": 3}, "kne", True)["sett"] == 3
-    assert "Løpeperiode aktiv" in loping.ai_tekst(sb, pid)
+    assert "Løping i opplegget" in loping.ai_tekst(sb, pid)
 
 
 def test_oppvarming_per_kroppsdel(sb):
@@ -682,3 +682,59 @@ def test_intervaller_maler_forslag_og_lagring(sb):
     assert sb.db.en("SELECT snittpuls FROM aktiviteter WHERE id = ?", (x["aktivitet_id"],))["snittpuls"] == 151
     intervall.slett(sb, x["id"])
     assert not sb.db.verdi("SELECT COUNT(*) FROM aktiviteter WHERE id = ?", (x["aktivitet_id"],))
+
+
+def test_okt_bare_paa_klokka(sb):
+    import kropp
+    import spill
+    from datetime import timedelta
+    from db import naa, til_iso
+    pid = sb.profiler()[0]["id"]
+    prog = sb.lagre_program(pid, sb.foreslaa_program(pid), kilde="mal")
+    dager = sb.program(prog["id"])["dager"]
+    start = naa() - timedelta(hours=3)
+    sb.db.kjor("UPDATE profiler SET opprettet = ? WHERE id = ?", (til_iso(naa() - timedelta(days=30)), pid))
+    # aktivitet fra før profilen fantes skal ikke bli til en økt
+    kropp.importer_garmin(sb, pid, {"activityId": 1, "activityType": "strength_training", "activityName": "Styrke",
+                                    "startTime": til_iso(naa() - timedelta(days=400)), "duration": 3000})
+    kropp.importer_garmin(sb, pid, {"activityId": 2, "activityType": "strength_training", "activityName": dager[1]["navn"],
+                                    "startTime": til_iso(start), "duration": 3000, "averageHR": 110})
+    nye = kropp.registrer_klokke_okter(sb, pid)
+    assert len(nye) == 1 and not kropp.registrer_klokke_okter(sb, pid)
+    o = sb.okt(nye[0])
+    assert o["status"] == "fullfort" and o["kilde"] == "klokke" and o["dag_id"] == dager[1]["id"]   # navnet på klokka avgjør dagen
+    assert o["ovelser"] and o["klokke"]["snittpuls"] == 110
+    assert spill.status(sb, pid)["ringer"][0]["verdi"] == 1
+    assert sb.neste_dag(pid)["id"] == dager[2 % len(dager)]["id"]
+    venter = sb.ubekreftede_klokke_okter(pid)
+    assert venter and venter[0]["id"] == o["id"]
+    # bytt dag og før inn settene som planlagt
+    o = sb.bekreft_klokke_okt(o["id"], {"dag_id": dager[0]["id"], "fulgte_planen": True})
+    assert o["dag_id"] == dager[0]["id"] and all(len(x["sett"]) == x["sett_plan"] for x in o["ovelser"])
+    assert not sb.ubekreftede_klokke_okter(pid)
+    # økt logget i appen samtidig → kobles, ingen ny økt
+    a = sb.start_okt(pid, dager[1]["id"])
+    sb.logg_sett(a["id"], {"okt_ovelse_id": a["ovelser"][0]["id"], "vekt": 20, "reps": 8})
+    sb.avslutt_okt(a["id"], {})
+    kropp.importer_garmin(sb, pid, {"activityId": 3, "activityType": "strength_training", "activityName": "Styrke",
+                                    "startTime": til_iso(naa() - timedelta(minutes=5)), "duration": 900})
+    assert not kropp.registrer_klokke_okter(sb, pid)
+
+
+def test_tredemolle_og_lopende_loping(sb):
+    import intervall
+    import loping
+    pid = sb.profiler()[0]["id"]
+    hjemme = next(u for u in sb.utstyrsprofiler() if u["navn"] == "Hjemme")
+    assert not any(m.get("id", "").startswith("molle") for m in intervall.maler(sb, pid, hjemme["id"]))
+    sb.lagre_utstyrsprofil({"navn": "Hjemme", "utstyr": [*hjemme["utstyr"], "tredemolle"]}, hjemme["id"])
+    assert {"molle-1-1", "molle-4x4"} <= {m["id"] for m in intervall.maler(sb, pid, hjemme["id"])}
+    assert all("tredemolle" not in sb.ovelse(o["nokkel"])["utstyr"] for o in intervall.foreslaa(sb, pid, "hiit", "kondisjon", upid=hjemme["id"], seed=3)["oppsett"]["ovelser"])
+    p = loping.lagre_periode(sb, pid, {"lopedager": [1, 5], "niva": "vanlig"})     # ingen datoer = til jeg skrur av
+    assert loping.lopende(p)
+    s = loping.status(sb, pid)
+    assert s["aktiv"]["uker"] is None and s["har_molle"] and all(o["molle"] for o in s["aktiv"]["plan"])
+    assert "tredemølle" in loping.ai_tekst(sb, pid)
+    assert loping.planlagte_garmin_okter(sb, pid)
+    o = sb.start_okt(pid, None, hjemme["id"])
+    assert "tredemølla" in sb.okt(o["id"])["generell_oppvarming"]["puls"]

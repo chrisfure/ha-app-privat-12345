@@ -287,7 +287,7 @@ def oppvarming(kg: float | None, ovelse: dict, kort: bool = False) -> list[dict]
     return ut
 
 
-def generell_oppvarming(monstre: list[str]) -> dict:
+def generell_oppvarming(monstre: list[str], utstyr: set[str] | None = None) -> dict:
     """Generell oppvarming tilpasset dagens øvelser: 5 min lett puls + bevegelighet for leddene som skal jobbe."""
     m = set(monstre)
     bevegelser = []
@@ -303,7 +303,9 @@ def generell_oppvarming(monstre: list[str]) -> dict:
         bevegelser = ["10 knebøy uten vekt", "10 armsirkler hver vei"]
     return {
         "minutter": 5 + min(3, len(bevegelser) // 2),
-        "puls": "5 min lett kondisjon: rask gange, sykkel, romaskin eller hopping på stedet – til du blir varm og litt andpusten.",
+        "puls": ("5 min på tredemølla: rask gange eller rolig jogg, gjerne litt stigning – til du blir varm og litt andpusten."
+                 if utstyr and "tredemolle" in utstyr else
+                 "5 min lett kondisjon: rask gange, sykkel, romaskin eller hopping på stedet – til du blir varm og litt andpusten."),
         "bevegelser": bevegelser,
         "tekst": "Deretter gjør du oppvarmingssettene som står på de tunge øvelsene.",
     }

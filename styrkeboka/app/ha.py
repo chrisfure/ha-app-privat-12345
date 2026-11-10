@@ -88,7 +88,7 @@ class HAKobling:
                             await self.send_okt_til_garmin(data["oppsummering"]["okt"]["id"])
                         except Exception as e:  # noqa: BLE001
                             log.warning("Kunne ikke sende økt til Garmin: %s", e)
-                    if hva in ("okt_fullfort", "program", "startvekter", "ukeplan") and data and data.get("profil_id"):
+                    if hva in ("okt_fullfort", "klokke_okt", "program", "startvekter", "ukeplan") and data and data.get("profil_id"):
                         try:
                             p = self.sb.profil(data["profil_id"])
                             if (p.get("garmin_eksport") or {}).get("styrke"):
@@ -136,6 +136,25 @@ class HAKobling:
         async with self._session.get(f"{CORE_API}/states", headers=self._hoder) as r:
             r.raise_for_status()
             return await r.json()
+
+    async def sok_sensorer(self, q: str, grense: int = 25) -> list[dict]:
+        """Fritekstsøk blant alle sensorer – når forslagene ikke treffer."""
+        ord_ = [o for o in q.lower().split() if o]
+        if not self.aktiv or not ord_:
+            return []
+        ut = []
+        for s in await self._tilstander():
+            eid = s.get("entity_id", "")
+            if not eid.startswith("sensor."):
+                continue
+            a = s.get("attributes") or {}
+            navn = str(a.get("friendly_name") or eid)
+            tekst = f"{eid} {navn}".lower().replace("_", " ")
+            if all(o in tekst for o in ord_):
+                ut.append({"entity_id": eid, "navn": navn, "state": s.get("state"), "enhet": a.get("unit_of_measurement")})
+                if len(ut) >= grense:
+                    break
+        return ut
 
     async def kilder(self, profil: dict) -> dict:
         """Sensorer som kan kobles til en profil, gruppert per type, med et forslag per type."""
@@ -277,6 +296,7 @@ class HAKobling:
             except Exception as e:  # noqa: BLE001
                 log.warning("Kalender feilet: %s", e)
         koblet = kropp.koble_styrke(self.sb, pid)
+        koblet += len(kropp.registrer_klokke_okter(self.sb, pid))
         hentet = 0
         if k.get("aktiviteter"):
             hentet = await self.hent_manglende_puls(profil, maks=6 if historikk else 3)

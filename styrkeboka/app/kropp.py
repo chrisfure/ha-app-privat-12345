@@ -433,6 +433,27 @@ def koble_styrke(sb: "Styrkeboka", pid: int, dager: int = 30) -> int:
     return n
 
 
+def registrer_klokke_okter(sb: "Styrkeboka", pid: int, dager: int = 14) -> list[int]:
+    """Styrkeøkter som bare ble gjort på klokka blir fullførte økter i appen (teller i ukemål, ringer og programmet).
+    Gjelder aktiviteter etter at profilen ble laget, og bare når ingen økt i appen ligger i nærheten i tid."""
+    p = sb.profil(pid)
+    grense = naa() - timedelta(days=dager)
+    if p.get("opprettet"):
+        grense = max(grense, fra_iso(p["opprettet"]))
+    nye = []
+    for a in sb.db.alle("SELECT * FROM aktiviteter WHERE profil_id = ? AND type = 'styrke' AND kilde = 'garmin' AND okt_id IS NULL "
+                        "AND start >= ? ORDER BY start", (pid, til_iso(grense))):
+        if (a.get("varighet_s") or 0) < 600:
+            continue
+        a_start = fra_iso(a["start"])
+        a_slutt = a_start + timedelta(seconds=a["varighet_s"])
+        if sb.db.verdi("SELECT 1 FROM okter WHERE profil_id = ? AND startet >= ? AND startet <= ? LIMIT 1",
+                       (pid, til_iso(a_start - timedelta(hours=3)), til_iso(a_slutt + timedelta(hours=1)))):
+            continue  # logget (eller pågår) i appen – kobles av koble_styrke
+        nye.append(sb.okt_fra_klokke(pid, a)["id"])
+    return nye
+
+
 def puls_analyse(serie: list[list], sett: list[dict], start: str) -> dict:
     """Puls per øvelse: topp i hvert arbeidssett og pulsen idet neste sett starter (hvor mye du hentet deg inn)."""
     if not serie:

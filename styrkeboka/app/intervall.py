@@ -76,6 +76,14 @@ MALER = [
      "ovelser": [{"nokkel": "thruster-manualer"}, {"nokkel": "ettarms-roing"}, {"nokkel": "utfall-manualer"},
                  {"nokkel": "skulderpress-manualer"}, {"nokkel": "fjellklatrer"}],
      "oppsett": {"arbeid": 40, "hvile": 20, "runder": 3, "rundehvile": 60}},
+    {"id": "molle-1-1", "navn": "Mølle 1–1", "format": "hiit", "fokus": "kondisjon", "krever": "tredemolle",
+     "beskrivelse": "8 × 1 min raskt løp med 1 min rolig gange på båndet mellom.",
+     "ovelser": [{"nokkel": "tredemolle-lop"}],
+     "oppsett": {"arbeid": 60, "hvile": 0, "runder": 8, "rundehvile": 60}},
+    {"id": "molle-4x4", "navn": "Mølle 4×4", "format": "hiit", "fokus": "kondisjon", "krever": "tredemolle",
+     "beskrivelse": "4 × 4 min hardt (løp eller motbakke) med 3 min rolig mellom – varm opp 10 min først.",
+     "ovelser": [{"nokkel": "tredemolle-lop"}],
+     "oppsett": {"arbeid": 240, "hvile": 0, "runder": 4, "rundehvile": 180}},
     {"id": "rolig-start", "navn": "Rolig start", "format": "sirkel", "fokus": "helkropp",
      "beskrivelse": "Skånsom sirkel uten hopp – fin første gang eller på en sliten dag.",
      "ovelser": [{"nokkel": "jogg-pa-stedet"}, {"nokkel": "knebøy-kroppsvekt"}, {"nokkel": "setehev"},
@@ -132,7 +140,9 @@ def maler(sb: "Styrkeboka", pid: int, upid: int | None = None) -> list[dict]:
             if k:
                 brukt.add(k)
                 ovl.append(_ovelse_ut(sb, k, x.get("reps")))
-        if len(ovl) < max(2, len(m["ovelser"]) - 1):
+        if m.get("krever") and (utstyr is None or m["krever"] not in utstyr):
+            continue
+        if len(ovl) < (1 if len(m["ovelser"]) == 1 else max(2, len(m["ovelser"]) - 1)):
             continue
         oppsett = {**FORMATER[m["format"]]["standard"], **(m.get("oppsett") or {}), "format": m["format"], "ovelser": ovl}
         if m["format"] == "tabata":
@@ -152,7 +162,8 @@ def foreslaa(sb: "Styrkeboka", pid: int, fmt: str, fokus: str = "helkropp", anta
     utstyr = _utstyr(sb, pid, upid)
     monstre = FOKUS.get(fokus, FOKUS["helkropp"])["monstre"]
     antall = antall or {"tabata": 2, "emom": 3, "amrap": 4}.get(fmt, 6)
-    kandidater = [o for o in sb.ovelser() if _egnet(o) and tilgjengelig(o, utstyr)]
+    # tredemølle trekkes ikke inn tilfeldig – upraktisk å hoppe av og på mellom gulvøvelser
+    kandidater = [o for o in sb.ovelser() if _egnet(o) and tilgjengelig(o, utstyr) and "tredemolle" not in o["utstyr"]]
     valgt: list[dict] = []
     for i in range(antall):
         m = monstre[i % len(monstre)]

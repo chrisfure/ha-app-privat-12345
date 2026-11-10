@@ -1,5 +1,14 @@
 # Endringslogg
 
+## 0.15.0
+
+- Økter gjort bare på klokka registreres: en styrkeaktivitet fra Garmin uten økt i appen blir en fullført økt som teller i ukemål, ringer og programmet. På forsiden bekrefter du hvilken økt det var – «Jeg fulgte planen» fører inn settene med vektene appen foreslo, eller du fører dem inn selv.
+- Tredemølle er nytt utstyr: mølletips på løpeturene, to mølleintervaller («Mølle 1–1» og «Mølle 4×4») under Intervalløkt, oppvarming på mølla, og AI-treneren vet om den.
+- Løping er enklere: eget «Løping»-kort øverst under Program og «Legg til løping» på forsiden. Velg antall turer og dager – ferdig. Varer til du skrur av (eller 8 uker / egne datoer), og sending til klokka velges samme sted.
+- «Klokke og sensorer» er laget på nytt: gruppert etter hva det brukes til, viser hva hver sensor måler akkurat nå, hake på det som hentes, og søk blant alle sensorer når forslaget ikke stemmer. Egen inngang øverst under Helse og under Mer.
+- Forsiden: dagsformen står nå rett over dagens økt, og kalendervalg kan åpnes direkte fra ukeplanen.
+- Løpeturer fra før løpingen ble lagt inn krysser ikke lenger av ukas plan.
+
 ## 0.14.0
 
 - Intervalløkter: HIIT, Tabata, sirkel, EMOM og AMRAP – lag din egen, velg en ferdig økt (bl.a. «Sete og bein», «Kjerne 10», «AMRAP 12», «Kettlebell-AMRAP») eller la treneren lage en ut fra dagsform og utstyr.

@@ -676,24 +676,104 @@ class Styrkeboka:
                 "dag_navn": dag["navn"] if dag else "Fri økt", "utstyrsprofil_id": upid, "startet": til_iso(naa()),
                 "status": "pagar", "av": av, "lett": 1 if lett else 0,
                 "blokk_nr": prog["blokk"]["nr"] if dag else None}, commit=False)
-            brukt: set[str] = set()
-            for i, po in enumerate(dag["ovelser"] if dag else []):
-                ov = self.ovelse(po["ovelse"])
-                erstattet = None
-                if not tilgjengelig(ov, utstyr):
-                    alt = P.velg_ovelse(ov["monster"], self.ovelser(), utstyr, p.get("erfaring") or "noe",
-                                        "rehab" in (p.get("maal") or []), brukt | {po["ovelse"]})
-                    if alt:
-                        erstattet, ov = po["ovelse"], alt
-                brukt.add(ov["nokkel"])
-                import loping
-                plan = loping.juster_plan(self, pid, P.lett_dose(po) if lett else po, ov["monster"], bool(po.get("fast")))
-                self._sett_inn_okt_ovelse(oid, i, ov, plan, pid, programovelse_id=po["id"],
-                                          erstattet_fra=erstattet, lett=lett)
+            self._fyll_fra_dag(oid, p, dag, utstyr, lett)
             self.db.commit()
         okt = self.okt(oid)
         self._varsle("okt_startet", {"profil_id": pid, "okt": okt})
         return okt
+
+    def _fyll_fra_dag(self, oid: int, p: dict, dag: dict | None, utstyr: set[str] | None, lett: bool) -> None:
+        """Legger øvelsene fra en programdag inn i økta, med bytte av øvelser utstyret ikke dekker."""
+        import loping
+        pid = p["id"]
+        brukt: set[str] = set()
+        for i, po in enumerate(dag["ovelser"] if dag else []):
+            ov = self.ovelse(po["ovelse"])
+            erstattet = None
+            if not tilgjengelig(ov, utstyr):
+                alt = P.velg_ovelse(ov["monster"], self.ovelser(), utstyr, p.get("erfaring") or "noe",
+                                    "rehab" in (p.get("maal") or []), brukt | {po["ovelse"]})
+                if alt:
+                    erstattet, ov = po["ovelse"], alt
+            brukt.add(ov["nokkel"])
+            plan = loping.juster_plan(self, pid, P.lett_dose(po) if lett else po, ov["monster"], bool(po.get("fast")))
+            self._sett_inn_okt_ovelse(oid, i, ov, plan, pid, programovelse_id=po["id"],
+                                      erstattet_fra=erstattet, lett=lett)
+
+    # ------------------------------------------------------------ økter gjort bare på klokka
+    def okt_fra_klokke(self, pid: int, akt: dict) -> dict:
+        """Lager en fullført økt av en styrkeaktivitet fra klokka som ikke ble logget i appen.
+        Heter aktiviteten det samme som en programdag (økta appen la på klokka), brukes den dagen –
+        ellers antas neste økt i programmet. Brukeren kan bekrefte eller bytte etterpå."""
+        p = self.profil(pid)
+        prog = self.aktivt_program(pid)
+        dag, sikker = None, False
+        if prog and prog["dager"]:
+            navn = str(akt.get("navn") or "").lower()
+            treff = sorted((d for d in prog["dager"] if d["navn"].lower() in navn), key=lambda d: -len(d["navn"]))
+            dag, sikker = (treff[0], True) if treff else (self.neste_dag(pid, prog), False)
+        start = fra_iso(akt["start"])
+        lett = bool(dag and prog["blokk"]["lett_naa"])
+        with self.db.lås:
+            oid = self.db.sett_inn("okter", {
+                "profil_id": pid, "program_id": prog["id"] if dag else None, "dag_id": dag["id"] if dag else None,
+                "dag_navn": dag["navn"] if dag else "Styrkeøkt", "utstyrsprofil_id": p.get("utstyrsprofil_id"),
+                "startet": til_iso(start), "avsluttet": til_iso(start + timedelta(seconds=akt.get("varighet_s") or 3600)),
+                "status": "fullfort", "kilde": "klokke", "klokke_bekreftet": 0, "lett": 1 if lett else 0,
+                "blokk_nr": prog["blokk"]["nr"] if dag else None}, commit=False)
+            self._fyll_fra_dag(oid, p, dag, self.utstyr_for(p.get("utstyrsprofil_id")), lett)
+            self.db.kjor("UPDATE aktiviteter SET okt_id = ? WHERE id = ?", (oid, akt["id"]))
+            self.db.commit()
+        self._varsle("klokke_okt", {"profil_id": pid, "okt_id": oid, "sikker": sikker})
+        return self.okt(oid)
+
+    def ubekreftede_klokke_okter(self, pid: int) -> list[dict]:
+        fra = til_iso(naa() - timedelta(days=10))
+        prog = self.aktivt_program(pid)
+        ut = []
+        for o in self.db.alle("SELECT * FROM okter WHERE profil_id = ? AND kilde = 'klokke' AND COALESCE(klokke_bekreftet, 0) = 0 "
+                              "AND startet >= ? ORDER BY startet DESC LIMIT 3", (pid, fra)):
+            ut.append({"id": o["id"], "startet": o["startet"], "dag_navn": o["dag_navn"], "dag_id": o["dag_id"],
+                       "minutter": self._minutter(o),
+                       "ovelser": self.db.verdi("SELECT COUNT(*) FROM okt_ovelser WHERE okt_id = ?", (o["id"],)),
+                       "dager": [{"id": d["id"], "navn": d["navn"]} for d in (prog["dager"] if prog else [])]})
+        return ut
+
+    def bekreft_klokke_okt(self, oid: int, d: dict) -> dict:
+        """Bekrefter en økt fra klokka: eventuelt bytt programdag, og eventuelt før inn settene som planlagt."""
+        o = self._okt_rad(oid)
+        if o.get("kilde") != "klokke":
+            raise Feil("Økta kom ikke fra klokka")
+        pid = o["profil_id"]
+        p = self.profil(pid)
+        har_sett = self.db.verdi("SELECT COUNT(*) FROM sett WHERE okt_id = ?", (oid,))
+        if "dag_id" in d and not har_sett:
+            prog = self.aktivt_program(pid)
+            ny = next((x for x in (prog["dager"] if prog else []) if x["id"] == d["dag_id"]), None) if d["dag_id"] else None
+            if (ny["id"] if ny else None) != o["dag_id"]:
+                with self.db.lås:
+                    self.db.kjor("DELETE FROM okt_ovelser WHERE okt_id = ?", (oid,), commit=False)
+                    self.db.oppdater("okter", oid, {"dag_id": ny["id"] if ny else None, "program_id": prog["id"] if ny else None,
+                                                    "dag_navn": ny["navn"] if ny else "Styrkeøkt",
+                                                    "blokk_nr": prog["blokk"]["nr"] if ny else None}, commit=False)
+                    self._fyll_fra_dag(oid, p, ny, self.utstyr_for(o.get("utstyrsprofil_id")), bool(o.get("lett")))
+                    self.db.commit()
+        if d.get("fulgte_planen") and not har_sett:
+            start = fra_iso(o["startet"])
+            ovl = self.db.alle("SELECT * FROM okt_ovelser WHERE okt_id = ? ORDER BY rekkefolge, id", (oid,))
+            totalt = sum(x["sett_plan"] for x in ovl) or 1
+            steg = max(30.0, self._minutter(o) * 60 / (totalt + 1))
+            n = 0
+            for oo in ovl:
+                for nr in range(1, oo["sett_plan"] + 1):
+                    n += 1
+                    self.db.sett_inn("sett", {
+                        "okt_id": oid, "okt_ovelse_id": oo["id"], "ovelse": oo["ovelse"], "settnr": nr, "vekt": oo["forslag_kg"],
+                        "reps": oo["forslag_reps"] or oo["reps_min"], "rir": oo["rir"], "oppvarming": 0,
+                        "tid": til_iso(start + timedelta(seconds=steg * n))})
+        self.db.oppdater("okter", oid, {"klokke_bekreftet": 1})
+        self._varsle("klokke_okt", {"profil_id": pid, "okt_id": oid})
+        return self.okt(oid)
 
     def _sett_inn_okt_ovelse(self, oid: int, rekkefolge: int, ov: dict, plan: dict, pid: int,
                              programovelse_id: int | None = None, erstattet_fra: str | None = None, lett: bool = False) -> int:
@@ -733,7 +813,7 @@ class Styrkeboka:
             arbeid = [s for s in oo["sett"] if not s["oppvarming"]]
             oo["ferdig"] = len(arbeid) >= oo["sett_plan"]
             o["ovelser"].append(oo)
-        o["generell_oppvarming"] = P.generell_oppvarming([x["info"]["monster"] for x in o["ovelser"]])
+        o["generell_oppvarming"] = P.generell_oppvarming([x["info"]["monster"] for x in o["ovelser"]], self.utstyr_for(o.get("utstyrsprofil_id")))
         o["klokke"] = self._klokke(oid, alle_sett)
         arbeid = [s for s in alle_sett if not s["oppvarming"]]
         o["nokkeltall"] = {
@@ -1025,7 +1105,7 @@ class Styrkeboka:
                 "id": o["id"], "startet": o["startet"], "dag_navn": o["dag_navn"], "opplevd": o["opplevd"],
                 "minutter": self._minutter(o), "sett": len(s), "volum": round(sum((x["vekt"] or 0) * (x["reps"] or 0) for x in s)),
                 "ovelser": [self.ovelse(k)["navn"] for k in ovl], "notat": o["notat"], "har_ai": bool(o["ai_oppsummering"]),
-                "uke": self._uke(fra_iso(o["startet"])),
+                "uke": self._uke(fra_iso(o["startet"])), "kilde": o.get("kilde"),
             })
         return ut
 
@@ -1140,6 +1220,7 @@ class Styrkeboka:
             "neste": neste_ut, "aktiv": aktiv, "mangler_startvekt": self.mangler_startvekt(pid) if prog else 0,
             "loping": self._loping_kort(pid),
             "dagsform": __import__("dagsform").status(self, pid),
+            "klokke_okter": self.ubekreftede_klokke_okter(pid),
             "spill": __import__("spill").status(self, pid),
             "ukeplan": __import__("ukeplan").hent(self, pid) if (prog or (p.get("koblinger") or {}).get("kalendere")) else None,
             "sist": {"id": sist["id"], "startet": sist["startet"], "dag_navn": sist["dag_navn"]} if sist else None,

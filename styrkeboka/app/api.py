@@ -286,6 +286,10 @@ class API:
                 await self.ai.hent_puls(k["id"])
             return {"okt": sb.okt(oid)}
 
+        @r("POST", "/api/okter/{oid}/klokke-bekreft")
+        async def klokke_bekreft(req):
+            return {"okt": sb.bekreft_klokke_okt(req.int("oid"), req.data or {})}
+
         @r("DELETE", "/api/aktiviteter/{aid}")
         async def slett_aktivitet(req):
             sb.db.slett("aktiviteter", req.int("aid"))
@@ -300,6 +304,11 @@ class API:
             except Exception as e:  # noqa: BLE001
                 log.warning("Klarte ikke hente sensorer: %s", e)
                 return {"kilder": {}, "forslag": {}, "feil": "Fikk ikke hentet sensorer fra Home Assistant"}
+
+        @r("GET", "/api/ha-sensorer")
+        async def ha_sensorer(req):
+            q = str(req.query.get("q") or "")[:60]
+            return {"sensorer": await self.ai.sok_sensorer(q) if hasattr(self.ai, "sok_sensorer") else []}
 
         @r("PUT", "/api/profiler/{pid}/koblinger")
         async def koblinger(req):

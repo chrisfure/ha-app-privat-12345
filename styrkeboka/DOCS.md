@@ -19,6 +19,14 @@ Alt lagres lokalt i appens egen database. Ingen navn eller treningsdata ligger i
 * **Helse** – målinger med kurver, løping/gåing og annen aktivitet, aktivitetsminutter og kroppsprofil.
 * **Mer** – profiler, treningssteder og utstyr, AI-treneren, hviletimer, egne øvelser og eksport.
 
+## Trent bare med klokka?
+
+Starter du styrkeøkta på Garmin-klokka uten å logge i appen, lager appen en fullført økt av den neste gang data hentes (hvert kvarter). Økta teller i ukemålet, ringene og programmet. På forsiden får du et kort der du velger hvilken økt det var og enten trykker **Jeg fulgte planen** (settene føres inn med vektene appen foreslo), **Før inn vekter** eller **Bare tell økta**. Heter aktiviteten det samme som en økt i programmet – slik den gjør når du starter økta appen har lagt på klokka – velges riktig økt automatisk.
+
+## Løping
+
+Under **Program** (eller «Legg til løping» på forsiden) velger du 1–3 turer i uka og hvilke dager. Løpingen varer til du skrur den av, eller i en periode du velger. Har et av treningsstedene **tredemølle**, viser hver tur et mølletips, og under Intervalløkt finner du egne mølleintervaller.
+
 ## Intervalløkter (HIIT, Tabata, sirkel, EMOM, AMRAP)
 
 Trykk **Intervalløkt** på forsiden.
