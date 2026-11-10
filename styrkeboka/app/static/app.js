@@ -212,9 +212,12 @@
     v.innerHTML = "";
     oppdaterOktPrikk();
 
-    if (ov.spill && !ov.aktiv) v.append(spillKort(ov.spill));
-    for (const k of (ov.aktiv ? [] : ov.klokke_okter || [])) v.append(klokkeOktKort(k));
-    if (ov.dagsform && !ov.aktiv) v.append(dagsformKort(ov.dagsform));
+    if (!ov.aktiv) {
+      const us = ov.ukesoppsummering;
+      if (us && hent("us-lukket", "") !== us.uke) v.append(ukesoppsummeringKort(us));
+      for (const k of ov.klokke_okter || []) v.append(klokkeOktKort(k));
+      if (ov.dagsform) v.append(dagsformKort(ov.dagsform));
+    }
     if (ov.aktiv) {
       const a = ov.aktiv;
       const pst = a.nokkeltall.planlagt ? Math.min(100, Math.round(100 * a.nokkeltall.sett / a.nokkeltall.planlagt)) : 0;
@@ -239,14 +242,16 @@
       const valgtSted = S.utstyrsprofiler.find((u) => u.id === stedId);
       v.append(el("div", { class: "helt" },
         el("div", {},
-          el("div", { class: "merke" }, b?.lett_naa ? "Lettere uke" : ov.sist ? `Neste økt · sist trent ${siden(ov.sist.startet)}` : "Første økt"),
+          el("div", { class: "merke" }, b?.lett_naa ? "Lettere uke" : planlagtTekst(n.id) || (ov.sist ? `Neste økt · sist trent ${siden(ov.sist.startet)}` : "Første økt")),
           el("div", { class: "helt-tittel" }, n.navn),
           el("div", { class: "helt-under" }, el("span", {}, ikon("klokke"), `ca. ${n.minutter} min`), el("span", {}, ikon("manual"), `${n.ovelser.length} øvelser`))),
         b?.lett_naa ? el("p", { class: "forklaring" }, `Siste uke i blokk ${b.nr}: halvparten så mange sett og samme vekt som sist. En lettere uke lar kroppen hente seg inn, så du står sterkere til neste blokk.`) : null,
-        el("ul", { class: "plan-liste" }, n.ovelser.map((o) => el("li", { class: o.tilgjengelig || !valgtSted ? "" : "utilgj" },
-          el("span", { class: "navn" }, o.navn, el("small", {}, `${o.sett} × ${o.reps_min}–${o.reps_maks}${o.erstatter ? ` · i stedet for ${o.erstatter}` : ""}`)),
-          o.kg != null ? el("span", { class: `kg ${o.trend === "opp" ? "trend-opp" : o.trend === "ned" ? "trend-ned" : ""}` },
-            o.trend === "opp" ? ikon("opp") : o.trend === "ned" ? ikon("ned") : null, kg(o.kg)) : null))),
+        el("details", { class: "plan-detaljer", open: hent("vis-plan", false), ontoggle: (e) => lagre("vis-plan", e.currentTarget.open) },
+          el("summary", {}, el("span", {}, "Se øvelsene og vektene"), ikon("ned")),
+          el("ul", { class: "plan-liste" }, n.ovelser.map((o) => el("li", { class: o.tilgjengelig || !valgtSted ? "" : "utilgj" },
+            el("span", { class: "navn" }, o.navn, el("small", {}, `${o.sett} × ${o.reps_min}–${o.reps_maks}${o.erstatter ? ` · i stedet for ${o.erstatter}` : ""}`)),
+            o.kg != null ? el("span", { class: `kg ${o.trend === "opp" ? "trend-opp" : o.trend === "ned" ? "trend-ned" : ""}` },
+              o.trend === "opp" ? ikon("opp") : o.trend === "ned" ? ikon("ned") : null, kg(o.kg)) : null)))),
         S.utstyrsprofiler.length > 1 ? el("div", { class: "segment" }, S.utstyrsprofiler.map((u) =>
           el("button", { class: u.id === stedId ? "valgt" : "", onclick: () => { lagre(`sted-${pid}`, u.id); visTrening(); } }, ikon("sted"), u.navn))) : null,
         n.ovelser.some((o) => o.erstatter) ? el("p", { class: "forklaring" }, `Øvelser som krever utstyr ${valgtSted?.navn || "stedet"} ikke har, er byttet ut med en tilsvarende øvelse for denne økta.`) : null,
@@ -259,6 +264,9 @@
         !ov.loping ? el("button", { class: "chip liten", onclick: () => lopingArk() }, ikon("lop"), "Legg til løping") : null));
     }
 
+    if (ov.spill && !ov.aktiv) v.append(spillKort(ov.spill));
+    if (ov.duell && !ov.aktiv) v.append(duellKort(ov.duell));
+    if (ov.ukeplan) v.append(ukeplanKort(ov.ukeplan));
     if (!ov.aktiv) v.append(intervallInngang());
     if (ov.loping) v.append(lopeKort(ov.loping));
     if (ov.mangler_startvekt && !ov.aktiv) {
@@ -272,7 +280,15 @@
     if (aiPaa()) knapper.append(el("button", { class: "knapp ai-lys", onclick: () => sporTreneren() }, ikon("snakk"), "Spør treneren"));
     if (ov.sist) knapper.append(el("button", { class: "knapp noytral", onclick: () => visOktDetalj(ov.sist.id, "trening") }, ikon("klokke"), "Forrige økt"));
     if (knapper.children.length) v.append(knapper);
-    if (ov.ukeplan) v.append(ukeplanKort(ov.ukeplan));
+    if (!ov.aktiv && ov.sist) v.append(el("button", { class: "lenke", style: "align-self:center", onclick: lagUkesoppsummering }, ikon("kalender"), "Oppsummer uka mi nå"));
+  }
+
+  // Når er neste styrkeøkt planlagt i ukeplanen?
+  function planlagtTekst(dagId) {
+    const i_dag = new Date().toLocaleDateString("sv-SE");
+    const d = (ov.ukeplan?.dager || []).find((x) => x.okter.some((o) => o.type === "styrke" && !o.gjort && o.dag_id === dagId));
+    if (!d) return "";
+    return d.dato === i_dag ? "Planlagt i dag" : `Neste økt · planlagt ${d.ukedag}`;
   }
 
   function oppdaterOktPrikk() {
@@ -1388,33 +1404,67 @@
 
   function spillKort(sp) {
     const n = sp.niva;
-    const xpBar = el("div", { class: "xp-bar" }, el("div", { style: `width:${Math.round(n.andel * 100)}%` }));
     const nm = sp.neste_merke;
-    const kort = el("div", { class: `kort spill ${sp.alle_lukket ? "alle-lukket" : ""}` },
-      el("div", { class: "spill-topp" },
-        el("div", { class: "niva-sirkel", title: `${tusen(n.xp)} XP totalt` }, el("small", {}, "nivå"), el("b", {}, n.nr)),
-        el("div", { class: "niva-tekst" },
-          el("div", { class: "niva-navn" }, n.navn),
-          xpBar,
-          el("small", {}, `${tusen(n.xp - n.fra)} / ${tusen(n.til - n.fra)} XP til nivå ${n.nr + 1}`, sp.xp_uka ? el("span", { class: "xp-uka" }, ` · +${tusen(sp.xp_uka)} denne uka`) : null)),
-        sp.rekke ? el("div", { class: "rekke", title: `Ukemålet nådd ${sp.rekke} uker på rad (beste: ${sp.beste_rekke})` }, el("span", {}, "🔥"), el("b", {}, sp.rekke), el("small", {}, sp.rekke === 1 ? "uke" : "uker")) : null),
+    return el("div", { class: `kort spill kompakt ${sp.alle_lukket ? "alle-lukket" : ""}` },
       el("div", { class: "ring-rad" },
         el("div", { class: "ring-boks" }, ringerSvg(sp.ringer),
           sp.alle_lukket ? el("span", { class: "ring-midt" }, "⭐") : null),
-        el("ul", { class: "ring-forklaring" }, sp.ringer.map((r) => el("li", { style: `--ring:${RINGFARGE[r.nokkel]}` },
-          el("span", { class: "ring-navn" }, r.navn, r.andel >= 1 ? el("span", { class: "hake" }, "✓") : null),
-          el("b", {}, ringVerdi(r)),
-          el("small", {}, r.andel >= 1 ? "Ringen er lukket!" : `${Math.round(r.andel * 100)} %`))))),
+        el("div", { class: "spill-side" },
+          el("div", { class: "niva-linje", title: `${tusen(n.xp)} XP totalt` },
+            el("span", { class: "niva-merke" }, n.nr), el("b", {}, n.navn),
+            sp.rekke ? el("span", { class: "rekke-liten", title: `Ukemålet nådd ${sp.rekke} uker på rad (beste: ${sp.beste_rekke})` }, `🔥 ${sp.rekke}`) : null),
+          el("div", { class: "xp-bar", title: `${tusen(n.xp - n.fra)} / ${tusen(n.til - n.fra)} XP til nivå ${n.nr + 1}` }, el("div", { style: `width:${Math.round(n.andel * 100)}%` })),
+          el("ul", { class: "ring-forklaring" }, sp.ringer.map((r) => el("li", { style: `--ring:${RINGFARGE[r.nokkel]}` },
+            el("span", { class: "ring-navn" }, r.navn), el("b", {}, r.nokkel === "sovn" ? `${tall(r.verdi)} / ${tall(r.maal)} t` : `${tusen(r.verdi)} / ${tusen(r.maal)}`),
+            r.andel >= 1 ? el("span", { class: "hake" }, "✓") : null))))),
       ukeKjede(sp),
-      sp.rekorder_uka.length ? el("div", { class: "rekord-linje" }, "⚡ ", el("b", {}, `${sp.rekorder_uka.length} ${sp.rekorder_uka.length === 1 ? "ny rekord" : "nye rekorder"} denne uka: `), sp.rekorder_uka.join(", ")) : null,
       el("button", { class: "merke-linje", onclick: () => merkerArk(sp) },
-        el("span", { class: "merke-ikoner" }, sp.merker.filter((m) => m.oppnadd).slice(-4).map((m) => el("span", {}, m.ikon))),
-        nm ? el("span", { class: "neste-merke" },
-          el("small", {}, `Neste merke: ${nm.ikon} ${nm.tittel}`),
-          el("span", { class: "minibar" }, el("span", { style: `width:${Math.round(nm.fremdrift * 100)}%` })))
-          : el("span", { class: "neste-merke" }, el("small", {}, "Alle merker er tatt – sterkt!")),
+        el("span", { class: "merke-ikoner" }, sp.merker.filter((m) => m.oppnadd).slice(-3).map((m) => el("span", {}, m.ikon))),
+        el("span", { class: "neste-merke" },
+          el("small", {}, sp.rekorder_uka.length ? `⚡ ${sp.rekorder_uka.length} ${sp.rekorder_uka.length === 1 ? "ny rekord" : "nye rekorder"} denne uka` : nm ? `Neste merke: ${nm.ikon} ${nm.tittel}` : "Alle merker er tatt – sterkt!"),
+          nm ? el("span", { class: "minibar" }, el("span", { style: `width:${Math.round(nm.fremdrift * 100)}%` })) : null),
         el("span", { class: "merke-antall" }, `${sp.oppnadd}/${sp.merker.length}`)));
+  }
+
+  function duellKort(d) {
+    const maks = Math.max(1, ...d.deltakere.map((x) => x.mulige), ...d.deltakere.map((x) => x.ringer));
+    const sortert = [...d.deltakere].sort((a, b) => b.ringer - a.ringer);
+    const leder = d.deltakere.find((x) => x.id === d.leder);
+    const forsprang = leder ? leder.ringer - Math.max(...d.deltakere.filter((x) => x.id !== leder.id).map((x) => x.ringer)) : 0;
+    return el("div", { class: "kort duell" },
+      el("div", { class: "kort-hode" }, el("h2", {}, "🏆 Månedens duell"), el("span", { class: "merkelapp gull" }, d.maaned)),
+      el("ul", { class: "duell-liste" }, sortert.map((x) => el("li", { class: x.id === d.leder ? "leder" : "" },
+        avatar(x, "liten"),
+        el("span", { class: "tekst" },
+          el("span", { class: "duell-navn" }, el("b", {}, x.navn), x.id === d.leder ? el("span", {}, "👑") : null, el("small", {}, `${x.okter} økter · ${tusen(x.minutter)} min`)),
+          el("span", { class: `duell-bar farge-${x.farge || "lilla"}` }, el("span", { style: `width:${Math.round(100 * x.ringer / maks)}%` }))),
+        el("b", { class: "duell-tall" }, x.ringer, el("small", {}, x.ringer === 1 ? " ring" : " ringer"))))),
+      el("p", { class: "forklaring", style: "font-size:13px" }, leder ? `${leder.navn} leder med ${forsprang} ${forsprang === 1 ? "ring" : "ringer"}. ` : sortert[0].ringer ? "Helt likt akkurat nå. " : "Ingen ringer lukket ennå – første ring tar ledelsen. ",
+        "Hver lukket ring i uka gir ett poeng, og hver har sine egne mål.",
+        d.forrige ? ` I ${d.forrige.maaned}: ${d.forrige.vinner ? `${d.forrige.vinner} vant` : "uavgjort"} ${d.forrige.stilling}.` : ""));
+  }
+
+  function ukesoppsummeringKort(o) {
+    const kort = el("div", { class: "ai-kort ukesoppsummering" },
+      el("div", { class: "kort-hode" }, el("h3", {}, ikon("kalender"), `Uka di – uke ${o.ukenr}`),
+        el("button", { class: "ikonknapp", "aria-label": "Lukk oppsummeringen", onclick: () => { lagre("us-lukket", o.uke); kort.remove(); } }, ikon("kryss"))),
+      el("p", { class: "us-tittel" }, o.tittel),
+      o.bra.length ? el("ul", { class: "us-liste bra" }, o.bra.map((x) => el("li", {}, x))) : null,
+      o.forbedre.length ? el("ul", { class: "us-liste forbedre" }, o.forbedre.map((x) => el("li", {}, x))) : null,
+      o.neste_uke ? el("p", {}, el("b", {}, "Neste uke: "), o.neste_uke) : null,
+      aiPaa() ? el("button", { class: "knapp ai liten", style: "flex:none;align-self:flex-start", onclick: ukeplanAiArk }, ikon("gnist"), "Planlegg neste uke") : null);
     return kort;
+  }
+
+  async function lagUkesoppsummering() {
+    visToast(aiPaa() ? "Treneren ser gjennom uka …" : "Lager oppsummering …", [], 20000);
+    try {
+      await post(`api/profiler/${pid}/ukesoppsummering`, {});
+      lagre("us-lukket", "");
+      await visTrening();
+      visToast("Ukesoppsummeringen er klar");
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    } catch (e) { feil(e); }
   }
 
   function merkerArk(sp) {
@@ -1448,8 +1498,10 @@
   function dagsformKort(d) {
     const v = d.verdier;
     const chip = (verdi, tekst) => verdi == null ? null : el("span", { class: "merkelapp" }, tekst);
-    return el("div", { class: `kort dagsform ${d.niva}` },
-      el("div", { class: "kort-hode" }, el("h2", {}, d.tittel), el("span", { class: "dagsform-prikk" })),
+    const kort = [v.sovn_score != null ? `søvn ${v.sovn_score}` : v.sovn_min != null ? `${tall(Math.round(v.sovn_min / 6) / 10)} t søvn` : null,
+      v.beredskap != null ? `beredskap ${v.beredskap}` : v.hrv != null ? `HRV ${v.hrv}` : null].filter(Boolean).join(" · ");
+    return el("details", { class: `kort dagsform ${d.niva}`, open: d.niva === "lav" },
+      el("summary", {}, el("span", { class: "dagsform-prikk" }), el("b", {}, d.tittel), el("small", {}, kort), ikon("ned")),
       el("p", { class: "dagsform-rad" }, d.rad),
       el("div", { class: "chips" },
         chip(v.beredskap, `Beredskap ${v.beredskap}`), chip(v.sovn_score, `Søvn ${v.sovn_score}`),
@@ -1458,22 +1510,57 @@
       d.grunner.length ? el("p", { class: "forklaring", style: "font-size:13px" }, `Fordi: ${d.grunner.join(", ")}.`) : null);
   }
 
+  // Ukeplanen: trykk på en økt for å flytte den – klokka og «neste økt» følger planen
   function ukeplanKort(u) {
     const i_dag = new Date().toLocaleDateString("sv-SE");
-    const rad = (d) => el("li", { class: `${d.dato === i_dag ? "i-dag" : ""} ${d.borte ? "borte" : ""}` },
-      el("span", { class: "uke-dag" }, d.dato === i_dag ? "I dag" : `${d.ukedag.slice(0, 3)} ${+d.dato.slice(8, 10)}.`),
-      el("span", { class: "tekst" },
-        d.okter.length ? el("span", { class: "chips" }, d.okter.map((o) => el("span", { class: `merkelapp ${o.type === "styrke" ? "aksent" : o.type === "lop" ? "lop" : ""}` },
-          o.type === "lop" ? `🏃 ${o.tittel}${o.minutter ? ` ${o.minutter} min` : ""}` : o.navn || o.tittel))) : el("span", { class: "hviledag" }, d.borte ? "Borte" : "Hvile"),
-        d.notat ? el("small", {}, d.notat) : null,
-        d.kalender?.length ? el("small", { class: "kal" }, d.kalender.slice(0, 2).join(" · ")) : null));
+    const harProgram = !!ov.program;
+    const endre = async (data, melding) => {
+      try {
+        await post(`api/profiler/${pid}/ukeplan/endre`, data);
+        lukkArk();
+        visToast(melding + (profil()?.garmin_eksport?.[data.type === "lop" ? "loping" : "styrke"] ? " – klokka oppdateres" : ""));
+        visTrening();
+      } catch (e) { feil(e); }
+    };
+    const flyttArk = (d, o) => {
+      const navn = o.type === "lop" ? o.tittel : o.navn || o.tittel;
+      if (o.type === "annet") return endre({ handling: "fjern", type: "annet", fra: d.dato }, "Tatt bort");
+      aapneArk(el("h3", {}, ikon("kalender"), ` Flytt «${navn}»`),
+        el("p", { class: "hint" }, o.type === "styrke" ? "Velg dag. Hvilken økt det blir følger rekkefølgen i programmet, så flytter du én, kan navnene på de andre bytte plass." : "Velg dag for løpeturen."),
+        el("ul", { class: "flytt-liste" }, u.dager.map((x) => {
+          const opptatt = o.type === "styrke" && x.okter.some((y) => y.type === "styrke");
+          const her = x.dato === d.dato;
+          const innhold = x.okter.map((y) => y.type === "lop" ? `🏃 ${y.tittel}` : y.navn || y.tittel).join(", ") || (x.borte ? "Borte" : "Hvile");
+          return el("li", {}, el("button", { disabled: her || opptatt, class: her ? "her" : "", onclick: () => endre({ handling: "flytt", type: o.type, fra: d.dato, til: x.dato }, `Flyttet til ${x.dato === i_dag ? "i dag" : x.ukedag}`) },
+            el("span", { class: "uke-dag" }, x.dato === i_dag ? "I dag" : `${x.ukedag.slice(0, 3)} ${+x.dato.slice(8, 10)}.`),
+            el("span", { class: "tekst" }, el("b", {}, her ? "Her ligger den nå" : innhold), x.borte ? el("small", {}, "Du ser ut til å være borte") : x.opptatt_t >= 6 ? el("small", {}, `Opptatt ca. ${Math.round(x.opptatt_t)} t`) : null),
+            her || opptatt ? null : ikon("hoyre")));
+        })),
+        el("div", { class: "ark-knapper" },
+          el("button", { class: "knapp noytral", onclick: () => endre({ handling: "fjern", type: o.type, fra: d.dato }, o.type === "lop" ? "Løpeturen hoppes over denne uka" : "Økta er tatt ut av planen") }, o.type === "lop" ? "Hopp over denne uka" : "Ta bort fra planen"),
+          el("button", { class: "knapp", onclick: lukkArk }, "Avbryt")));
+    };
+    const rad = (d) => {
+      const harStyrke = d.okter.some((o) => o.type === "styrke");
+      return el("li", { class: `${d.dato === i_dag ? "i-dag" : ""} ${d.borte ? "borte" : ""}` },
+        el("span", { class: "uke-dag" }, d.dato === i_dag ? "I dag" : `${d.ukedag.slice(0, 3)} ${+d.dato.slice(8, 10)}.`),
+        el("span", { class: "tekst" },
+          d.okter.length ? el("span", { class: "chips" }, d.okter.map((o) => o.gjort
+            ? el("span", { class: "merkelapp opp" }, `✓ ${o.navn}`)
+            : el("button", { class: `merkelapp flyttbar ${o.type === "styrke" ? "aksent" : o.type === "lop" ? "lop" : ""}`, "aria-label": `Flytt ${o.navn || o.tittel}`, onclick: () => flyttArk(d, o) },
+              o.type === "lop" ? `🏃 ${o.tittel}${o.minutter ? ` ${o.minutter} min` : ""}` : o.navn || o.tittel))) : el("span", { class: "hviledag" }, d.borte ? "Borte" : "Hvile"),
+          d.notat ? el("small", {}, d.notat) : null,
+          d.kalender?.length ? el("small", { class: "kal" }, d.kalender.slice(0, 2).join(" · ")) : null),
+        harProgram && !harStyrke ? el("button", { class: "uke-pluss", "aria-label": `Legg styrkeøkt på ${d.ukedag}`, onclick: () => endre({ handling: "legg_til", type: "styrke", til: d.dato }, `Styrkeøkt lagt på ${d.dato === i_dag ? "i dag" : d.ukedag}`) }, ikon("pluss")) : null);
+    };
+    const tilbakestill = async () => { try { await slett(`api/profiler/${pid}/ukeplan`); visToast("Tilbake til appens forslag"); visTrening(); } catch (e) { feil(e); } };
     return el("div", { class: "kort ukeplan" },
-      el("div", { class: "kort-hode" }, el("h2", {}, "De neste 7 dagene"), el("span", { class: `merkelapp ${u.kilde === "ai" ? "ai" : ""}` }, u.kilde === "ai" ? ikon("gnist") : null, u.kilde === "ai" ? "AI" : "Forslag")),
-      u.oppsummering ? el("p", { class: "forklaring", style: "font-size:13px" }, u.oppsummering) : null,
+      el("div", { class: "kort-hode" }, el("h2", {}, "De neste 7 dagene"), el("span", { class: `merkelapp ${u.kilde === "ai" ? "ai" : u.kilde === "egen" ? "aksent" : ""}` }, u.kilde === "ai" ? ikon("gnist") : null, u.kilde === "ai" ? "AI" : u.kilde === "egen" ? "Din plan" : "Forslag")),
+      el("p", { class: "forklaring", style: "font-size:13px" }, u.kilde === "lokal" ? "Trykk på en økt for å flytte den, eller + for å legge til. Klokka og «neste økt» følger planen." : u.oppsummering),
       el("ul", { class: "uke-liste" }, u.dager.map(rad)),
       el("div", { class: "knapperad" },
         aiPaa() ? el("button", { class: "knapp ai-lys liten", style: "flex:1", onclick: ukeplanAiArk }, ikon("gnist"), u.kilde === "ai" ? "Ny plan med AI" : "Planlegg uka med AI") : null,
-        u.kilde === "ai" ? el("button", { class: "knapp noytral liten", onclick: async () => { try { await slett(`api/profiler/${pid}/ukeplan`); visTrening(); } catch (e) { feil(e); } } }, "Appens forslag") : null),
+        u.kilde !== "lokal" ? el("button", { class: "knapp noytral liten", onclick: tilbakestill }, "Tilbakestill") : null),
       !(profil()?.koblinger?.kalendere || []).length && S.ai_tilgjengelig ? el("button", { class: "lenke", style: "align-self:flex-start;font-size:13.5px", onclick: () => koblingArk("kalendere") }, ikon("kalender"), "Planlegg rundt jobb og reiser – velg kalender") : null);
   }
 
@@ -2670,6 +2757,11 @@
     }).catch(() => {});
     aiKort.append(el("div", { class: "liste-rad", style: "min-height:0;padding:0" }, el("span", { class: "tekst" }, el("b", {}, "Oppsummering etter hver økt"), el("small", {}, "Automatisk når du fullfører")), bryter(S.innstillinger.ai_auto_oppsummering, (x) => lagreInn({ ai_auto_oppsummering: x }))));
     aiKort.append(el("div", { class: "liste-rad", style: "min-height:0;padding:0" }, el("span", { class: "tekst" }, el("b", {}, "Tips når økta starter"), el("small", {}, "Ellers trykker du på knappen selv")), bryter(S.innstillinger.ai_auto_tips, (x) => lagreInn({ ai_auto_tips: x }))));
+
+    v.append(el("div", { class: "seksjon-tittel" }, "Motivasjon"));
+    v.append(el("div", { class: "kort" },
+      el("div", { class: "liste-rad", style: "min-height:0;padding:0" }, el("span", { class: "tekst" }, el("b", {}, "Ukesoppsummering søndag kveld"), el("small", {}, "Treneren oppsummerer uka og foreslår fokus for neste – vises på forsiden til onsdag")), bryter(S.innstillinger.ukesoppsummering, (x) => lagreInn({ ukesoppsummering: x }))),
+      S.profiler.length > 1 ? el("div", { class: "liste-rad", style: "min-height:0;padding:0" }, el("span", { class: "tekst" }, el("b", {}, "Månedens duell"), el("small", {}, "Hvem lukker flest ringer i måneden? Hver har sine egne mål.")), bryter(S.innstillinger.utfordring, (x) => lagreInn({ utfordring: x }))) : null));
 
     v.append(el("div", { class: "seksjon-tittel" }, "Økt"));
     v.append(el("div", { class: "kort" }, el("div", { class: "liste-rad", style: "min-height:0;padding:0" }, el("span", { class: "tekst" }, el("b", {}, "Lyd når hvilen er over"), el("small", {}, "Telefonen vibrerer uansett (der det støttes)")), bryter(S.innstillinger.hviletimer_lyd, (x) => lagreInn({ hviletimer_lyd: x })))));

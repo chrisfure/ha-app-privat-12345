@@ -119,6 +119,10 @@ class FalskAI:
 
     async def spor(self, oppgave, instruksjoner):
         await asyncio.sleep(0.4)
+        if "ukesoppsummering" in oppgave:
+            return json.dumps({"tittel": "Sterk uke – to av tre ringer lukket", "bra": ["To styrkeøkter med fem nye rekorder", "Aktivitetsringen lukket allerede onsdag"],
+                               "forbedre": ["Én styrkeøkt gjenstår for å nå ukemålet"],
+                               "neste_uke": "Legg første økt tidlig i uka. Bondegange har stått stille – prøv tyngre vekt og kortere drag."}, ensure_ascii=False)
         if "ukeplan" in oppgave:
             import ukeplan
             pid = self.sb.profiler()[0]["id"]

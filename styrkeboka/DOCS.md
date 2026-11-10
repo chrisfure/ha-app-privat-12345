@@ -139,6 +139,16 @@ Har du f.eks. Garmin Connect-integrasjonen, trykk **Helse → Hent data automati
 
 Kobler du også søvn, HRV, Body Battery, stress, treningsberedskap og restitusjonstid (Garmin-sensorene foreslås automatisk), viser forsiden et **dagsformkort** – god, middels eller lav – med grunnene og et konkret råd. HRV sammenlignes med ditt eget snitt de siste ukene. Er formen ikke god, kan du trykke **Gjør økta lettere** i økta (færre sett, litt lavere vekt).
 
+### Flytt økter i ukeplanen
+
+Trykk på en økt i «De neste 7 dagene» for å flytte den, **+** for å legge en styrkeøkt på en dag, eller ta den bort. Da blir det **din plan**, og «neste økt», uke-kjeden og Garmin-kalenderen følger den – også løpeturene. Hvilken styrkeøkt det blir (A, B, C …) følger alltid rekkefølgen i programmet. «Tilbakestill» gir appens forslag igjen.
+
+### Ukesoppsummering og månedens duell
+
+Søndag fra kl. 18 lager treneren en oppsummering av uka med fokus for neste uke. Den ligger øverst på forsiden til onsdag (eller til du lukker den), og «Oppsummer uka mi nå» nederst lager en når som helst. Home Assistant får hendelsen `styrkeboka_hendelse` med `handling: ukesoppsummering`, om du vil lage et varsel selv.
+
+Har dere flere profiler, viser forsiden **månedens duell**: hver lukket ring i en uke gir ett poeng. Alle har sine egne mål, så det er jevnt uansett nivå. Begge deler kan skrus av under Mer → Motivasjon.
+
 ### Ukeplan rundt kalenderen
 
 Velg kalenderne dine (jobb, reiser, f.eks. TripIt) i samme ark. Forsiden viser **de neste 7 dagene** med styrkeøkter og løpeturer: dager du er borte (reise, kurs, ferie, hytte – eller heldagshendelser med sted) og svært lange dager hoppes over, og øktene spres med hvile mellom. Jobbvakter teller som opptatte timer, ikke som borte. **Planlegg uka med AI** lager en mer gjennomtenkt plan ut fra kalender, dagsform, løpeplan og ønsker du skriver. Neste styrkeøkt legges i Garmin-kalenderen på dagen fra ukeplanen.

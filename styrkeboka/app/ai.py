@@ -309,6 +309,22 @@ def oppgave_intervall(sb: Styrkeboka, pid: int, fmt: str, minutter: int, fokus: 
     ] if x)
 
 
+def oppgave_ukesoppsummering(sb: Styrkeboka, pid: int, fakta: str) -> str:
+    import ukeplan
+    return "\n\n".join(t for t in [
+        ROLLE,
+        "OPPGAVE: Skriv en kort ukesoppsummering til brukeren. Vær konkret og bruk tallene: hva gikk bra, hva kan bli bedre, "
+        "og hva bør være fokus neste uke (ta hensyn til kalenderstatus, dagsform og eventuell stillstand). "
+        "Motiverende, men ærlig – ikke ros det som ikke ble gjort. Maks 3 punkter i hver liste, korte setninger.",
+        "UKAS TALL:\n" + fakta,
+        "OM BRUKEREN:\n" + profilkontekst(sb, pid),
+        "TRENINGSANALYSE:\n" + treningsanalyse(sb, pid),
+        ukeplan.ai_tekst(sb, pid),
+        "Svar KUN med JSON: {\"tittel\": \"én kort setning som oppsummerer uka\", \"bra\": [\"...\"], "
+        "\"forbedre\": [\"...\"], \"neste_uke\": \"2-3 setninger om fokus og plan neste uke\"}",
+    ] if t)
+
+
 def oppgave_ukeplan(sb: Styrkeboka, pid: int, onske: str = "") -> str:
     import ukeplan
     prog = sb.aktivt_program(pid)

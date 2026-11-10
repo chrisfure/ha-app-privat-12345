@@ -5,7 +5,7 @@ form: fullførte økter, arbeidssett, nye rekorder, nådde ukemål og kondisjons
 """
 from __future__ import annotations
 
-from datetime import timedelta
+from datetime import date, datetime, timedelta
 from typing import TYPE_CHECKING
 
 import program as P
@@ -56,7 +56,67 @@ def _uke_start(sb: "Styrkeboka", d):
     return (d - timedelta(days=d.weekday())).replace(hour=0, minute=0, second=0, microsecond=0)
 
 
-def status(sb: "Styrkeboka", pid: int) -> dict:
+MAANEDER = ["januar", "februar", "mars", "april", "mai", "juni", "juli", "august", "september", "oktober", "november", "desember"]
+
+
+def ringer_per_uke(sb: "Styrkeboka", pid: int, uker: int = 10) -> dict[str, int]:
+    """Antall lukkede ringer (0–3) per uke, nøkkel = mandagens dato. Samme mål som ringene på forsiden."""
+    import kropp
+    p = sb.profil(pid)
+    plan = int(p.get("dager_per_uke") or 3)
+    ut = {}
+    for u in kropp.uker(sb, pid, uker):
+        start = date.fromisoformat(u["start"])
+        slutt = (start + timedelta(days=7)).isoformat()
+        n = (1 if u["styrkeokter"] >= plan else 0) + (1 if u["minutter"] >= AKTIVITETSMAAL else 0)
+        sovn = sb.db.alle("SELECT verdi FROM maalinger WHERE profil_id = ? AND type = 'sovn_min' AND dato >= ? AND dato < ?",
+                          (pid, u["start"], slutt))
+        if sovn:
+            n += 1 if sum(r["verdi"] for r in sovn) / len(sovn) >= SOVNMAAL_MIN else 0
+        else:
+            sett = sb.db.verdi(
+                "SELECT COUNT(*) FROM sett s JOIN okter o ON o.id = s.okt_id WHERE o.profil_id = ? AND o.status = 'fullfort' "
+                "AND s.oppvarming = 0 AND o.startet >= ? AND o.startet < ?",
+                (pid, til_iso(datetime.combine(start, datetime.min.time(), tzinfo=sb.tz)),
+                 til_iso(datetime.combine(start + timedelta(days=7), datetime.min.time(), tzinfo=sb.tz))))
+            n += 1 if sett >= plan * 15 else 0
+        ut[u["start"]] = {"ringer": n, "okter": u["styrkeokter"], "minutter": u["minutter"]}
+    return ut
+
+
+def duell(sb: "Styrkeboka") -> dict | None:
+    """Månedens duell mellom profilene: flest lukkede ringer i uker som starter i måneden.
+    Hver har sine egne mål (økter per uke), så det er rettferdig uansett nivå."""
+    profiler = [p for p in sb.profiler() if not p.get("arkivert")]
+    if len(profiler) < 2 or not sb.inn.get("utfordring", True):
+        return None
+    i_dag = sb.lokal(naa()).date()
+    forrige_mnd = (i_dag.replace(day=1) - timedelta(days=1))
+
+    def tell(aar: int, mnd: int) -> list[dict]:
+        rader = []
+        for p in profiler:
+            uker = {k: v for k, v in ringer_per_uke(sb, p["id"]).items() if (date.fromisoformat(k).year, date.fromisoformat(k).month) == (aar, mnd)}
+            rader.append({"id": p["id"], "navn": p["navn"], "farge": p.get("farge"), "ringer": sum(v["ringer"] for v in uker.values()),
+                          "mulige": 3 * len(uker), "okter": sum(v["okter"] for v in uker.values()),
+                          "minutter": sum(v["minutter"] for v in uker.values())})
+        return rader
+
+    def leder(rader: list[dict]) -> int | None:
+        topp = max(r["ringer"] for r in rader)
+        best = [r for r in rader if r["ringer"] == topp]
+        return best[0]["id"] if topp and len(best) == 1 else None
+    naa_ = tell(i_dag.year, i_dag.month)
+    forr = tell(forrige_mnd.year, forrige_mnd.month)
+    ut = {"maaned": MAANEDER[i_dag.month - 1], "deltakere": naa_, "leder": leder(naa_), "forrige": None}
+    if any(r["ringer"] for r in forr):
+        v = leder(forr)
+        ut["forrige"] = {"maaned": MAANEDER[forrige_mnd.month - 1], "vinner": next((r["navn"] for r in forr if r["id"] == v), None),
+                         "stilling": " – ".join(str(r["ringer"]) for r in sorted(forr, key=lambda r: -r["ringer"]))}
+    return ut
+
+
+def status(sb: "Styrkeboka", pid: int, lagre: bool = True) -> dict:
     import kropp
     p = sb.profil(pid)
     plan = int(p.get("dager_per_uke") or 3)
@@ -168,7 +228,7 @@ def status(sb: "Styrkeboka", pid: int) -> dict:
     nye = [m for m in merker if m["nokkel"] in naa_har - hadde] if lagret else []   # ikke feire alt første gang
     nv = niva(xp)
     nytt_niva = bool(lagret) and nv["nr"] > int(lagret.get("niva") or nv["nr"])
-    if naa_har != hadde or nv["nr"] != lagret.get("niva"):
+    if lagre and (naa_har != hadde or nv["nr"] != lagret.get("niva")):
         sb.db.lagre_innstilling(f"spill-{pid}", {"merker": sorted(naa_har | hadde), "niva": nv["nr"]})
     return {
         "nye_merker": nye, "nytt_niva": nytt_niva,

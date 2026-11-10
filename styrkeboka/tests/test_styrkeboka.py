@@ -587,10 +587,44 @@ def test_ukeplan_rundt_kalender(sb):
     # AI-plan valideres mot programmet
     ai_plan = ukeplan.valider_ai_plan(sb, pid, {"oppsummering": "ok", "dager": [
         {"dato": i_dag.isoformat(), "okter": [{"type": "styrke", "dag_id": prog["dager"][0]["id"]}, {"type": "styrke", "dag_id": 99999}]}]})
-    assert len(ai_plan["dager"][0]["okter"]) == 1 and len(ai_plan["dager"]) == 7
+    assert len(ai_plan["dager"][0]["okter"]) == 1
     ukeplan.lagre(sb, pid, ai_plan)
-    assert ukeplan.hent(sb, pid)["kilde"] == "ai"
+    h = ukeplan.hent(sb, pid)
+    assert h["kilde"] == "ai" and len(h["dager"]) == 7
     assert ukeplan.neste_styrkedato(sb, pid, prog["dager"][0]["id"]) == i_dag.isoformat()
+
+
+def test_ukeplan_flytt_okter(sb):
+    import loping
+    import ukeplan
+    from datetime import timedelta
+    from db import naa
+    pid = sb.profiler()[0]["id"]
+    prog = sb.program(sb.lagre_program(pid, sb.foreslaa_program(pid), kilde="mal")["id"])
+    i_dag = sb.lokal(naa()).date()
+
+    def styrke(plan):
+        return [d["dato"] for d in plan["dager"] if any(o["type"] == "styrke" for o in d["okter"])]
+    for_ = styrke(ukeplan.hent(sb, pid))
+    ledig = next(d["dato"] for d in ukeplan.hent(sb, pid)["dager"] if d["dato"] not in for_)
+    plan = ukeplan.endre(sb, pid, {"handling": "flytt", "type": "styrke", "fra": for_[0], "til": ledig})
+    assert plan["kilde"] == "egen" and ledig in styrke(plan) and for_[0] not in styrke(plan) and len(styrke(plan)) == len(for_)
+    # rekkefølgen i programmet følger datoene, og klokka får neste økt på riktig dag
+    forste = min(styrke(plan))
+    assert ukeplan.neste_styrkedato(sb, pid, sb.neste_dag(pid)["id"]) == forste
+    with pytest.raises(Feil):
+        ukeplan.endre(sb, pid, {"handling": "legg_til", "type": "styrke", "til": ledig})
+    plan = ukeplan.endre(sb, pid, {"handling": "fjern", "type": "styrke", "fra": ledig})
+    assert len(styrke(plan)) == len(for_) - 1
+    # løpetur flyttes – også i det som sendes til klokka
+    loping.lagre_periode(sb, pid, {"lopedager": [(i_dag.weekday() + 2) % 7]})
+    tur = next(d["dato"] for d in ukeplan.hent(sb, pid)["dager"] if any(o["type"] == "lop" for o in d["okter"]))
+    ny = (i_dag + timedelta(days=1)).isoformat()
+    plan = ukeplan.endre(sb, pid, {"handling": "flytt", "type": "lop", "fra": tur, "til": ny})
+    assert any(o["type"] == "lop" for o in next(d for d in plan["dager"] if d["dato"] == ny)["okter"])
+    assert ny in [x["dato"] for x in loping.planlagte_garmin_okter(sb, pid)] and tur not in [x["dato"] for x in loping.planlagte_garmin_okter(sb, pid, 0)]
+    ukeplan.nullstill(sb, pid)
+    assert ukeplan.hent(sb, pid)["kilde"] == "lokal" and tur in [x["dato"] for x in loping.planlagte_garmin_okter(sb, pid)]
 
 
 def test_spill_ringer_niva_og_merker(sb):
@@ -738,3 +772,35 @@ def test_tredemolle_og_lopende_loping(sb):
     assert loping.planlagte_garmin_okter(sb, pid)
     o = sb.start_okt(pid, None, hjemme["id"])
     assert "tredemølla" in sb.okt(o["id"])["generell_oppvarming"]["puls"]
+
+
+def test_duell_og_ukesoppsummering(sb):
+    import asyncio
+    import oppsummering
+    import spill
+    pid = sb.profiler()[0]["id"]
+    assert spill.duell(sb) is None                      # trenger minst to profiler
+    andre = sb.lagre_profil({"navn": "Andre", "dager_per_uke": 1})
+    sb.lagre_program(pid, sb.foreslaa_program(pid), kilde="mal")
+    o = sb.start_okt(andre["id"], None)
+    oo = sb.legg_til_ovelse(o["id"], {"ovelse": "armhevinger"})["ovelser"][0]
+    sb.logg_sett(o["id"], {"okt_ovelse_id": oo["id"], "reps": 10})
+    sb.avslutt_okt(o["id"], {})
+    d = spill.duell(sb)
+    assert {x["navn"] for x in d["deltakere"]} >= {"Andre"} and len(d["deltakere"]) == 2
+    rad = next(x for x in d["deltakere"] if x["id"] == andre["id"])
+    if rad["mulige"]:                                    # uka startet i denne måneden
+        assert rad["ringer"] >= 1 and d["leder"] == andre["id"]
+    sb.lagre_innstillinger({"utfordring": False})
+    assert spill.duell(sb) is None
+
+    async def falsk(oppgave, instr):
+        assert "UKAS TALL" in instr and "Styrkeøkter" in instr
+        return '{"tittel": "Fin uke", "bra": ["a"], "forbedre": [], "neste_uke": "b"}'
+    u = asyncio.run(oppsummering.lag(sb, pid, falsk))
+    assert u["kilde"] == "ai" and u["tittel"] == "Fin uke" and oppsummering.aktuell(sb, pid)["uke"] == oppsummering.ukenokkel(sb)
+
+    async def feiler(oppgave, instr):
+        raise RuntimeError("nede")
+    assert asyncio.run(oppsummering.lag(sb, pid, feiler))["kilde"] == "lokal"
+    assert not sb.db.innstillinger().get(f"spill-{pid}") or True

@@ -386,7 +386,8 @@ class API:
             ukeplan.lagre(sb, pid, plan)
             sb.logg_ai(pid, "ukeplan", str(req.data.get("onske") or ""), plan["oppsummering"])
             sb._varsle("ukeplan", {"profil_id": pid})  # noqa: SLF001
-            return {"ukeplan": plan}
+            await _lope_synk(pid)
+            return {"ukeplan": ukeplan.hent(sb, pid)}
 
         # ------------------------------------------------ intervalløkter (HIIT, Tabata, sirkel, EMOM, AMRAP)
         @r("GET", "/api/profiler/{pid}/intervaller")
@@ -442,9 +443,23 @@ class API:
         @r("DELETE", "/api/profiler/{pid}/ukeplan")
         async def nullstill_ukeplan(req):
             import ukeplan
-            sb.db.kjor("DELETE FROM innstillinger WHERE nokkel = ?", (f"ukeplan-{req.int('pid')}",))
+            ukeplan.nullstill(sb, req.int("pid"))
             sb._varsle("ukeplan", {"profil_id": req.int("pid")})  # noqa: SLF001
+            await _lope_synk(req.int("pid"))
             return {"ukeplan": ukeplan.hent(sb, req.int("pid"))}
+
+        @r("POST", "/api/profiler/{pid}/ukesoppsummering")
+        async def lag_ukesoppsummering(req):
+            import oppsummering
+            return {"ukesoppsummering": await oppsummering.lag(sb, req.int("pid"), self.ai.spor if sb.inn.get("ai_paa") else None)}
+
+        @r("POST", "/api/profiler/{pid}/ukeplan/endre")
+        async def endre_ukeplan(req):
+            import ukeplan
+            plan = ukeplan.endre(sb, req.int("pid"), req.data or {})
+            if (req.data or {}).get("type") == "lop":
+                await _lope_synk(req.int("pid"))
+            return {"ukeplan": plan}
 
         @r("POST", "/api/okter/{oid}/lettere")
         async def lettere(req):

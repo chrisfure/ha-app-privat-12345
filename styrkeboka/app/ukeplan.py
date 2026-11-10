@@ -106,6 +106,15 @@ def kalender_tekst(sb: "Styrkeboka", pid: int, dager: int = 7) -> str:
     return "KALENDERSTATUS NESTE 7 DAGER (bare tilgjengelighet, ingen detaljer):\n" + "\n".join(linjer)
 
 
+def _gjort_i_dag(sb: "Styrkeboka", pid: int) -> str | None:
+    i_dag = sb.lokal(naa()).date()
+    for o in sb.db.alle("SELECT startet, dag_navn FROM okter WHERE profil_id = ? AND status = 'fullfort' AND startet >= ? ORDER BY startet DESC",
+                        (pid, til_iso(naa() - timedelta(days=1)))):
+        if sb.lokal(o["startet"]).date() == i_dag:
+            return o["dag_navn"] or "Styrkeøkt"
+    return None
+
+
 def lokal_plan(sb: "Styrkeboka", pid: int, dager: int = 7) -> dict:
     import dagsform
     import loping
@@ -114,8 +123,8 @@ def lokal_plan(sb: "Styrkeboka", pid: int, dager: int = 7) -> dict:
     i_dag = sb.lokal(naa()).date()
     alle = hendelser(sb, pid)
     info = {i_dag + timedelta(days=i): dag_info(sb, alle, i_dag + timedelta(days=i)) for i in range(dager)}
-    trent_i_dag = any(sb.lokal(o["startet"]).date() == i_dag for o in sb.db.alle(
-        "SELECT startet FROM okter WHERE profil_id = ? AND status = 'fullfort' AND startet >= ?", (pid, til_iso(naa() - timedelta(days=1)))))
+    gjort_i_dag = _gjort_i_dag(sb, pid)
+    trent_i_dag = bool(gjort_i_dag)
     form = dagsform.status(sb, pid)
 
     # løpeturer fra løpeplanen (faste dager)
@@ -124,7 +133,7 @@ def lokal_plan(sb: "Styrkeboka", pid: int, dager: int = 7) -> dict:
         d = date.fromisoformat(x["dato"])
         if d in info:
             lop.setdefault(d, []).append({"type": "lop", "tittel": x["okt"]["tittel"], "minutter": x["okt"]["minutter"],
-                                          "hard": x["okt"]["type"] == "intervall"})
+                                          "hard": x["okt"]["type"] == "intervall", "orig": x.get("orig") or x["dato"]})
     # kandidatdager for styrke
     n = int(p.get("dager_per_uke") or 3) if prog else 0
     kandidater = []
@@ -160,6 +169,8 @@ def lokal_plan(sb: "Styrkeboka", pid: int, dager: int = 7) -> dict:
         if d in valgt:
             pd = rekke[valgt.index(d)]
             okter.insert(0, {"type": "styrke", "dag_id": pd["id"], "navn": pd["navn"]})
+        if d == i_dag and gjort_i_dag:
+            okter.insert(0, {"type": "styrke", "gjort": True, "navn": gjort_i_dag})
         if inf["borte"]:
             notat = "Borte/reise – ingen styrkeøkt planlagt."
             if d in lop:
@@ -175,42 +186,152 @@ def lokal_plan(sb: "Styrkeboka", pid: int, dager: int = 7) -> dict:
             + (" Dager du er borte eller svært opptatt er hoppet over." if any(i['borte'] or i['opptatt_t'] >= 10 for i in info.values()) else "")}
 
 
+def lop_flytt(sb: "Styrkeboka", pid: int) -> dict:
+    """Løpeturer brukeren (eller AI-planen) har flyttet: {opprinnelig dato: ny dato, eller "" for å hoppe over}."""
+    return sb.db.innstillinger().get(f"lop-flytt-{pid}") or {}
+
+
+def _lagre_lop_flytt(sb: "Styrkeboka", pid: int, flytt: dict) -> None:
+    grense = (sb.lokal(naa()).date() - timedelta(days=14)).isoformat()
+    sb.db.lagre_innstilling(f"lop-flytt-{pid}", {k: v for k, v in flytt.items() if k >= grense})
+
+
 def valider_ai_plan(sb: "Styrkeboka", pid: int, data: dict) -> dict:
-    prog = sb.aktivt_program(pid)
-    dag_ider = {d["id"]: d["navn"] for d in (prog["dager"] if prog else [])}
+    """Gjør AI-svaret om til en lagret plan. Løpeturene AI-en har lagt på andre dager, flyttes i løpeplanen
+    (så klokka følger etter); styrkedagene lagres, og hvilken økt det blir følger programmets rekkefølge."""
+    flytt = lop_flytt(sb, pid)
     lokal = lokal_plan(sb, pid)
-    per_dato = {d["dato"]: d for d in lokal["dager"]}
-    for d in per_dato.values():
-        d["okter"], d["notat"] = [], ""
+    planlagt = sorted({o["orig"] for d in lokal["dager"] for o in d["okter"] if o["type"] == "lop"})
+    datoer = {d["dato"] for d in lokal["dager"]}
+    dager, ai_lop = [], []
     for d in data.get("dager") or []:
         dato = str(d.get("dato") or "")[:10]
-        if dato not in per_dato:
+        if dato not in datoer:
             continue
         okter = []
         for o in d.get("okter") or []:
-            if o.get("type") == "styrke" and int(o.get("dag_id") or 0) in dag_ider:
-                okter.append({"type": "styrke", "dag_id": int(o["dag_id"]), "navn": dag_ider[int(o["dag_id"])]})
+            if o.get("type") == "styrke" and not any(x["type"] == "styrke" for x in okter):
+                okter.append({"type": "styrke"})
             elif o.get("type") == "lop":
-                okter.append({"type": "lop", "tittel": str(o.get("tittel") or "Løpetur")[:40], "minutter": int(o.get("minutter") or 30)})
-            elif o.get("type") == "annet":
-                okter.append({"type": "annet", "tittel": str(o.get("tittel") or "")[:60]})
-        per_dato[dato]["okter"] = okter
-        per_dato[dato]["notat"] = str(d.get("notat") or "")[:200]
-    return {"kilde": "ai", "laget": til_iso(naa()), "dager": list(per_dato.values()),
-            "oppsummering": str(data.get("oppsummering") or "")[:600]}
+                ai_lop.append((dato, o, okter))
+            elif o.get("type") == "annet" and str(o.get("tittel") or "").strip():
+                okter.append({"type": "annet", "tittel": str(o["tittel"])[:60]})
+        dager.append({"dato": dato, "okter": okter, "notat": str(d.get("notat") or "")[:200]})
+    ai_lop.sort(key=lambda x: x[0])
+    for i, (dato, o, okter) in enumerate(ai_lop):
+        if i < len(planlagt):
+            if dato == planlagt[i]:
+                flytt.pop(planlagt[i], None)
+            else:
+                flytt[planlagt[i]] = dato
+        else:  # løpetur som ikke finnes i løpeplanen – vises som forslag
+            okter.append({"type": "annet", "tittel": f"🏃 {str(o.get('tittel') or 'Løpetur')[:40]}"})
+    _lagre_lop_flytt(sb, pid, flytt)
+    return {"kilde": "ai", "laget": til_iso(naa()), "dager": dager, "oppsummering": str(data.get("oppsummering") or "")[:600]}
 
 
 def hent(sb: "Styrkeboka", pid: int) -> dict:
-    """Lagret AI-plan fra i dag hvis den finnes, ellers en fersk lokal plan."""
+    """Ukeplanen som gjelder: din egen eller AI-ens lagrede plan hvis den finnes, ellers appens forslag.
+    Lagrede planer sier hvilke dager det er styrke; hvilken økt det blir følger programmet. Dager lenger
+    fram enn den lagrede planen fylles på med appens forslag."""
+    lokal = lokal_plan(sb, pid)
     lagret = sb.db.innstillinger().get(f"ukeplan-{pid}")
     i_dag = sb.lokal(naa()).date().isoformat()
-    if lagret and lagret.get("kilde") == "ai" and sb.lokal(lagret["laget"]).date().isoformat() == i_dag:
-        return {**lagret, "dager": [d for d in lagret["dager"] if d["dato"] >= i_dag]}
-    return lokal_plan(sb, pid)
+    per = {d["dato"]: d for d in (lagret or {}).get("dager") or [] if d["dato"] >= i_dag}
+    if not lagret or lagret.get("kilde") not in ("ai", "egen") or not per:
+        return lokal
+    p = sb.profil(pid)
+    prog = sb.aktivt_program(pid)
+    n = int(p.get("dager_per_uke") or 3)
+    antall, forrige = 0, False
+    for d in lokal["dager"]:
+        lop = [o for o in d["okter"] if o["type"] == "lop"]
+        gjort = [o for o in d["okter"] if o.get("gjort")]
+        if d["dato"] in per:
+            l = per[d["dato"]]
+            styrke = any(o["type"] == "styrke" for o in l["okter"]) and not gjort
+            annet = [o for o in l["okter"] if o["type"] == "annet"]
+            d["notat"] = l.get("notat") or ""
+            if styrke and d["borte"]:
+                d["notat"] = "Du ser ut til å være borte denne dagen – flytt økta om det ikke passer."
+        else:
+            styrke = any(o["type"] == "styrke" and not o.get("gjort") for o in d["okter"]) and antall < n and not forrige
+            annet = []
+        antall += 1 if styrke or gjort else 0
+        forrige = bool(styrke or gjort)
+        d["okter"] = gjort + ([{"type": "styrke"}] if styrke else []) + lop + annet
+    # hvilken økt: programmets rekkefølge fra neste
+    rekke = []
+    if prog and prog["dager"]:
+        neste = sb.neste_dag(pid, prog)
+        ider = [x["id"] for x in prog["dager"]]
+        start = ider.index(neste["id"]) if neste else 0
+        rekke = [prog["dager"][(start + i) % len(ider)] for i in range(7)]
+    i = 0
+    for d in lokal["dager"]:
+        for o in d["okter"]:
+            if o["type"] == "styrke" and not o.get("gjort"):
+                pd = rekke[i] if i < len(rekke) else None
+                o["dag_id"], o["navn"] = (pd["id"], pd["navn"]) if pd else (None, "Styrkeøkt")
+                i += 1
+    return {"kilde": lagret["kilde"], "laget": lagret["laget"], "dager": lokal["dager"],
+            "oppsummering": lagret.get("oppsummering") or ("Din egen plan – appen følger den." if lagret["kilde"] == "egen" else "")}
 
 
 def lagre(sb: "Styrkeboka", pid: int, plan: dict) -> None:
     sb.db.lagre_innstilling(f"ukeplan-{pid}", plan)
+
+
+def nullstill(sb: "Styrkeboka", pid: int) -> None:
+    sb.db.kjor("DELETE FROM innstillinger WHERE nokkel IN (?, ?)", (f"ukeplan-{pid}", f"lop-flytt-{pid}"))
+
+
+def endre(sb: "Styrkeboka", pid: int, d: dict) -> dict:
+    """Flytt, fjern eller legg til en økt i ukeplanen. Resultatet lagres som din egen plan."""
+    from logikk import Feil
+    plan = hent(sb, pid)
+    per = {x["dato"]: x for x in plan["dager"]}
+    handling, typ = d.get("handling"), d.get("type") or "styrke"
+    fra, til = str(d.get("fra") or "")[:10], str(d.get("til") or "")[:10]
+    if handling in ("flytt", "fjern") and fra not in per:
+        raise Feil("Fant ikke dagen i planen")
+    if handling in ("flytt", "legg_til") and til not in per:
+        raise Feil("Velg en av de neste 7 dagene")
+    if typ == "lop":
+        tur = next((o for o in per[fra]["okter"] if o["type"] == "lop"), None)
+        if not tur:
+            raise Feil("Fant ingen løpetur denne dagen")
+        flytt = lop_flytt(sb, pid)
+        ny = "" if handling == "fjern" else til
+        if ny == tur["orig"]:
+            flytt.pop(tur["orig"], None)
+        else:
+            flytt[tur["orig"]] = ny
+        _lagre_lop_flytt(sb, pid, flytt)
+    elif typ == "styrke":
+        def har(x):
+            return any(o["type"] == "styrke" for o in x["okter"])
+        if handling in ("flytt", "fjern"):
+            if not any(o["type"] == "styrke" and not o.get("gjort") for o in per[fra]["okter"]):
+                raise Feil("Ingen styrkeøkt å flytte denne dagen")
+            per[fra]["okter"] = [o for o in per[fra]["okter"] if o["type"] != "styrke" or o.get("gjort")]
+        if handling in ("flytt", "legg_til"):
+            if har(per[til]):
+                raise Feil("Det er allerede en styrkeøkt den dagen")
+            per[til]["okter"].insert(0, {"type": "styrke"})
+            per[til]["notat"] = ""
+    elif typ == "annet" and handling == "fjern":
+        per[fra]["okter"] = [o for o in per[fra]["okter"] if o["type"] != "annet"]
+    else:
+        raise Feil("Ukjent endring")
+    fra_ai = plan["kilde"] == "ai"
+    lagre(sb, pid, {"kilde": "egen", "laget": til_iso(naa()), "oppsummering": "",
+                    "dager": [{"dato": x["dato"], "notat": x["notat"] if fra_ai else "",
+                               "okter": [{"type": "styrke"} for o in x["okter"] if o["type"] == "styrke" and not o.get("gjort")]
+                               + [{"type": "annet", "tittel": o["tittel"]} for o in x["okter"] if o["type"] == "annet"]}
+                              for x in plan["dager"]]})
+    sb._varsle("ukeplan", {"profil_id": pid})  # noqa: SLF001
+    return hent(sb, pid)
 
 
 def neste_styrkedato(sb: "Styrkeboka", pid: int, dag_id: int) -> str | None:

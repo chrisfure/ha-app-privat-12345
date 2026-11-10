@@ -850,3 +850,67 @@ button.merkelapp { cursor: pointer; }
 .klokke-okt { box-shadow: var(--skygge), 0 0 0 2px var(--gronn) inset; gap: 10px; }
 .klokke-okt .knapperad { flex-wrap: wrap; }
 .klokke-okt .knapperad .knapp { flex: 1 1 auto; }
+
+/* ---------------------------------------------------------------- kortere forside */
+.plan-detaljer summary { list-style: none; display: flex; align-items: center; justify-content: space-between; cursor: pointer; padding: 10px 14px; border-radius: 14px; background: var(--flate-2); font-weight: 800; font-size: 14.5px; color: var(--dempet); }
+.plan-detaljer summary::-webkit-details-marker { display: none; }
+.plan-detaljer summary svg { width: 16px; height: 16px; transition: transform .2s; }
+.plan-detaljer[open] summary svg, details.dagsform[open] summary > svg { transform: rotate(180deg); }
+.plan-detaljer[open] summary { margin-bottom: 6px; }
+details.dagsform { padding: 0; gap: 0; }
+details.dagsform summary { list-style: none; display: flex; align-items: center; gap: 10px; padding: 12px 16px; cursor: pointer; }
+details.dagsform summary::-webkit-details-marker { display: none; }
+details.dagsform summary b { font-weight: 900; }
+details.dagsform summary small { color: var(--dempet); font-weight: 700; font-size: 13px; flex: 1; text-align: right; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+details.dagsform summary > svg { width: 16px; height: 16px; color: var(--dempet); flex: none; transition: transform .2s; }
+details.dagsform > :not(summary) { margin: 0 16px 12px; }
+details.dagsform .dagsform-prikk { flex: none; }
+.spill.kompakt { gap: 12px; }
+.spill.kompakt .ring-boks { width: 112px; height: 112px; }
+.spill.kompakt .ring-rad { gap: 14px; align-items: center; }
+.spill.kompakt .ring-midt { font-size: 22px; }
+.spill-side { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 7px; }
+.niva-linje { display: flex; align-items: center; gap: 8px; }
+.niva-linje b { font-weight: 900; font-size: 16px; flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.niva-merke { width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; flex: none; font-size: 13px; font-weight: 900; color: var(--flate); background: var(--blekk); box-shadow: 0 0 0 2px var(--gul); }
+.rekke-liten { font-weight: 900; font-size: 13.5px; padding: 2px 8px; border-radius: 99px; background: var(--oransje-lys); color: var(--oransje-blekk); flex: none; }
+.spill.kompakt .xp-bar { height: 6px; }
+.spill.kompakt .ring-forklaring { gap: 3px; }
+.spill.kompakt .ring-forklaring li { flex-direction: row; align-items: center; gap: 8px; padding-left: 8px; border-left-width: 3px; }
+.spill.kompakt .ring-forklaring .ring-navn { flex: 1; font-size: 11.5px; }
+.spill.kompakt .ring-forklaring b { font-size: 14px; }
+.spill.kompakt .ledd-dag .sirkel { width: 30px; height: 30px; }
+.spill.kompakt .ledd { margin-top: 12px; }
+.spill.kompakt .merke-linje { padding: 8px 10px; }
+
+/* ---------------------------------------------------------------- flytt økter i ukeplanen */
+button.merkelapp.flyttbar { padding: 6px 12px; font-size: 13px; }
+.uke-pluss { width: 32px; height: 32px; flex: none; border-radius: 50%; background: var(--flate-2); color: var(--dempet); display: grid; place-items: center; }
+.uke-pluss svg { width: 15px; height: 15px; }
+.flytt-liste { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.flytt-liste button { width: 100%; display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 16px; background: var(--flate-2); text-align: left; color: inherit; min-height: 52px; }
+.flytt-liste button:disabled { opacity: .5; }
+.flytt-liste button.her { opacity: 1; box-shadow: 0 0 0 2px var(--aksent) inset; }
+.flytt-liste .tekst { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.flytt-liste .tekst b { font-size: 14.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.flytt-liste small { color: var(--dempet); font-weight: 700; font-size: 12.5px; }
+.flytt-liste .uke-dag { flex: none; }
+.flytt-liste svg { width: 16px; height: 16px; color: var(--dempet); }
+
+/* ---------------------------------------------------------------- månedens duell og ukesoppsummering */
+.duell-liste { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 12px; }
+.duell-liste li { display: flex; align-items: center; gap: 10px; }
+.duell-liste .tekst { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 5px; }
+.duell-navn { display: flex; align-items: baseline; gap: 6px; }
+.duell-navn small { color: var(--dempet); font-weight: 700; font-size: 12.5px; margin-left: auto; }
+.duell-bar { display: block; height: 10px; border-radius: 99px; background: var(--flate-2); overflow: hidden; }
+.duell-bar span { display: block; height: 100%; min-width: 4px; border-radius: inherit; background: var(--b, var(--aksent)); transition: width .8s ease; }
+.duell-tall { font-size: 22px; font-weight: 900; font-variant-numeric: tabular-nums; flex: none; }
+.duell-tall small { font-size: 12px; font-weight: 800; color: var(--dempet); }
+.ukesoppsummering .kort-hode { margin: 0; }
+.us-tittel { font-size: 18px; font-weight: 900; line-height: 1.25; margin: 0; }
+.ai-kort ul.us-liste { list-style: none; padding: 0; }
+.us-liste li { padding-left: 24px; position: relative; }
+.us-liste li::before { position: absolute; left: 0; font-weight: 900; }
+.us-liste.bra li::before { content: "✓"; color: var(--opp-blekk); }
+.us-liste.forbedre li::before { content: "→"; color: var(--oransje-blekk); }

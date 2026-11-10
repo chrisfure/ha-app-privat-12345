@@ -26,6 +26,8 @@ STANDARD_INNSTILLINGER = {
     "ai_auto_oppsummering": True,
     "ai_auto_tips": False,
     "hviletimer_lyd": True,
+    "utfordring": True,        # månedens duell mellom profilene
+    "ukesoppsummering": True,  # automatisk søndag kveld
 }
 
 
@@ -1221,6 +1223,8 @@ class Styrkeboka:
             "loping": self._loping_kort(pid),
             "dagsform": __import__("dagsform").status(self, pid),
             "klokke_okter": self.ubekreftede_klokke_okter(pid),
+            "duell": __import__("spill").duell(self),
+            "ukesoppsummering": __import__("oppsummering").aktuell(self, pid),
             "spill": __import__("spill").status(self, pid),
             "ukeplan": __import__("ukeplan").hent(self, pid) if (prog or (p.get("koblinger") or {}).get("kalendere")) else None,
             "sist": {"id": sist["id"], "startet": sist["startet"], "dag_navn": sist["dag_navn"]} if sist else None,

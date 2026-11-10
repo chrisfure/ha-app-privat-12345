@@ -122,6 +122,8 @@ class HAKobling:
         except Feil:
             return
         nyttelast = {"handling": hva, "profil": p["navn"]}
+        if hva == "ukesoppsummering":
+            nyttelast["tittel"] = data.get("tittel")
         if hva == "okt_startet" and data.get("okt"):
             nyttelast["okt"] = data["okt"]["dag_navn"]
         if hva == "okt_fullfort" and data.get("oppsummering"):
@@ -381,6 +383,14 @@ class HAKobling:
                         await self.synk_profil(p)
                     except Exception as e:  # noqa: BLE001
                         log.warning("Henting av kroppsdata feilet for profil %s: %s", p["id"], e)
+                try:
+                    import oppsummering
+                    if oppsummering.skal_lages(self.sb, p["id"]):
+                        o = await oppsummering.lag(self.sb, p["id"], self.spor if self.aktiv else None)
+                        await self._fyr_hendelse("ukesoppsummering", {"profil_id": p["id"], "tittel": o["tittel"]})
+                        self._ved_endring("profil", None)
+                except Exception as e:  # noqa: BLE001
+                    log.warning("Ukesoppsummering feilet for profil %s: %s", p["id"], e)
                 if runde % 4 == 0 and (p.get("garmin_eksport") or {}).get("styrke"):
                     try:
                         await self.synk_garmin_styrke(p)
@@ -546,7 +556,7 @@ class HAKobling:
         return ut
 
     # oppgaver som krever mest vurdering – kan gå til en kraftigere modell
-    PLANLEGGING = {"lag program", "juster program", "ny blokk", "ukeplan", "startvekter", "intervalløkt"}
+    PLANLEGGING = {"lag program", "juster program", "ny blokk", "ukeplan", "startvekter", "intervalløkt", "ukesoppsummering"}
 
     async def _velg_entitet(self, oppgave: str = "") -> str | None:
         if oppgave in self.PLANLEGGING and self.sb.inn.get("ai_entitet_plan"):

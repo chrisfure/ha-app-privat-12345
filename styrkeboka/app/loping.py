@@ -166,12 +166,18 @@ def status(sb: "Styrkeboka", pid: int) -> dict:
     makspuls = kropp.avledet(sb, pid).get("makspuls")
     plan = ukeplan(p, uke, makspuls)
     dager = lopedager(p)
+    flytt = sb.db.innstillinger().get(f"lop-flytt-{pid}") or {}
     for i, o in enumerate(plan):
         if molle:
             o["molle"] = MOLLE_TIPS.get(o["type"])
         if i < len(dager):
-            o["dag"] = UKEDAGER[dager[i]]
-            o["dato"] = (_mandag(i_dag) + timedelta(days=dager[i])).isoformat()
+            dato = (_mandag(i_dag) + timedelta(days=dager[i])).isoformat()
+            ny = flytt.get(dato, dato)
+            o["flyttet"] = ny != dato
+            if ny:
+                o["dato"], o["dag"] = ny, UKEDAGER[date.fromisoformat(ny).weekday()]
+            else:
+                o["dato"], o["dag"], o["hoppet_over"] = dato, UKEDAGER[dager[i]], True
     # løpeturer denne uka (minst 10 min) krysses av i rekkefølge
     mandag = sb.lokal(naa()).replace(hour=0, minute=0, second=0, microsecond=0) - timedelta(days=i_dag.weekday())
     turer = [kropp.berik(a) for a in sb.db.alle(
@@ -265,6 +271,7 @@ def planlagte_garmin_okter(sb: "Styrkeboka", pid: int, uker_frem: int = 2) -> li
     import kropp
     i_dag = sb.lokal(naa()).date()
     makspuls = kropp.avledet(sb, pid).get("makspuls")
+    flytt = sb.db.innstillinger().get(f"lop-flytt-{pid}") or {}   # turer flyttet i ukeplanen
     ut = []
     for p in perioder(sb, pid):
         start = _mandag(date.fromisoformat(p["fra"]))
@@ -279,8 +286,15 @@ def planlagte_garmin_okter(sb: "Styrkeboka", pid: int, uker_frem: int = 2) -> li
                 if i >= len(dager):
                     break
                 dato = mandag + timedelta(days=dager[i])
-                if dato < i_dag or dato < date.fromisoformat(p["fra"]) or dato > slutt:
+                if dato < date.fromisoformat(p["fra"]) or dato > slutt:
                     continue
-                ut.append({"periode_id": p["id"], "dato": dato.isoformat(), "okt": o,
+                orig = dato.isoformat()
+                if orig in flytt:
+                    if not flytt[orig]:
+                        continue  # hoppet over denne uka
+                    dato = date.fromisoformat(flytt[orig])
+                if dato < i_dag:
+                    continue
+                ut.append({"periode_id": p["id"], "dato": dato.isoformat(), "orig": orig, "okt": o,
                            "nokkel": f"{p['id']}:{o['type']}:{o['tittel']}:{o['minutter']}"})
     return ut

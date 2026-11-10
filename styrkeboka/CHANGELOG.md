@@ -1,5 +1,12 @@
 # Endringslogg
 
+## 0.16.0
+
+- Kortere forside: dagens økt og «Start økten» øverst, øvelseslista kan foldes ut, dagsformen er én linje (åpnes ved trykk), og ringkortet er halvert i høyde.
+- Ukeplanen styrer: trykk på en økt for å flytte den til en annen dag, + for å legge til, eller ta den bort. «Neste økt», uke-kjeden og Garmin-kalenderen (styrke og løpeturer) følger planen. AI-planen flytter også løpeturene på klokka.
+- Ukesoppsummering søndag kveld: treneren oppsummerer uka (hva gikk bra, hva kan bli bedre, fokus neste uke). Vises på forsiden til onsdag, kan lages når som helst, og sendes som hendelsen `ukesoppsummering` til Home Assistant.
+- Månedens duell: hvem lukker flest ringer i måneden? Hver lukket ring i uka gir ett poeng, med egne mål per person. Kan skrus av under Mer.
+
 ## 0.15.0
 
 - Økter gjort bare på klokka registreres: en styrkeaktivitet fra Garmin uten økt i appen blir en fullført økt som teller i ukemål, ringer og programmet. På forsiden bekrefter du hvilken økt det var – «Jeg fulgte planen» fører inn settene med vektene appen foreslo, eller du fører dem inn selv.
