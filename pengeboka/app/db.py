@@ -62,6 +62,7 @@ CREATE TABLE IF NOT EXISTS transaksjoner (
     ikke_overforing INTEGER NOT NULL DEFAULT 0,
     notat         TEXT,
     motkonto      TEXT,                         -- kontonummeret pengene gikk til/kom fra, når filen har det
+    bank_ref      TEXT,                         -- id fra banken når transaksjonen er hentet automatisk
     fingeravtrykk TEXT NOT NULL,
     endret_av     TEXT,
     endret        TEXT,
@@ -84,6 +85,27 @@ CREATE TABLE IF NOT EXISTS kvitteringer (           -- kopi av Matplans kvitteri
 CREATE TABLE IF NOT EXISTS kvittering_kobling (
     transaksjon_id INTEGER PRIMARY KEY REFERENCES transaksjoner(id) ON DELETE CASCADE,
     matplan_id     INTEGER NOT NULL UNIQUE
+);
+CREATE TABLE IF NOT EXISTS bank_okter (            -- samtykker hos banken via Enable Banking
+    session_id  TEXT PRIMARY KEY,
+    bank        TEXT,
+    gyldig_til  TEXT,
+    opprettet   TEXT,
+    av          TEXT,
+    utlopt      INTEGER NOT NULL DEFAULT 0
+);
+CREATE TABLE IF NOT EXISTS bank_kontoer (
+    uid         TEXT PRIMARY KEY,                   -- kontoens id hos Enable Banking
+    session_id  TEXT NOT NULL REFERENCES bank_okter(session_id) ON DELETE CASCADE,
+    navn        TEXT,
+    nummer      TEXT,
+    type        TEXT,
+    konto_id    INTEGER REFERENCES kontoer(id) ON DELETE SET NULL,
+    aktiv       INTEGER NOT NULL DEFAULT 1,
+    sist_hentet TEXT,
+    sist_forsok TEXT,
+    sist_til    TEXT,
+    feil        TEXT
 );
 CREATE TABLE IF NOT EXISTS innstillinger (
     nokkel  TEXT PRIMARY KEY,
@@ -109,10 +131,12 @@ class Database:
 
     def _migrer(self) -> None:
         """Legger til kolonner som kom i senere versjoner."""
-        for tabell, kolonne, typ in (("kontoer", "nummer", "TEXT"), ("transaksjoner", "motkonto", "TEXT")):
+        for tabell, kolonne, typ in (("kontoer", "nummer", "TEXT"), ("transaksjoner", "motkonto", "TEXT"),
+                                     ("transaksjoner", "bank_ref", "TEXT")):
             finnes = {r[1] for r in self.con.execute(f"PRAGMA table_info({tabell})")}
             if kolonne not in finnes:
                 self.con.execute(f"ALTER TABLE {tabell} ADD COLUMN {kolonne} {typ}")
+        self.con.execute("CREATE INDEX IF NOT EXISTS tx_bank_ref ON transaksjoner(konto_id, bank_ref)")
 
     # ---- grunnleggende
     def rader(self, sql: str, args=()) -> list[dict]:

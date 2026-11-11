@@ -16,6 +16,7 @@ from urllib.parse import parse_qsl, unquote, urlparse
 
 import threading
 
+import bank
 import matplan
 from db import Database
 from logikk import Feil, Pengeboka
@@ -225,6 +226,66 @@ def kvittering(r, mid):
         raise Feil(str(e)) from None
 
 
+# ---------------------------------------------------------------- bank (Enable Banking)
+def _bank(fn, *a, **k):
+    try:
+        return fn(*a, **k)
+    except bank.Bankfeil as e:
+        raise Feil(str(e)) from None
+
+
+@route("GET", r"/api/bank")
+def bank_status(r):
+    return bank.status(PB.db)
+
+
+@route("PUT", r"/api/bank/oppsett")
+def bank_oppsett(r):
+    d = r.json()
+    return _bank(bank.sett_opp, PB.db, str(d.get("app_id") or ""), str(d.get("nokkel") or ""), d.get("redirect"))
+
+
+@route("DELETE", r"/api/bank/oppsett")
+def bank_fjern(r):
+    bank.fjern_oppsett(PB.db)
+    return bank.status(PB.db)
+
+
+@route("GET", r"/api/bank/banker")
+def bank_banker(r):
+    return {"banker": _bank(bank.banker, PB.db)}
+
+
+@route("POST", r"/api/bank/start")
+def bank_start(r):
+    return _bank(bank.start, PB.db, str(r.json().get("bank") or ""), r.bruker)
+
+
+@route("POST", r"/api/bank/fullfor")
+def bank_fullfor(r):
+    return _bank(bank.fullfor, PB.db, PB, str(r.json().get("adresse") or ""), r.bruker)
+
+
+@route("POST", r"/api/bank/hent")
+def bank_hent(r):
+    svar = _bank(bank.hent, PB.db, PB, av=r.bruker)
+    threading.Thread(target=matplan.synk_stille, args=(PB.db,), daemon=True).start()
+    return {**bank.status(PB.db), "resultat": svar}
+
+
+@route("PATCH", r"/api/bank/konto/([\w-]+)")
+def bank_konto(r, uid):
+    return _bank(bank.endre_konto, PB.db, PB, uid, r.json())
+
+
+@route("DELETE", r"/api/bank/okt/([\w-]+)")
+def bank_koble_fra(r, sid):
+    if not PB.db.verdi("SELECT 1 FROM bank_okter WHERE session_id = ?", (sid,)):
+        raise Feil("Ukjent tilkobling")
+    bank.koble_fra(PB.db, sid)
+    return bank.status(PB.db)
+
+
 @route("GET", r"/api/eksport\.csv")
 def eksport(r):
     return Raw(PB.eksport_csv().encode("utf-8-sig"), "text/csv; charset=utf-8",
@@ -370,5 +431,6 @@ def start(port: int | None = None, db_sti: Path | None = None) -> ThreadingHTTPS
 if __name__ == "__main__":
     s = start()
     matplan.start_bakgrunn(PB.db)
+    bank.start_bakgrunn(PB.db, PB)
     log.info("Pengeboka kjører på port %s", s.server_address[1])
     s.serve_forever()

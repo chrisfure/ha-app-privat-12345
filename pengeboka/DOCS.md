@@ -102,15 +102,37 @@ Pengeboka finner kjøpet med samme beløp (innen 1 kr), samme kjede og dato inne
 
 Koblingen oppdateres hver time og rett etter hver import. **Koble fra** sletter kopien av kvitteringene her.
 
+## Automatisk henting fra banken
+
+I stedet for å laste ned filer kan Pengeboka hente transaksjonene selv hver natt. Det går via **Enable Banking**, en finsk tjeneste for open banking som er under tilsyn av det finske finanstilsynet. Den har bare **lesetilgang**: den kan se transaksjoner, men ikke flytte penger. For egne kontoer til eget bruk er den gratis («restricted mode»).
+
+**Oppsett (én gang):**
+
+1. Lag en konto på [enablebanking.com](https://enablebanking.com) og gå til Control Panel → API applications → Add a new application.
+2. Velg **Production** og **Generate in the browser**. Navn: Pengeboka. Allowed redirect URLs, Privacy URL og Terms URL: `https://localhost/`.
+3. Registrer appen. Nøkkelfilen (`.pem`) lastes ned automatisk. Ta godt vare på den.
+4. Trykk **Link accounts** på appen og godkjenn med BankID. Bare kontoer som er koblet her, kan hentes.
+5. I Pengeboka: **Innstillinger → Automatisk fra banken**. Lim inn app-ID-en, velg nøkkelfilen og trykk **Lagre**.
+
+**Koble til banken:**
+
+1. Velg bank og trykk **Logg inn med BankID**. Innloggingen åpnes i en ny fane.
+2. Etter BankID havner du på en side som ikke laster (`https://localhost/?code=…`). Det er meningen. Kopier hele adressen fra adressefeltet og lim den inn i Pengeboka.
+3. Trykk **Fullfør**. Kontoene kobles til kontoene i Pengeboka med samme kontonummer. Kontoer som ikke finnes, opprettes. Under hver konto kan du velge en annen Pengeboka-konto eller **Ikke hent**.
+
+Etterpå hentes nye bokførte transaksjoner hver natt rundt kl. 05, og når du trykker **Hent nå**. Reserverte beløp kommer med når de er bokført. Kjøp som allerede er importert fra fil, blir ikke dobbelt: samme beløp innen tre dager regnes som samme transaksjon, både når banken henter etter en fil og når en fil importeres etter banken.
+
+**Samtykket varer i opptil 180 dager.** To uker før det går ut, står det under «Trenger dere», og da fornyer du med BankID. Har dere hver deres bankinnlogging, kobler dere til én gang hver (og begge må koble kontoene sine under «Link accounts» hos Enable Banking).
+
+Filimporten fungerer som før og er reserven hvis Enable Banking skulle slutte å virke.
+
 ## Personvern og sikkerhet
 
 * Alt lagres i appens egen database i Home Assistant. Ingen kontonumre eller navn ligger i koden.
 * Appen har ingen port ut og godtar bare forespørsler gjennom Home Assistants innlogging (ingress). Den har ikke tilgang til resten av Home Assistant og bruker ingen AI.
-* Er Matplan koblet til, snakker Pengeboka bare med Matplan internt i Home Assistant, aldri med internett. Bankdataene blir her: Matplan får bare vite hvilken konto, dato og sum hver kvittering ble funnet med.
+* Med automatisk henting snakker Pengeboka med Enable Banking (api.enablebanking.com) over kryptert forbindelse. Nøkkelfilen og app-ID-en ligger i appens database og sendes aldri ut; de brukes bare til å signere forespørslene. Enable Banking lagrer ikke transaksjonene. Uten automatisk henting kontakter appen ikke internett.
+* Er Matplan koblet til, snakker Pengeboka med Matplan internt i Home Assistant. Bankdataene blir her: Matplan får bare vite hvilken konto, dato og sum hver kvittering ble funnet med.
 * Transaksjonene kommer med i sikkerhetskopiene av Home Assistant. **Bruk passord på sikkerhetskopiene**, særlig hvis de lagres i skyen.
 * Slå på totrinnsinnlogging for brukerne i Home Assistant.
 * **Last ned alt som CSV** under Innstillinger gir en kopi dere kan åpne i Excel.
 
-## Senere
-
-Automatisk henting fra banken (via en regulert tjeneste som Enable Banking) kan kobles på senere og bruker samme import, regler og oversikt.

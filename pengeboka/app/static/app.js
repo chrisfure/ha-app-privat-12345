@@ -191,6 +191,7 @@
       else if (t.type === "avvik") se(() => apneTransaksjon(t.id));
       else if (t.type === "over" || t.type === "kurs") se(() => { S.filter = { ...S.filter, kategori: String(t.kategori_id), maned: S.maned, konto: "", sok: "" }; byttFane("transaksjoner"); });
       else if (t.type === "import") se(() => byttFane("import"));
+      else if (t.type === "bank") se(() => byttFane("innstillinger"));
       if (t.nokkel) knapper.append(el("button", { class: "knapp liten noytral", title: "Sett – skjul dette", onclick: async () => {
         try { await api("avvis", { metode: "POST", data: { nokkel: t.nokkel } }); visOversikt().catch(feil); } catch (e) { feil(e); }
       } }, "OK"));
@@ -760,6 +761,129 @@
     if (!k) setTimeout(() => navn.focus(), 300);
   }
 
+  function bankKort(b, kontoer) {
+    const kort = el("div", { class: "kort bank-kort" }, el("div", { class: "kort-hode" }, el("h2", {}, "🏦 Automatisk fra banken")));
+    if (!b) return kort;
+    const tid = (iso) => new Date(iso).toLocaleString("nb-NO", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+    const oppdater = () => visInnstillinger().catch(feil);
+    if (!b.satt_opp) {
+      const appId = el("input", { type: "text", placeholder: "f.eks. 8d2c…", autocomplete: "off", spellcheck: "false" });
+      const filvalg = el("input", { type: "file", accept: ".pem,.key,.txt,application/x-pem-file" });
+      const redirect = el("input", { type: "text", value: b.standard_redirect });
+      kort.append(
+        el("p", { class: "forklaring" }, "Henter transaksjonene fra banken hver natt, så dere slipper å laste ned filer. Går via Enable Banking (open banking, bare lesetilgang). Gratis for egne kontoer."),
+        el("ol", { class: "forklaring steg" },
+          el("li", {}, "Lag en app hos Enable Banking (Production, redirect ", el("code", {}, b.standard_redirect), ") og trykk «Link accounts»."),
+          el("li", {}, "Lim inn app-ID-en og velg nøkkelfilen (.pem) som ble lastet ned."),
+          el("li", {}, "Koble til banken med BankID.")),
+        el("div", { class: "skjema", style: "margin-top:10px" },
+          el("label", { class: "felt" }, el("span", {}, "App-ID (Application ID)"), appId),
+          el("label", { class: "felt" }, el("span", {}, "Nøkkelfil (.pem)"), filvalg),
+          el("details", {}, el("summary", { class: "forklaring", style: "cursor:pointer;font-weight:800" }, "Avansert: redirect-adresse"),
+            el("label", { class: "felt", style: "margin-top:8px" }, el("span", {}, "Må stå under «Allowed redirect URLs» i appen"), redirect)),
+          el("button", { class: "knapp", onclick: async (e) => {
+            const knapp = e.currentTarget;
+            const f = filvalg.files[0];
+            if (!appId.value.trim() || !f) return feil(new Error("Fyll inn app-ID og velg nøkkelfilen"));
+            if (f.size > 20000) return feil(new Error("Det ser ikke ut som nøkkelfilen"));
+            knapp.disabled = true;
+            try {
+              await api("bank/oppsett", { metode: "PUT", data: { app_id: appId.value.trim(), nokkel: await f.text(), redirect: redirect.value.trim() } });
+              toast("Enable Banking er satt opp – koble til banken"); oppdater();
+            } catch (er) { feil(er); knapp.disabled = false; }
+          } }, "Lagre")));
+      return kort;
+    }
+
+    const kontoValg = (bk) => {
+      const verdi = !bk.aktiv ? "av" : String(bk.konto_id ?? "");
+      const sel = el("select", { "aria-label": `Pengeboka-konto for ${bk.navn}` },
+        kontoer.map((k) => el("option", { value: k.id, selected: verdi === String(k.id) }, k.navn)),
+        el("option", { value: "ny" }, "+ Ny konto"),
+        el("option", { value: "av", selected: verdi === "av" }, "Ikke hent"));
+      sel.onchange = async () => {
+        try {
+          const data = sel.value === "av" ? { aktiv: false } : { aktiv: true, konto_id: sel.value === "ny" ? "ny" : Number(sel.value) };
+          await api(`bank/konto/${encodeURIComponent(bk.uid)}`, { metode: "PATCH", data }); oppdater();
+        } catch (e) { feil(e); }
+      };
+      return sel;
+    };
+
+    const tilkobling = el("div", { class: "bank-tilkobling" });
+    const visTilkobling = async (forvalgt) => {
+      try {
+        const { banker } = await api("bank/banker");
+        const valg = el("select", { "aria-label": "Bank" }, banker.map((x) => el("option", { value: x.navn, selected: x.navn === (forvalgt || "DNB") }, x.navn)));
+        const adresse = el("input", { type: "text", placeholder: "https://localhost/?code=…", autocomplete: "off", spellcheck: "false" });
+        const steg2 = el("div", { class: "skjema", hidden: true },
+          el("p", { class: "forklaring" }, "Etter BankID havner du på en side som ikke laster. Det er meningen: kopier hele adressen fra adressefeltet og lim den inn her."),
+          el("label", { class: "felt" }, el("span", {}, "Adressen du havnet på"), adresse),
+          el("button", { class: "knapp", onclick: async (e) => {
+            const knapp = e.currentTarget; knapp.disabled = true; knapp.textContent = "Henter transaksjoner …";
+            try { await api("bank/fullfor", { metode: "POST", data: { adresse: adresse.value } }); toast("Banken er koblet til"); oppdater(); }
+            catch (er) { feil(er); knapp.disabled = false; knapp.textContent = "Fullfør"; }
+          } }, "Fullfør"));
+        tilkobling.replaceChildren(el("div", { class: "skjema" },
+          el("label", { class: "felt" }, el("span", {}, "Bank"), valg),
+          el("button", { class: "knapp", onclick: async (e) => {
+            e.currentTarget.disabled = true;
+            const vindu = window.open("", "_blank");   // åpnes med en gang, ellers stopper nettleseren det
+            try {
+              const { url } = await api("bank/start", { metode: "POST", data: { bank: valg.value } });
+              if (vindu) vindu.location.href = url;
+              else steg2.prepend(el("p", {}, el("a", { href: url, target: "_blank", rel: "noopener" }, "Åpne innloggingen hos banken")));
+              steg2.hidden = false; adresse.focus();
+            } catch (er) { if (vindu) vindu.close(); feil(er); }
+            e.target.disabled = false;
+          } }, "Logg inn med BankID"),
+          steg2));
+      } catch (e) { feil(e); }
+    };
+
+    const okter = (b.okter || []).map((o) => el("div", { class: "bank-okt" },
+      el("div", { class: "bank-okt-hode" },
+        el("b", {}, o.bank),
+        o.utlopt ? el("span", { class: "merke borte" }, "Samtykket har gått ut")
+          : el("span", { class: `merke ${o.dager_igjen <= 14 ? "pris" : "ny"}` }, `Gyldig i ${o.dager_igjen} dager`)),
+      el("ul", { class: "liste" }, o.kontoer.map((bk) => el("li", { class: "bank-konto" },
+        el("span", { class: "tx-tekst" },
+          el("div", { class: "tx-navn" }, bk.navn),
+          el("div", { class: "tx-under" }, [bk.nummer_vis, bk.sist_hentet ? `hentet ${tid(bk.sist_hentet)}` : "ikke hentet ennå"].filter(Boolean).join(" · ")),
+          ...(bk.feil && bk.aktiv ? [el("div", { class: "feilmelding liten" }, bk.feil)] : [])),
+        kontoValg(bk)))),
+      el("div", { class: "ark-knapper" }, ...[
+        el("button", { class: "knapp noytral", onclick: async () => {
+          if (!confirm(`Koble fra ${o.bank}? Transaksjonene som er hentet, blir liggende.`)) return;
+          try { await api(`bank/okt/${encodeURIComponent(o.session_id)}`, { metode: "DELETE" }); oppdater(); } catch (e) { feil(e); }
+        } }, "Koble fra"),
+        o.utlopt || o.dager_igjen <= 30 ? el("button", { class: "knapp sekundaer", onclick: () => visTilkobling(o.bank) }, "Forny med BankID") : null].filter(Boolean))));
+
+    const sist = b.sist;
+    kort.append(...[
+      el("p", { class: "forklaring" }, "Nye transaksjoner hentes hver natt og havner i samme kontoer, kategorier og regler som filene. Kjøp som allerede er importert fra fil, blir ikke dobbelt."),
+      ...okter,
+      b.okter.length ? null : el("p", { class: "forklaring", style: "margin-top:8px" }, `Enable Banking-appen «${b.app?.navn || ""}» er klar. Koble til banken:`),
+      tilkobling,
+      b.okter.length ? el("div", { class: "ark-knapper", style: "margin-top:12px" },
+        el("button", { class: "knapp sekundaer", onclick: async (e) => {
+          const knapp = e.currentTarget; knapp.disabled = true;
+          try { const r = await api("bank/hent", { metode: "POST" }); toast(r.resultat.nye ? `${r.resultat.nye} nye transaksjoner` : "Ingen nye transaksjoner"); }
+          catch (er) { feil(er); }
+          oppdater();
+        } }, "Hent nå"),
+        el("button", { class: "knapp noytral", onclick: () => visTilkobling() }, "Koble til en bank til")) : null,
+      sist ? el("p", { class: "forklaring", style: "margin-top:8px" }, `Sist hentet ${tid(sist.tid)}: ${sist.nye} nye.`) : null,
+      el("details", { style: "margin-top:10px" }, el("summary", { class: "forklaring", style: "cursor:pointer" }, "Fjern oppsettet"),
+        el("p", { class: "forklaring", style: "margin:6px 0" }, "Kobler fra alle banker og sletter app-ID og nøkkel fra Pengeboka. Transaksjonene blir liggende."),
+        el("button", { class: "knapp noytral", onclick: async () => {
+          if (!confirm("Fjerne bankoppsettet?")) return;
+          try { await api("bank/oppsett", { metode: "DELETE" }); oppdater(); } catch (e) { feil(e); }
+        } }, "Fjern oppsett"))].filter(Boolean));
+    if (!b.okter.length) visTilkobling();
+    return kort;
+  }
+
   function matplanKort(m) {
     const kort = el("div", { class: "kort" }, el("div", { class: "kort-hode" }, el("h2", {}, "🧾 Matplan")));
     if (!m) return kort;
@@ -828,10 +952,11 @@
             try { await api(`regler/${r.id}`, { metode: "DELETE" }); visInnstillinger().catch(feil); } catch (e) { feil(e); }
           } }, ikon("kryss"))))))
           : el("p", { class: "tom" }, "Ingen egne regler ennå.")),
+      bankKort(await api("bank").catch(() => null), d.kontoer),
       matplanKort(await api("matplan").catch(() => null)),
       el("div", { class: "kort" },
         el("div", { class: "kort-hode" }, el("h2", {}, "Data")),
-        el("p", { class: "forklaring" }, "Alt lagres bare i denne appen i Home Assistant. Appen sender ingenting ut, har ingen tilgang til resten av Home Assistant og bruker ingen AI. Husk passord på sikkerhetskopiene."),
+        el("p", { class: "forklaring" }, "Alt lagres bare i denne appen i Home Assistant. Appen har ingen tilgang til resten av Home Assistant og bruker ingen AI. Den kontakter bare Enable Banking (hvis automatisk henting er satt opp) og Matplan. Husk passord på sikkerhetskopiene."),
         el("a", { class: "knapp noytral bred", style: "margin-top:12px", href: "api/eksport.csv", download: "pengeboka.csv" }, ikon("last-ned"), "Last ned alt som CSV"))));
   }
 

@@ -17,6 +17,7 @@ from datetime import date, datetime, timedelta
 from statistics import median
 from zoneinfo import ZoneInfo
 
+import bank
 import fil
 import matplan
 import regler
@@ -338,26 +339,69 @@ class Pengeboka:
             raise Feil(f"Filen gjelder konto {fil.vis_nummer(nummer)}, men {konto['navn']} har {fil.vis_nummer(konto['nummer'])}")
         if nummer and not konto["nummer"] and not self.db.verdi("SELECT id FROM kontoer WHERE nummer = ?", (nummer,)):
             self.db.kjor("UPDATE kontoer SET nummer = ? WHERE id = ?", (nummer, konto_id))  # lær nummeret
-        fa = self._fingeravtrykk(tx)
+        r = self._lagre(konto_id, tx, filnavn, av, bank=False)
+        self.db.sett_innstilling("sist_oppsett", oppsett)
+        return r
+
+    def importer_bank(self, konto_id: int, tx: list[dict], navn: str, av: str | None) -> dict:
+        """Transaksjoner hentet automatisk fra banken (se bank.py). tx har i tillegg «ref» fra banken."""
+        if not self.db.verdi("SELECT 1 FROM kontoer WHERE id = ?", (konto_id,)):
+            raise Feil("Fant ikke kontoen")
+        return self._lagre(konto_id, tx, navn, av, bank=True)
+
+    def _lagre(self, konto_id: int, tx: list[dict], filnavn: str, av: str | None, bank: bool) -> dict:
+        """Felles for fil og bank. Det samme kjøpet kan komme både fra en fil og fra banken, med litt
+        ulik tekst og dato. Da regnes det som samme transaksjon når beløpet er likt og datoen er innen
+        tre dager, og raden får begge kjennetegnene – så verken ny fil eller ny henting dobbeltfører."""
+        fa = [f"bank:{t['ref']}" for t in tx] if bank else self._fingeravtrykk(tx)
         datoer = sorted(t["dato"] for t in tx)
         nye = 0
         with self.db.transaksjon():
-            iid = self.db.con.execute(
+            c = self.db.con
+            iid = c.execute(
                 "INSERT INTO importer(konto_id, filnavn, tid, av, fra, til) VALUES(?,?,?,?,?,?)",
                 (konto_id, (filnavn or "")[:120], naa_iso(), av, datoer[0], datoer[-1])).lastrowid
+            fins = {r[0] for r in c.execute("SELECT fingeravtrykk FROM transaksjoner WHERE konto_id = ?", (konto_id,))}
+            refs = {r[0] for r in c.execute("SELECT bank_ref FROM transaksjoner WHERE konto_id = ? AND bank_ref IS NOT NULL",
+                                            (konto_id,))}
+            # Rader fra den andre kilden som ikke er paret ennå
+            andre: dict[int, list[tuple[date, int]]] = defaultdict(list)
+            sql = ("SELECT id, dato, belop_ore FROM transaksjoner WHERE konto_id = ? AND bank_ref IS NULL" if bank else
+                   "SELECT id, dato, belop_ore FROM transaksjoner WHERE konto_id = ? AND fingeravtrykk LIKE 'bank:%'")
+            for rid, dato, belop in c.execute(sql + " AND dato BETWEEN ? AND ?", (konto_id,
+                                              (date.fromisoformat(datoer[0]) - timedelta(days=3)).isoformat(),
+                                              (date.fromisoformat(datoer[-1]) + timedelta(days=3)).isoformat())):
+                andre[belop].append((date.fromisoformat(dato), rid))
+            brukt: set[int] = set()
             for t, f in zip(tx, fa):
-                cur = self.db.con.execute(
-                    "INSERT OR IGNORE INTO transaksjoner(konto_id, import_id, dato, belop_ore, tekst, motpart, motkonto, fingeravtrykk) "
-                    "VALUES(?,?,?,?,?,?,?,?)",
+                if (bank and t["ref"] in refs) or f in fins:
+                    continue
+                d = date.fromisoformat(t["dato"])
+                kandidater = sorted((abs((d - kd).days), rid) for kd, rid in andre.get(t["belop_ore"], [])
+                                    if rid not in brukt and abs((d - kd).days) <= 3)
+                if kandidater:
+                    rid = kandidater[0][1]
+                    brukt.add(rid)
+                    if bank:
+                        c.execute("UPDATE transaksjoner SET bank_ref = ? WHERE id = ?", (t["ref"], rid))
+                    else:
+                        c.execute("UPDATE transaksjoner SET fingeravtrykk = ? WHERE id = ?", (f, rid))
+                    continue
+                cur = c.execute(
+                    "INSERT OR IGNORE INTO transaksjoner(konto_id, import_id, dato, belop_ore, tekst, motpart, motkonto, "
+                    "fingeravtrykk, bank_ref) VALUES(?,?,?,?,?,?,?,?,?)",
                     (konto_id, iid, t["dato"], t["belop_ore"], t["tekst"][:300], regler.motpart(t["tekst"])[:80],
-                     t.get("motkonto"), f))
+                     t.get("motkonto"), f, t.get("ref") if bank else None))
                 nye += cur.rowcount
-            self.db.con.execute("UPDATE importer SET nye = ?, duplikater = ? WHERE id = ?", (nye, len(tx) - nye, iid))
+                fins.add(f)
+                if bank:
+                    refs.add(t["ref"])
+            c.execute("UPDATE importer SET nye = ?, duplikater = ? WHERE id = ?", (nye, len(tx) - nye, iid))
         if nye == 0:
             self.db.kjor("DELETE FROM importer WHERE id = ?", (iid,))
-        self.db.sett_innstilling("sist_oppsett", oppsett)
-        self.finn_overforinger()
-        self.kategoriser_alle()
+        else:
+            self.finn_overforinger()
+            self.kategoriser_alle()
         return {"nye": nye, "duplikater": len(tx) - nye, "fra": datoer[0], "til": datoer[-1], "konto_id": konto_id,
                 "ukategorisert": self.db.verdi(
                     "SELECT COUNT(*) FROM transaksjoner WHERE import_id = ? AND kategori_id IS NULL", (iid,)) or 0}
@@ -893,6 +937,7 @@ class Pengeboka:
                 if k not in merk:
                     ut.append({"nokkel": k, "type": "import", "konto_id": konto["id"],
                                "tekst": f"{konto['navn']}: siste transaksjon er {siden} dager gammel – på tide å importere"})
+        ut += [v for v in bank.varsler(self.db) if v["nokkel"] not in merk]
         return ut
 
     def avvis(self, nokkel: str) -> None:

@@ -1,5 +1,11 @@
 # Endringslogg
 
+## 0.6.0
+
+- Automatisk henting fra banken via Enable Banking (open banking, bare lesetilgang): oppsett under Innstillinger, tilkobling med BankID, henting hver natt og på «Hent nå».
+- Kontoer kobles på kontonummer. Kjøp som allerede er importert fra fil, blir ikke dobbelt – heller ikke når en fil importeres etter banken.
+- Varsel under «Trenger dere» før samtykket går ut, og hvis hentingen feiler.
+
 ## 0.5.1
 
 - Kategorisering og import går omtrent fem ganger raskere.
