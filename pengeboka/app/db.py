@@ -74,6 +74,17 @@ CREATE TABLE IF NOT EXISTS merknader (
     verdi   TEXT NOT NULL,
     tid     TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS kvitteringer (           -- kopi av Matplans kvitteringsoversikt (uten varelinjer)
+    matplan_id  INTEGER PRIMARY KEY,
+    butikk      TEXT,
+    dato        TEXT,
+    total_ore   INTEGER,
+    varer       INTEGER
+);
+CREATE TABLE IF NOT EXISTS kvittering_kobling (
+    transaksjon_id INTEGER PRIMARY KEY REFERENCES transaksjoner(id) ON DELETE CASCADE,
+    matplan_id     INTEGER NOT NULL UNIQUE
+);
 CREATE TABLE IF NOT EXISTS innstillinger (
     nokkel  TEXT PRIMARY KEY,
     verdi   TEXT NOT NULL

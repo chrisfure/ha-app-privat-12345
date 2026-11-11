@@ -127,7 +127,9 @@ a { color: inherit; }
 .txrad .k-ikon { width: 38px; height: 38px; border-radius: 12px; background: var(--flate-2); display: grid; place-items: center; font-size: 19px; flex: none; }
 .txrad .k-ikon.mangler { background: var(--gul-lys); color: var(--gul-blekk); font-weight: 800; font-size: 18px; }
 .txrad .tx-tekst { flex: 1; min-width: 0; }
-.txrad .tx-navn { font-weight: 800; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.txrad .tx-navn { font-weight: 800; display: flex; align-items: center; min-width: 0; white-space: nowrap; }
+.txrad .tx-motpart { overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.txrad .tx-navn .merke { flex-shrink: 0; }
 .txrad .tx-under { font-size: 13px; color: var(--dempet); font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .txrad .tx-belop { font-weight: 800; flex: none; }
 .tom { color: var(--dempet); text-align: center; font-weight: 600; margin: 18px 0 6px; }
@@ -385,3 +387,14 @@ table.eksempel td.b { text-align: right; font-weight: 800; font-variant-numeric:
   #v-budsjett > .knapp.noytral { align-self: flex-start; }
   .topp { padding-top: 0; }
 }
+
+/* Kvitteringer fra Matplan */
+.merke.kv { background: var(--aksent-lys); color: var(--aksent-blekk); margin-left: 6px; }
+.merke.ingen-kv { background: var(--flate-2); color: var(--dempet); margin-left: 6px; font-weight: 700; }
+.kv-boks summary { cursor: pointer; font-weight: 800; }
+.kv-boks { background: var(--aksent-lys); color: var(--aksent-blekk); }
+.kv-boks table { margin-top: 8px; color: var(--blekk); }
+.kv-boks .dempet { color: var(--dempet); font-weight: 600; }
+.filterrad.fire { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+@media (max-width: 999.98px) { .filterrad.fire { grid-template-columns: 1fr 1fr; } }
+@media (min-width: 1000px) { .filterrad.fire { flex: 2.6; } }

@@ -220,6 +220,7 @@
         const rest = mal - k.brukt;
         under.push(rest >= 0 ? `${kr(rest)} igjen av ${kr(mal)}` : el("span", { class: "over" }, `${kr(-rest)} over budsjett (${kr(mal)})`));
       } else if (k.snitt) under.push(`Snitt ${kr(k.snitt)} i måneden`);
+      if (k.kvitteringer?.av) under.push(`${under.length ? " · " : ""}🧾 ${k.kvitteringer.har} av ${k.kvitteringer.av} med kvittering`);
       if (m.pagar && k.prognose && k.prognose > k.brukt * 1.02) under.push(`${under.length ? " · " : ""}ligger an til ${kr(k.prognose)}`);
       ul.append(el("li", {}, el("button", { class: "katrad", onclick: () => {
         S.filter = { ...S.filter, kategori: String(k.id), maned: m.maned, konto: "", sok: "" };
@@ -239,6 +240,7 @@
   async function visTransaksjoner() {
     if (!S.kategorier.length) await lastKategorier();
     if (!S.oversikt) S.oversikt = await api("oversikt");
+    S.matplan = await api("matplan").catch(() => null);
     const v = $("v-transaksjoner");
     const f = S.filter;
     const sok = el("input", { type: "search", placeholder: "Søk i tekst, mottaker eller notat", value: f.sok, "aria-label": "Søk" });
@@ -253,15 +255,18 @@
     const sM = velg("Måned", mndValg, f.maned);
     const sK = velg("Konto", kontoValg, f.skjulte && !f.konto ? "skjulte" : f.konto);
     const sC = velg("Kategori", katValg, f.kategori);
+    const medKv = !!S.matplan?.tilkoblet;
+    if (!medKv) f.kvittering = "";
+    const sV = velg("Kvittering", [["", "Kvittering"], ["har", "🧾 Med kvittering"], ["mangler", "Dagligvarer uten kvittering"]], f.kvittering || "");
     const endret = () => {
-      f.maned = sM.value; f.kategori = sC.value;
+      f.maned = sM.value; f.kategori = sC.value; f.kvittering = sV.value;
       f.skjulte = sK.value === "skjulte"; f.konto = sK.value === "skjulte" ? "" : sK.value;
       S.grense = 300; lagre("filter", { ...f, sok: "" }); lastListe();
     };
-    [sM, sK, sC].forEach((s) => s.addEventListener("change", endret));
+    [sM, sK, sC, sV].forEach((s) => s.addEventListener("change", endret));
     const liste = el("div", { id: "txliste" });
     v.replaceChildren(
-      el("div", { class: "filtre" }, el("div", { class: "sok" }, ikon("sok"), sok), el("div", { class: "filterrad" }, sM, sC, sK)),
+      el("div", { class: "filtre" }, el("div", { class: "sok" }, ikon("sok"), sok), el("div", { class: `filterrad${medKv ? " fire" : ""}` }, sM, sC, sK, medKv ? sV : null)),
       el("div", { class: "kort" }, liste));
     await lastListe();
   }
@@ -269,7 +274,7 @@
   async function lastListe() {
     const f = S.filter;
     const q = new URLSearchParams();
-    for (const k of ["sok", "maned", "konto", "kategori"]) if (f[k]) q.set(k, f[k]);
+    for (const k of ["sok", "maned", "konto", "kategori", "kvittering"]) if (f[k]) q.set(k, f[k]);
     if (f.skjulte) q.set("skjulte", "1");
     if (f.kategori && f.kategori !== "ingen") q.set("overforinger", "1");
     q.set("grense", S.grense);
@@ -299,7 +304,9 @@
     if (t.notat) under.push(t.notat);
     return el("button", { class: "txrad", onclick: () => apneTransaksjon(t.id) },
       el("span", { class: `k-ikon${t.kategori ? "" : " mangler"}` }, t.ikon || "?"),
-      el("span", { class: "tx-tekst" }, el("div", { class: "tx-navn" }, t.motpart),
+      el("span", { class: "tx-tekst" }, el("div", { class: "tx-navn" }, el("span", { class: "tx-motpart" }, t.motpart),
+          t.kvittering ? el("span", { class: "merke kv", title: "Har kvittering i Matplan" }, "🧾", el("span", { class: "bare-pc" }, "\u00a0Kvittering")) : null,
+          t.kvittering_mangler ? el("span", { class: "merke ingen-kv", title: "Fant ingen kvittering i Matplan med samme beløp" }, "Ingen kvittering") : null),
         el("div", { class: "tx-under bare-mobil" }, under.join(" · ")),
         el("div", { class: "tx-under bare-pc", title: t.tekst }, t.notat ? `📝 ${t.notat}` : t.tekst)),
       el("span", { class: "tx-kol bare-pc" }, t.konto),
@@ -338,6 +345,8 @@
         el("button", { class: k.id === t.kategori_id ? "valgt" : "", onclick: () => velg(k.id) }, el("span", {}, k.ikon), k.navn)))];
     });
     const info = [];
+    if (t.kvittering) info.push(kvitteringBoks(t.kvittering));
+    else if (t.kvittering_mangler) info.push(el("div", { class: "infoboks" }, "Ingen kvittering i Matplan med samme beløp, butikk og dato."));
     if (t.par) info.push(el("div", { class: "infoboks spar" }, `${t.belop_ore < 0 ? "Overført til" : "Overført fra"} ${t.par.konto} ${dato(t.par.dato)} – telles ikke som forbruk`));
     if (t.endret_av) info.push(el("div", { class: "infoboks" }, `Sist endret av ${t.endret_av}`));
     visArk(
@@ -358,6 +367,26 @@
         el("button", { class: "knapp", onclick: async () => {
           try { await api(`transaksjoner/${t.id}`, { metode: "PATCH", data: { notat: notat.value } }); lukkArk(); oppdaterGjeldende(); } catch (e) { feil(e); }
         } }, "Lukk")));
+  }
+
+  // Kvitteringen fra Matplan: oppsummering med en gang, varelinjene hentes når den åpnes
+  function kvitteringBoks(k) {
+    const linjer = el("div", { class: "kv-linjer" }, el("p", { class: "hint" }, "Henter varelinjer …"));
+    const boks = el("details", { class: "infoboks kv-boks" },
+      el("summary", {}, `🧾 Kvittering fra ${k.butikk || "butikken"} ${k.dato ? dato(k.dato) : ""} · ${k.varer} varer · ${kr(k.total_ore)}`),
+      linjer);
+    let hentet = false;
+    boks.addEventListener("toggle", async () => {
+      if (!boks.open || hentet) return;
+      hentet = true;
+      try {
+        const d = await api(`kvittering/${k.matplan_id}`);
+        linjer.replaceChildren(el("table", { class: "eksempel" }, (d.varer || []).map((v) => el("tr", {},
+          el("td", {}, v.produkt || v.navn, v.antall && v.antall !== 1 ? el("span", { class: "dempet" }, ` × ${String(v.antall).replace(".", ",")}`) : null),
+          el("td", { class: "b" }, v.pris != null ? kr(Math.round(v.pris * 100)) : "")))));
+      } catch (e) { linjer.replaceChildren(el("p", { class: "hint" }, e.message)); hentet = false; }
+    });
+    return boks;
   }
 
   function oppdaterGjeldende() {
@@ -731,6 +760,50 @@
     if (!k) setTimeout(() => navn.focus(), 300);
   }
 
+  function matplanKort(m) {
+    const kort = el("div", { class: "kort" }, el("div", { class: "kort-hode" }, el("h2", {}, "🧾 Matplan")));
+    if (!m) return kort;
+    const st = m.status || {};
+    const tid = (iso) => new Date(iso).toLocaleString("nb-NO", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+    if (m.tilkoblet) {
+      kort.append(
+        el("p", { class: "forklaring" }, "Dagligvarekjøp kobles mot kvitteringene i Matplan når beløp, butikk og dato stemmer. Matplan får bare vite hvilke kvitteringer som er funnet – aldri resten av bankdataene."),
+        st.synket ? el("div", { class: "nokkeltall", style: "margin-top:10px" },
+          el("div", {}, el("span", {}, "Med kvittering"), el("b", {}, st.koblet ?? 0)),
+          el("div", {}, el("span", {}, "Uten"), el("b", {}, st.uten_kvittering ?? 0)),
+          el("div", {}, el("span", {}, "Kvitteringer"), el("b", {}, st.kvitteringer ?? 0))) : null,
+        el("p", { class: "forklaring", style: "margin-top:8px" }, st.synket ? `Sist oppdatert ${tid(st.synket)}. Oppdateres hver time og etter hver import.` : ""),
+        st.feil ? el("div", { class: "feilmelding", style: "margin-top:8px" }, st.feil) : null,
+        el("div", { class: "ark-knapper", style: "margin-top:12px" },
+          el("button", { class: "knapp noytral", onclick: async () => {
+            if (!confirm("Koble fra Matplan? Koblingene mellom kjøp og kvitteringer fjernes.")) return;
+            try { await api("matplan", { metode: "DELETE" }); visInnstillinger().catch(feil); } catch (e) { feil(e); }
+          } }, "Koble fra"),
+          el("button", { class: "knapp sekundaer", onclick: async (e) => {
+            e.currentTarget.disabled = true;
+            try { await api("matplan/synk", { metode: "POST" }); toast("Oppdatert fra Matplan"); } catch (er) { feil(er); }
+            visInnstillinger().catch(feil);
+          } }, "Oppdater nå")));
+      return kort;
+    }
+    const kode = el("input", { type: "text", placeholder: "Lim inn koblingskoden", autocomplete: "off", spellcheck: "false" });
+    const url = el("input", { type: "text", value: m.url || m.standard_url });
+    kort.append(
+      el("p", { class: "forklaring" }, "Koble dagligvarekjøpene i banken mot kvitteringene i Matplan. Da ser dere hvilke kjøp som har kvittering, og varelinjene rett i Pengeboka."),
+      el("p", { class: "forklaring", style: "margin-top:8px" }, "Hent koblingskoden i Matplan: Mer → Innstillinger → 🏦 Pengeboka → Kopier."),
+      el("div", { class: "skjema", style: "margin-top:10px" },
+        el("label", { class: "felt" }, el("span", {}, "Koblingskode"), kode),
+        el("details", {}, el("summary", { class: "forklaring", style: "cursor:pointer;font-weight:800" }, "Avansert: adressen til Matplan"),
+          el("label", { class: "felt", style: "margin-top:8px" }, el("span", {}, "Adresse inne i Home Assistant"), url)),
+        st.feil ? el("div", { class: "feilmelding" }, st.feil) : null,
+        el("button", { class: "knapp", onclick: async (e) => {
+          const b = e.currentTarget; b.disabled = true;
+          try { await api("matplan", { metode: "PUT", data: { kode: kode.value, url: url.value } }); toast("Matplan er koblet til"); visInnstillinger().catch(feil); }
+          catch (er) { feil(er); b.disabled = false; }
+        } }, "Koble til Matplan")));
+    return kort;
+  }
+
   async function visInnstillinger() {
     const v = $("v-innstillinger");
     const d = await api("kontoer");
@@ -755,6 +828,7 @@
             try { await api(`regler/${r.id}`, { metode: "DELETE" }); visInnstillinger().catch(feil); } catch (e) { feil(e); }
           } }, ikon("kryss"))))))
           : el("p", { class: "tom" }, "Ingen egne regler ennå.")),
+      matplanKort(await api("matplan").catch(() => null)),
       el("div", { class: "kort" },
         el("div", { class: "kort-hode" }, el("h2", {}, "Data")),
         el("p", { class: "forklaring" }, "Alt lagres bare i denne appen i Home Assistant. Appen sender ingenting ut, har ingen tilgang til resten av Home Assistant og bruker ingen AI. Husk passord på sikkerhetskopiene."),

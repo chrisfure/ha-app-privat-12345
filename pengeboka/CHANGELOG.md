@@ -1,5 +1,11 @@
 # Endringslogg
 
+## 0.4.0
+
+- Kobling mot Matplan: dagligvarekjøp får «🧾 Kvittering» eller «Ingen kvittering», med varene fra kvitteringen når du åpner kjøpet.
+- Nytt filter for kvittering i Transaksjoner, og «X av Y med kvittering» under Dagligvarer i Oversikt.
+- Matplan får vite hvilken konto hver kvittering ble betalt fra. Bankdataene blir i Pengeboka.
+
 ## 0.3.0
 
 - Egen PC-visning: sidemeny, oversikten i to kolonner med kommende faste trekk, transaksjoner som tabell, budsjett og faste trekk i to kolonner, redigering i et panel til høyre og tydelige hover-effekter.

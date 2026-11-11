@@ -14,6 +14,9 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qsl, unquote, urlparse
 
+import threading
+
+import matplan
 from db import Database
 from logikk import Feil, Pengeboka
 
@@ -157,12 +160,69 @@ def forhandsvis(r):
 @route("POST", r"/api/import")
 def importer(r):
     konto = int(r.q["konto"]) if r.q.get("konto") else None  # uten konto: appen finner den selv
-    return PB.importer(r.fil(), r.filnavn, konto, _oppsett(r), r.bruker)
+    svar = PB.importer(r.fil(), r.filnavn, konto, _oppsett(r), r.bruker)
+    threading.Thread(target=matplan.synk_stille, args=(PB.db,), daemon=True).start()  # nye kjøp → koble kvitteringer
+    return svar
 
 
 @route("DELETE", r"/api/importer/(\d+)")
 def angre_import(r, iid):
     return {"slettet": PB.angre_import(int(iid))}
+
+
+# ---------------------------------------------------------------- Matplan
+def _matplan_svar():
+    s = matplan.innstillinger(PB.db)
+    return {"url": s["url"], "tilkoblet": bool(s["kode"]), "standard_url": matplan.STANDARD_URL, "status": s["status"]}
+
+
+@route("GET", r"/api/matplan")
+def matplan_status(r):
+    return _matplan_svar()
+
+
+@route("PUT", r"/api/matplan")
+def matplan_koble(r):
+    d = r.json()
+    url = str(d.get("url") or matplan.STANDARD_URL).strip()[:200]
+    kode = str(d.get("kode") or "").strip()[:200]
+    if not kode:
+        raise Feil("Lim inn koblingskoden fra Matplan")
+    try:
+        matplan.synk(PB.db, url, kode)  # test og første synk før noe lagres
+    except matplan.Matplanfeil as e:
+        raise Feil(str(e)) from None
+    PB.db.sett_innstilling("matplan_url", url)
+    PB.db.sett_innstilling("matplan_kode", kode)
+    return _matplan_svar()
+
+
+@route("POST", r"/api/matplan/synk")
+def matplan_synk(r):
+    try:
+        matplan.synk(PB.db)
+    except matplan.Matplanfeil as e:
+        raise Feil(str(e)) from None
+    return _matplan_svar()
+
+
+@route("DELETE", r"/api/matplan")
+def matplan_koble_fra(r):
+    for k in ("matplan_kode", "matplan_status"):
+        PB.db.kjor("DELETE FROM innstillinger WHERE nokkel = ?", (k,))
+    PB.db.kjor("DELETE FROM kvittering_kobling")
+    PB.db.kjor("DELETE FROM kvitteringer")
+    return _matplan_svar()
+
+
+@route("GET", r"/api/kvittering/(\d+)")
+def kvittering(r, mid):
+    if not PB.db.verdi("SELECT 1 FROM kvitteringer WHERE matplan_id = ?", (int(mid),)):
+        raise Feil("Ukjent kvittering")
+    try:
+        return matplan.hent_kvittering(PB.db, int(mid))
+    except matplan.Matplanfeil as e:
+        raise Feil(str(e)) from None
 
 
 @route("GET", r"/api/eksport\.csv")
@@ -309,5 +369,6 @@ def start(port: int | None = None, db_sti: Path | None = None) -> ThreadingHTTPS
 
 if __name__ == "__main__":
     s = start()
+    matplan.start_bakgrunn(PB.db)
     log.info("Pengeboka kjører på port %s", s.server_address[1])
     s.serve_forever()

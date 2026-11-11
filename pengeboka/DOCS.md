@@ -84,10 +84,27 @@ For hver kategori ser appen på hvor stor del av månedsforbruket som pleier å 
 
 Gjetter appen feil kolonner, åpne **Feil kolonner? Endre her** i forhåndsvisningen. PDF kan ikke leses.
 
+## Kvitteringer fra Matplan
+
+Bruker dere Matplan til kvitteringer, kan Pengeboka koble dem til dagligvarekjøpene i banken:
+
+1. I Matplan: **Mer → Innstillinger → Pengeboka**, trykk **Kopier** på koblingskoden.
+2. Her: **Innstillinger → Matplan**, lim inn koden og trykk **Koble til Matplan**.
+
+Pengeboka finner kjøpet med samme beløp (innen 1 kr), samme kjede og dato innen 3 dager (Oda: 6 dager). Ingen AI. Da får dere:
+
+* **🧾 Kvittering** på kjøpet. Trykk på kjøpet for å se varene på kvitteringen.
+* **Ingen kvittering** på dagligvarekjøp uten kvittering (bare fra datoen den første kvitteringen kom inn).
+* Filteret **Kvittering** i Transaksjoner, og «X av Y med kvittering» under Dagligvarer i Oversikt.
+* I Matplan står det hvilken konto kvitteringen ble betalt fra, eller «Ikke i banken».
+
+Koblingen oppdateres hver time og rett etter hver import. **Koble fra** sletter kopien av kvitteringene her.
+
 ## Personvern og sikkerhet
 
 * Alt lagres i appens egen database i Home Assistant. Ingen kontonumre eller navn ligger i koden.
 * Appen har ingen port ut og godtar bare forespørsler gjennom Home Assistants innlogging (ingress). Den har ikke tilgang til resten av Home Assistant og bruker ingen AI.
+* Er Matplan koblet til, snakker Pengeboka bare med Matplan internt i Home Assistant, aldri med internett. Bankdataene blir her: Matplan får bare vite hvilken konto, dato og sum hver kvittering ble funnet med.
 * Transaksjonene kommer med i sikkerhetskopiene av Home Assistant. **Bruk passord på sikkerhetskopiene**, særlig hvis de lagres i skyen.
 * Slå på totrinnsinnlogging for brukerne i Home Assistant.
 * **Last ned alt som CSV** under Innstillinger gir en kopi dere kan åpne i Excel.

@@ -18,6 +18,7 @@ from statistics import median
 from zoneinfo import ZoneInfo
 
 import fil
+import matplan
 import regler
 from db import Database, naa_iso
 
@@ -449,20 +450,38 @@ class Pengeboka:
             args.append(q["motpart"])
         if not q.get("overforinger") and q.get("kategori") in (None, "", "ingen"):
             hvor.append("(t.kilde IS NULL OR t.kilde != 'overforing' OR c.gruppe != 'overforing')")
+        # Kvittering fra Matplan: «har» = koblet, «mangler» = dagligvarekjøp i perioden Matplan har kvitteringer for
+        forste_kv = self._forste_kvittering()
+        if q.get("kvittering") == "har":
+            hvor.append("kk.matplan_id IS NOT NULL")
+        elif q.get("kvittering") == "mangler":
+            hvor.append("kk.matplan_id IS NULL AND t.belop_ore < 0 AND c.navn = 'Dagligvarer' AND t.dato >= ?")
+            args.append(forste_kv or "9999")
         sok = str(q.get("sok") or "").strip().lower()
         if sok:
             hvor.append("(lower(t.tekst) LIKE ? OR lower(t.motpart) LIKE ? OR lower(coalesce(t.notat,'')) LIKE ?)")
             args += [f"%{sok}%"] * 3
         sql_hvor = (" WHERE " + " AND ".join(hvor)) if hvor else ""
         grense = min(int(q.get("grense") or 300), 2000)
+        fra = """FROM transaksjoner t JOIN kontoer k ON k.id = t.konto_id LEFT JOIN kategorier c ON c.id = t.kategori_id
+                 LEFT JOIN kvittering_kobling kk ON kk.transaksjon_id = t.id"""
         rader = self.db.rader(f"""
             SELECT t.id, t.konto_id, t.dato, t.belop_ore, t.tekst, t.motpart, t.kategori_id, t.kilde, t.par_id,
-                   t.notat, t.endret_av, k.navn AS konto, k.skjult AS konto_skjult, c.navn AS kategori, c.ikon, c.gruppe
-            FROM transaksjoner t JOIN kontoer k ON k.id = t.konto_id LEFT JOIN kategorier c ON c.id = t.kategori_id
-            {sql_hvor} ORDER BY t.dato DESC, t.id DESC LIMIT ?""", (*args, grense + 1))
-        sum_ = self.db.verdi(f"""SELECT COALESCE(SUM(t.belop_ore), 0) FROM transaksjoner t
-            JOIN kontoer k ON k.id = t.konto_id LEFT JOIN kategorier c ON c.id = t.kategori_id {sql_hvor}""", args)
-        return {"transaksjoner": rader[:grense], "flere": len(rader) > grense, "sum": sum_}
+                   t.notat, t.endret_av, k.navn AS konto, k.skjult AS konto_skjult, c.navn AS kategori, c.ikon, c.gruppe,
+                   kk.matplan_id AS kvittering
+            {fra} {sql_hvor} ORDER BY t.dato DESC, t.id DESC LIMIT ?""", (*args, grense + 1))
+        sum_ = self.db.verdi(f"SELECT COALESCE(SUM(t.belop_ore), 0) {fra} {sql_hvor}", args)
+        for r in rader:
+            # Vis «mangler kvittering» bare der Matplan faktisk har kvitteringer fra den perioden
+            r["kvittering_mangler"] = bool(forste_kv and not r["kvittering"] and r["belop_ore"] < 0
+                                           and r["kategori"] == "Dagligvarer" and r["dato"] >= forste_kv)
+        return {"transaksjoner": rader[:grense], "flere": len(rader) > grense, "sum": sum_,
+                "matplan": bool(forste_kv)}
+
+    def _forste_kvittering(self) -> str | None:
+        if not matplan.tilkoblet(self.db):
+            return None
+        return self.db.verdi("SELECT MIN(dato) FROM kvitteringer")
 
     def transaksjon(self, tid: int) -> dict:
         t = self.db.rad("""SELECT t.*, k.navn AS konto, c.navn AS kategori, c.ikon, c.gruppe
@@ -475,6 +494,11 @@ class Pengeboka:
                                    "JOIN kontoer k ON k.id = t.konto_id WHERE t.id = ?", (t["par_id"],))
         t["like"] = self.db.verdi("SELECT COUNT(*) FROM transaksjoner WHERE motpart = ? AND id != ?",
                                   (t["motpart"], tid)) or 0
+        t["kvittering"] = self.db.rad("""SELECT kv.* FROM kvittering_kobling kk JOIN kvitteringer kv ON kv.matplan_id = kk.matplan_id
+                                         WHERE kk.transaksjon_id = ?""", (tid,)) if matplan.tilkoblet(self.db) else None
+        forste = self._forste_kvittering()
+        t["kvittering_mangler"] = bool(forste and not t["kvittering"] and t["belop_ore"] < 0
+                                       and t["kategori"] == "Dagligvarer" and t["dato"] >= forste)
         # «Gjelder alle» er på som standard – men ikke for generiske tekster som «Overføring Innland»
         t["regel_anbefalt"] = bool(t["like"]) and not regler.ser_ut_som_overforing(t["tekst"])
         t["regelforslag"] = regler.rydd(t["motpart"]) if not t["motpart"].lower().startswith("vipps") \
@@ -587,6 +611,7 @@ class Pengeboka:
         ym = ym or _ym(i_dag)
         if not re.fullmatch(r"\d{4}-\d{2}", ym):
             raise Feil("Ugyldig måned")
+        forste_kv = self._forste_kvittering()
         tall = self._maned_tall(ym)
         kats = self.kategorier()
         snitt = self.snitt(ym)
@@ -616,7 +641,14 @@ class Pengeboka:
                     prognose = brukt
             if brukt == 0 and not k["budsjett_ore"] and not snitt.get(k["id"]) and k["skjult"]:
                 continue
-            rader.append({"id": k["id"], "navn": k["navn"], "ikon": k["ikon"], "brukt": brukt, "budsjett": k["budsjett_ore"],
+            kv = None
+            if k["navn"] == "Dagligvarer" and forste_kv:
+                kv = self.db.rad("""SELECT COUNT(*) AS av, COUNT(kk.matplan_id) AS har
+                    FROM transaksjoner t JOIN kontoer ko ON ko.id = t.konto_id
+                    LEFT JOIN kvittering_kobling kk ON kk.transaksjon_id = t.id
+                    WHERE ko.skjult = 0 AND t.kategori_id = ? AND t.belop_ore < 0 AND substr(t.dato, 1, 7) = ? AND t.dato >= ?""",
+                                 (k["id"], ym, forste_kv))
+            rader.append({"kvitteringer": kv, "id": k["id"], "navn": k["navn"], "ikon": k["ikon"], "brukt": brukt, "budsjett": k["budsjett_ore"],
                           "snitt": round(snitt.get(k["id"], 0)), "prognose": round(prognose) if prognose is not None else None,
                           "skjult": k["skjult"]})
         ukat_inn, ukat_ut = self._ukategorisert(ym)

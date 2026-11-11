@@ -392,3 +392,116 @@ def test_server_sperrer(server, monkeypatch):
     assert s == 400
     monkeypatch.setattr(main, "UTVIKLING", False)
     assert _hent(f"{url}/api/oversikt")[0] == 403  # bare Home Assistant-ingress slipper inn
+
+
+# ---------------------------------------------------------------- kvitteringer fra Matplan
+import matplan  # noqa: E402
+
+
+def _t(id_, dato, ore, motpart):
+    return {"id": id_, "dato": dato, "belop_ore": ore, "motpart": motpart, "tekst": motpart}
+
+
+def _k(id_, dato, ore, butikk):
+    return {"matplan_id": id_, "dato": dato, "total_ore": ore, "butikk": butikk}
+
+
+def test_match_kvitteringer():
+    tx = [_t(1, "2026-10-05", -24900, "Kiwi"), _t(2, "2026-10-05", -24900, "Rema 1000"),
+          _t(3, "2026-10-09", -54050, "Coop Extra"), _t(4, "2026-10-20", -99900, "Oda"),
+          _t(5, "2026-10-12", -10000, "Vipps: Ola"), _t(6, "2026-10-01", -30000, "Kiwi")]
+    kv = [_k(10, "2026-10-04", 24900, "Kiwi"),             # Kiwi, dagen før → tx 1, ikke Rema (tx 2)
+          _k(11, "2026-10-08", 54000, "Coop"),             # 50 øre avvik, Coop ~ Coop Extra → tx 3
+          _k(12, "2026-10-15", 99900, "Oda"),              # Oda belastes ved levering, 5 dager senere → tx 4
+          _k(13, "2026-10-12", 10000, "Ukjent butikk"),    # ukjent kjede, men helt likt og samme dag → tx 5
+          _k(14, "2026-10-10", 30000, "Kiwi")]             # 9 dager unna tx 6 → ingen
+    assert matplan.match(tx, kv) == {1: 10, 3: 11, 4: 12, 5: 13}
+    assert matplan.kjede("COOP EXTRA STASJONEN") == matplan.kjede("Coop") == "coop"
+    assert matplan.kjede("Rema 1000") == "rema" and matplan.kjede("Frisør") is None
+
+
+def test_match_en_til_en():
+    tx = [_t(1, "2026-10-05", -5000, "Kiwi"), _t(2, "2026-10-06", -5000, "Kiwi")]
+    kv = [_k(10, "2026-10-06", 5000, "Kiwi"), _k(11, "2026-10-05", 5000, "Kiwi")]
+    assert matplan.match(tx, kv) == {1: 11, 2: 10}
+
+
+class _FalskMatplan:
+    """Liten etterligning av Matplans koblingsgrensesnitt."""
+    def __init__(self, kvitteringer, kode="hemmelig"):
+        import http.server
+        self.kv, self.kode, self.mottatt, self.forsok = kvitteringer, kode, None, []
+        meg = self
+
+        class H(http.server.BaseHTTPRequestHandler):
+            def log_message(self, *a):
+                pass
+
+            def _svar(self, kode, obj):
+                b = json.dumps(obj).encode()
+                self.send_response(kode)
+                self.send_header("Content-Type", "application/json")
+                self.end_headers()
+                self.wfile.write(b)
+
+            def _ok(self):
+                meg.forsok.append((self.command, self.path))
+                return self.headers.get("Authorization") == f"Bearer {meg.kode}"
+
+            def do_GET(self):
+                if not self._ok():
+                    return self._svar(401, {"error": "Feil koblingskode"})
+                if self.path.startswith("/kobling/kvitteringer?"):
+                    return self._svar(200, {"kvitteringer": meg.kv})
+                if self.path.startswith("/kobling/kvitteringer/"):
+                    return self._svar(200, {"id": 1, "varer": [{"navn": "TINE HELMELK", "produkt": "Melk", "antall": 2, "pris": 49.8}]})
+                self._svar(404, {})
+
+            def do_PUT(self):
+                if not self._ok():
+                    return self._svar(401, {})
+                meg.mottatt = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
+                self._svar(200, {"ok": True})
+        self.srv = http.server.ThreadingHTTPServer(("127.0.0.1", 0), H)
+        threading.Thread(target=self.srv.serve_forever, daemon=True).start()
+        self.url = f"http://127.0.0.1:{self.srv.server_address[1]}"
+
+
+def test_synk_med_matplan(pb):
+    k = konto(pb, "Felles")
+    pb.importer(csv([("2026-10-05", "Varekjøp KIWI 505 SENTRUM", -24900), ("2026-10-09", "Varekjøp REMA 1000 TORGET", -54000),
+                     ("2026-10-25", "Varekjøp COOP EXTRA", -31000), ("2026-10-26", "Lønn", 4_000_000)]), "a.csv", k, None, "A")
+    falsk = _FalskMatplan([{"id": 7, "store": "Kiwi", "purchased_on": "2026-10-05", "total": 249.0, "varer": 12},
+                           {"id": 8, "store": "Rema 1000", "purchased_on": "2026-10-09", "total": 999.0, "varer": 3},
+                           {"id": 9, "store": "Coop", "purchased_on": "2026-11-30", "total": 50.0, "varer": 1}])
+    with pytest.raises(matplan.Matplanfeil, match="koblingskoden"):
+        matplan.synk(pb.db, falsk.url, "feil")
+    pb.db.sett_innstilling("matplan_url", falsk.url)
+    pb.db.sett_innstilling("matplan_kode", "hemmelig")
+    st = matplan.synk(pb.db)
+    assert (st["kvitteringer"], st["koblet"], st["kjop"], st["uten_kvittering"]) == (3, 1, 3, 2)
+    # Svaret til Matplan: Kiwi funnet, Rema mangler (beløpet stemmer ikke), Coop 30. nov er etter siste bankdato → ikke vurdert
+    assert falsk.mottatt["koblinger"] == [
+        {"kvittering": 7, "status": "funnet", "dato": "2026-10-05", "konto": "Felles", "belop": 249.0},
+        {"kvittering": 8, "status": "mangler"}]
+    assert falsk.mottatt["dekket_til"] == "2026-10-26"
+    rader = {t["motpart"]: t for t in pb.transaksjoner({})["transaksjoner"]}
+    assert rader["Kiwi"]["kvittering"] == 7 and not rader["Kiwi"]["kvittering_mangler"]
+    assert rader["Rema 1000"]["kvittering_mangler"] and rader["Coop Extra"]["kvittering_mangler"]
+    assert not rader["Lønn"]["kvittering_mangler"]
+    assert [t["motpart"] for t in pb.transaksjoner({"kvittering": "har"})["transaksjoner"]] == ["Kiwi"]
+    assert {t["motpart"] for t in pb.transaksjoner({"kvittering": "mangler"})["transaksjoner"]} == {"Rema 1000", "Coop Extra"}
+    t = pb.transaksjon(rader["Kiwi"]["id"])
+    assert t["kvittering"]["butikk"] == "Kiwi" and t["kvittering"]["varer"] == 12
+    assert matplan.hent_kvittering(pb.db, 7)["varer"][0]["produkt"] == "Melk"
+    dag = next(c for c in pb.maned("2026-10")["kategorier"] if c["navn"] == "Dagligvarer")
+    assert dag["kvitteringer"] == {"av": 3, "har": 1}
+
+
+def test_matplan_ikke_tilkoblet_viser_ingenting(pb):
+    k = konto(pb, "Felles")
+    pb.importer(csv([("2026-10-05", "KIWI 505", -24900)]), "a.csv", k, None, "A")
+    t = pb.transaksjoner({})["transaksjoner"][0]
+    assert t["kvittering"] is None and not t["kvittering_mangler"]
+    with pytest.raises(matplan.Matplanfeil, match="ikke koblet"):
+        matplan.synk(pb.db)
