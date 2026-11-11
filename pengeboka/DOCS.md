@@ -93,12 +93,13 @@ Bruker dere Matplan til kvitteringer, kan Pengeboka koble dem til dagligvarekjø
 1. I Matplan: **Mer → Innstillinger → Pengeboka**, trykk **Kopier** på koblingskoden.
 2. Her: **Innstillinger → Matplan**, lim inn koden og trykk **Koble til Matplan**.
 
-Pengeboka finner kjøpet med samme beløp (innen 1 kr), samme kjede og dato innen 3 dager (Oda: 6 dager). Ingen AI. Da får dere:
+Pengeboka finner kjøpet med samme beløp (innen 1 kr), samme kjede og dato innen 3 dager (Oda: 6 dager). Det som er igjen, kobles hvis kjeden er den samme og beløpet er innen 20 kr eller 3 % (Oda justerer ofte beløpet etter bytter). Ingen AI. Da får dere:
 
 * **🧾 Kvittering** på kjøpet. Trykk på kjøpet for å se varene på kvitteringen.
 * **Ingen kvittering** på dagligvarekjøp uten kvittering (bare fra datoen den første kvitteringen kom inn).
 * Filteret **Kvittering** i Transaksjoner, og «X av Y med kvittering» under Dagligvarer i Oversikt.
 * I Matplan står det hvilken konto kvitteringen ble betalt fra, eller «Ikke i banken».
+* Dagligvarekjøp uten kvittering vises i Matplan med merket «Mangler kvittering» og telles med i snittet der. Når kvitteringen kommer, forsvinner de.
 
 Koblingen oppdateres hver time og rett etter hver import. **Koble fra** sletter kopien av kvitteringene her.
 
@@ -131,7 +132,7 @@ Filimporten fungerer som før og er reserven hvis Enable Banking skulle slutte �
 * Alt lagres i appens egen database i Home Assistant. Ingen kontonumre eller navn ligger i koden.
 * Appen har ingen port ut og godtar bare forespørsler gjennom Home Assistants innlogging (ingress). Den har ikke tilgang til resten av Home Assistant og bruker ingen AI.
 * Med automatisk henting snakker Pengeboka med Enable Banking (api.enablebanking.com) over kryptert forbindelse. Nøkkelfilen og app-ID-en ligger i appens database og sendes aldri ut; de brukes bare til å signere forespørslene. Enable Banking lagrer ikke transaksjonene. Uten automatisk henting kontakter appen ikke internett.
-* Er Matplan koblet til, snakker Pengeboka med Matplan internt i Home Assistant. Bankdataene blir her: Matplan får bare vite hvilken konto, dato og sum hver kvittering ble funnet med.
+* Er Matplan koblet til, snakker Pengeboka med Matplan internt i Home Assistant. Bankdataene blir her: Matplan får bare vite hvilken konto, dato og sum hver kvittering ble funnet med, og butikk, dato, sum og konto for dagligvarekjøp uten kvittering.
 * Transaksjonene kommer med i sikkerhetskopiene av Home Assistant. **Bruk passord på sikkerhetskopiene**, særlig hvis de lagres i skyen.
 * Slå på totrinnsinnlogging for brukerne i Home Assistant.
 * **Last ned alt som CSV** under Innstillinger gir en kopi dere kan åpne i Excel.

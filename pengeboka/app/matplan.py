@@ -10,6 +10,10 @@ Matching (ingen AI):
   2. Samme kjede når begge er kjent (Kiwi mot Kiwi, Coop Extra mot Coop …)
   3. Dato innen 3 dager (Oda: 6 dager, fordi kortet ofte belastes ved levering)
   Nærmeste dato vinner, og hver kvittering kobles til høyst ett kjøp.
+  Deretter en runde for det som er igjen: samme kjede, beløp innen 20 kr eller 3 %.
+
+Dagligvarekjøp i banken uten kvittering sendes også til Matplan (butikk, dato, sum og konto),
+så Matplan kan telle dem med i det familien bruker på mat.
 """
 from __future__ import annotations
 
@@ -117,6 +121,31 @@ def match(transaksjoner: list[dict], kvitteringer: list[dict]) -> dict[int, int]
         brukt_t.add(tid)
         brukt_k.add(kid)
         ut[tid] = kid
+    # Runde 2 for det som er igjen: samme kjede og nesten samme beløp (Oda justerer ofte beløpet
+    # etter bytter og manglende varer). Uten denne ville både kvitteringen og kjøpet telt i Matplan.
+    par = []
+    for k in kvitteringer:
+        if k["matplan_id"] in brukt_k or not k.get("dato") or not k.get("total_ore"):
+            continue
+        kk = kjede(k.get("butikk"))
+        if not kk:
+            continue
+        kd = date.fromisoformat(k["dato"])
+        grense = DAGER_ODA if kk == "oda" else DAGER
+        for t in transaksjoner:
+            if t["id"] in brukt_t or (kjede(t.get("motpart")) or kjede(t.get("tekst"))) != kk:
+                continue
+            diff = abs(-t["belop_ore"] - k["total_ore"])
+            dager = abs((date.fromisoformat(t["dato"]) - kd).days)
+            if dager <= grense and diff <= max(2000, k["total_ore"] * 0.03):
+                par.append(((diff, dager, t["id"]), t["id"], k["matplan_id"]))
+    par.sort()
+    for _, tid, kid in par:
+        if tid in brukt_t or kid in brukt_k:
+            continue
+        brukt_t.add(tid)
+        brukt_k.add(kid)
+        ut[tid] = kid
     return ut
 
 
@@ -186,7 +215,10 @@ def synk(db, url: str | None = None, kode: str | None = None) -> dict:
                              "konto": t["konto"], "belop": -t["belop_ore"] / 100})
             elif dekket and fra and fra <= (k["dato"] or "") <= dekket:
                 svar.append({"kvittering": k["matplan_id"], "status": "mangler"})
-        _kall(url, kode, "/kobling/bank", "PUT", {"koblinger": svar, "dekket_til": dekket, "kilde": "Pengeboka"})
+        uten = [{"ref": str(t["id"]), "dato": t["dato"], "butikk": t["motpart"], "belop": -t["belop_ore"] / 100,
+                 "konto": t["konto"]} for t in tx if t["id"] not in koblet and t["kategori"] == "Dagligvarer"]
+        _kall(url, kode, "/kobling/bank", "PUT", {"koblinger": svar, "dekket_til": dekket, "kilde": "Pengeboka",
+                                                   "uten_kvittering": uten})
         status = {"synket": naa_iso(), "feil": None, "kvitteringer": len(kv), "koblet": len(koblet),
                   "kjop": len(tx), "uten_kvittering": len(tx) - len(koblet)}
         db.sett_innstilling("matplan_status", status)

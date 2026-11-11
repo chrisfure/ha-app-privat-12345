@@ -580,3 +580,22 @@ def test_oppgradering_fra_gamle_kategorier(tmp_path):
     pb.db.kjor("UPDATE kategorier SET navn = 'Bil og transport' WHERE navn = 'Bil'")
     Pengeboka(pb.db)
     assert pb.db.verdi("SELECT COUNT(*) FROM kategorier WHERE navn = 'Bil og transport'") == 1
+
+
+def test_match_nesten_likt_belop_samme_kjede():
+    tx = [_t(1, "2026-10-20", -101500, "Oda"), _t(2, "2026-10-21", -30000, "Kiwi"), _t(3, "2026-10-21", -10000, "Meny")]
+    kv = [_k(10, "2026-10-17", 99900, "Oda"),     # Oda justerte beløpet med 16 kr → samme kjøp
+          _k(11, "2026-10-21", 25000, "Kiwi"),    # 50 kr unna – for mye
+          _k(12, "2026-10-21", 10500, "Kiwi")]    # nesten likt, men feil kjede
+    assert matplan.match(tx, kv) == {1: 10}
+
+
+def test_synk_sender_kjop_uten_kvittering(pb):
+    k = konto(pb, "Felles")
+    pb.importer(csv([("2026-10-05", "Varekjøp KIWI 505 SENTRUM", -24900), ("2026-10-09", "Varekjøp REMA 1000 TORGET", -54000),
+                     ("2026-10-10", "Varekjøp NARVESEN", -5000), ("2026-10-26", "Lønn", 4_000_000)]), "a.csv", k, None, "A")
+    falsk = _FalskMatplan([{"id": 7, "store": "Kiwi", "purchased_on": "2026-10-05", "total": 249.0, "varer": 12}])
+    matplan.synk(pb.db, falsk.url, "hemmelig")
+    uten = falsk.mottatt["uten_kvittering"]
+    assert [(u["butikk"], u["dato"], u["belop"], u["konto"]) for u in uten] == [("Rema 1000", "2026-10-09", 540.0, "Felles")]
+    assert uten[0]["ref"].isdigit()

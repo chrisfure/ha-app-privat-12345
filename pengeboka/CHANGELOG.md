@@ -1,5 +1,10 @@
 # Endringslogg
 
+## 0.6.1
+
+- Dagligvarekjøp uten kvittering sendes til Matplan, som viser dem i kvitteringslista og teller dem med i snittet (krever Matplan 0.25.0).
+- Kvitteringer kobles også når beløpet avviker litt (samme kjede, innen 20 kr eller 3 %), så Oda-kjøp ikke telles dobbelt.
+
 ## 0.6.0
 
 - Automatisk henting fra banken via Enable Banking (open banking, bare lesetilgang): oppsett under Innstillinger, tilkobling med BankID, henting hver natt og på «Hent nå».
