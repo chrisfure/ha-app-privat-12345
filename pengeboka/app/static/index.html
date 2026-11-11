@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="nb">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#FBF6EF">
+  <title>Pengeboka</title>
+  <link rel="stylesheet" href="static/style.css">
+</head>
+<body>
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <symbol id="i-hjem" viewBox="0 0 24 24"><path d="M3 11l9-7 9 7"/><path d="M5 10v10h14V10"/></symbol>
+    <symbol id="i-liste" viewBox="0 0 24 24"><path d="M8 6h13M8 12h13M8 18h13M3.5 6h.01M3.5 12h.01M3.5 18h.01"/></symbol>
+    <symbol id="i-mal" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/></symbol>
+    <symbol id="i-gjenta" viewBox="0 0 24 24"><path d="M17 2l4 4-4 4"/><path d="M3 11V9a3 3 0 0 1 3-3h15M7 22l-4-4 4-4"/><path d="M21 13v2a3 3 0 0 1-3 3H3"/></symbol>
+    <symbol id="i-opp" viewBox="0 0 24 24"><path d="M12 16V4M7 9l5-5 5 5M5 20h14"/></symbol>
+    <symbol id="i-tannhjul" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z"/></symbol>
+    <symbol id="i-venstre" viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></symbol>
+    <symbol id="i-hoyre" viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></symbol>
+    <symbol id="i-sjekk" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></symbol>
+    <symbol id="i-kryss" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></symbol>
+    <symbol id="i-sok" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></symbol>
+    <symbol id="i-fil" viewBox="0 0 24 24"><path d="M6 3h8l4 4v14H6Z"/><path d="M14 3v4h4M9 13h6M9 17h4"/></symbol>
+    <symbol id="i-advarsel" viewBox="0 0 24 24"><path d="M12 3 2 20h20Z"/><path d="M12 10v4M12 17h.01"/></symbol>
+    <symbol id="i-pluss" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+    <symbol id="i-last-ned" viewBox="0 0 24 24"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></symbol>
+    <symbol id="i-lommebok" viewBox="0 0 24 24"><path d="M4 7a2 2 0 0 1 2-2h11v4"/><rect x="3" y="7" width="18" height="13" rx="3"/><path d="M16 13.5h.01"/></symbol>
+  </svg>
+
+  <main class="app">
+    <header class="topp">
+      <div>
+        <h1 id="tittel">Pengeboka</h1>
+        <p class="undertittel" id="undertittel"></p>
+      </div>
+      <button class="ikonknapp" id="til-innstillinger" aria-label="Innstillinger"><svg><use href="#i-tannhjul"/></svg></button>
+    </header>
+
+    <section class="visning" id="v-oversikt"></section>
+    <section class="visning" id="v-transaksjoner" hidden></section>
+    <section class="visning" id="v-budsjett" hidden></section>
+    <section class="visning" id="v-faste" hidden></section>
+    <section class="visning" id="v-import" hidden></section>
+    <section class="visning" id="v-innstillinger" hidden></section>
+  </main>
+
+  <nav class="fanerad" id="faner">
+    <button data-fane="oversikt" class="aktiv"><svg><use href="#i-hjem"/></svg><span>Oversikt</span></button>
+    <button data-fane="transaksjoner"><svg><use href="#i-liste"/></svg><span>Transaksjoner</span></button>
+    <button data-fane="budsjett"><svg><use href="#i-mal"/></svg><span>Budsjett</span></button>
+    <button data-fane="faste"><svg><use href="#i-gjenta"/></svg><span>Faste</span></button>
+    <button data-fane="import"><svg><use href="#i-opp"/></svg><span>Import</span></button>
+  </nav>
+
+  <div class="ark-bakgrunn" id="ark-bakgrunn" hidden></div>
+  <div class="ark" id="ark" role="dialog" aria-modal="true" hidden></div>
+  <div class="toast" id="toast" role="status" hidden></div>
+
+  <script src="static/app.js"></script>
+</body>
+</html>

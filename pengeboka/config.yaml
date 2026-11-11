@@ -1,0 +1,16 @@
+name: Pengeboka
+version: "0.1.0"
+slug: pengeboka
+description: Husholdningsøkonomi uten AI – importer kontoutskrifter, se budsjett, faste trekk og hva som er igjen.
+url: https://github.com/chrisfure/ha-app-privat-12345
+arch:
+  - aarch64
+  - amd64
+init: false
+ingress: true
+ingress_port: 8099
+panel_icon: mdi:wallet-outline
+panel_title: Pengeboka
+panel_admin: false
+# Appen trenger ikke tilgang til resten av Home Assistant, og har ingen port ut.
+# Alle innstillinger gjøres inne i appen.

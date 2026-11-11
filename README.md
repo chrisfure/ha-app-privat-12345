@@ -8,6 +8,7 @@ Små apper for familiehverdagen, laget for Home Assistant.
 | [Plasterboka](plasterboka/DOCS.md) | Sykdomslogg for barna: temperatur, medisin og symptomer med ett trykk, døgndose per legemiddel og sykehistorie med feberkurver. |
 | [Styrkeboka](styrkeboka/DOCS.md) | Styrketrening med program, logging av sett, hviletimer og AI-trener – med historikk og fremgang per øvelse. |
 | [Smarthus](smarthus/DOCS.md) | Hele huset i én app: rom med faner, lys, varme og en Mer-side – enkel for alle, med redigeringsmodus for den som styrer oppsettet. |
+| [Pengeboka](pengeboka/DOCS.md) | Husholdningsøkonomi uten AI: importer kontoutskrifter fra nettbanken og se hva som er brukt, budsjett, faste trekk og overføringer mellom egne kontoer. |
 
 ## Installering
 
@@ -27,4 +28,4 @@ Små apper for familiehverdagen, laget for Home Assistant.
 
 Anbefalinger og normalområder er hentet fra Helsenorge, Helsedirektoratet og WHO – se kildelistene i hver app.
 
-Ingen personlige opplysninger ligger i koden – navn, datoer og helsedata settes inne i appene og lagres lokalt.
+Ingen personlige opplysninger ligger i koden – navn, datoer, helse- og økonomidata settes inne i appene og lagres lokalt.
