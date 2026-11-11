@@ -30,10 +30,10 @@
   <main class="app">
     <header class="topp">
       <div>
-        <h1 id="tittel">Pengeboka</h1>
+        <h1 id="tittel"><span class="bare-mobil">Pengeboka</span><span class="bare-pc" id="sidetittel">Oversikt</span></h1>
         <p class="undertittel" id="undertittel"></p>
       </div>
-      <button class="ikonknapp" id="til-innstillinger" aria-label="Innstillinger"><svg><use href="#i-tannhjul"/></svg></button>
+      <button class="ikonknapp bare-mobil" id="til-innstillinger" aria-label="Innstillinger"><svg><use href="#i-tannhjul"/></svg></button>
     </header>
 
     <section class="visning" id="v-oversikt"></section>
@@ -44,12 +44,14 @@
     <section class="visning" id="v-innstillinger" hidden></section>
   </main>
 
-  <nav class="fanerad" id="faner">
+  <nav class="fanerad" id="faner" aria-label="Hovedmeny">
+    <div class="rail-merke bare-pc"><span>💰</span>Pengeboka</div>
     <button data-fane="oversikt" class="aktiv"><svg><use href="#i-hjem"/></svg><span>Oversikt</span></button>
     <button data-fane="transaksjoner"><svg><use href="#i-liste"/></svg><span>Transaksjoner</span></button>
     <button data-fane="budsjett"><svg><use href="#i-mal"/></svg><span>Budsjett</span></button>
     <button data-fane="faste"><svg><use href="#i-gjenta"/></svg><span>Faste</span></button>
     <button data-fane="import"><svg><use href="#i-opp"/></svg><span>Import</span></button>
+    <button data-fane="innstillinger" class="bare-pc rail-bunn"><svg><use href="#i-tannhjul"/></svg><span>Innstillinger</span></button>
   </nav>
 
   <div class="ark-bakgrunn" id="ark-bakgrunn" hidden></div>

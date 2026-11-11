@@ -1,5 +1,10 @@
 # Endringslogg
 
+## 0.3.0
+
+- Egen PC-visning: sidemeny, oversikten i to kolonner med kommende faste trekk, transaksjoner som tabell, budsjett og faste trekk i to kolonner, redigering i et panel til høyre og tydelige hover-effekter.
+- Hurtigtaster: 1–5 for fanene, / for søk og piltaster for måned.
+
 ## 0.2.0
 
 - Importer flere filer på én gang. Appen finner kontoen selv: fra kontonummeret i filen (eller filnavnet), ellers fra transaksjoner den har importert før. Ukjente kontonumre gir forslag til ny konto med navn og type.

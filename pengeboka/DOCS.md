@@ -28,6 +28,17 @@ Etter det holder det å importere én gang i måneden. Det gjør ingenting om pe
 * **Import** – nye filer og tidligere importer. En import kan angres.
 * **⚙️ Innstillinger** – kontoer, egne regler og eksport av alt som CSV.
 
+## På PC
+
+På en bred skjerm får appen sidemeny til venstre, oversikten i to kolonner med kommende faste trekk, transaksjoner som en tabell (mottaker, konto, kategori, beløp) og redigering i et panel til høyre.
+
+| Tast | Gjør |
+|---|---|
+| 1–5 | Bytt mellom Oversikt, Transaksjoner, Budsjett, Faste og Import |
+| / | Søk i transaksjonene |
+| ← → | Forrige og neste måned på Oversikt |
+| Esc | Lukk panelet |
+
 ## Kontoer, skjulte kontoer og overføringer
 
 Ta med alle kontoene, også de dere sjelden ser på. Da kan appen se pengene gå fra én konto og komme inn på en annen.

@@ -99,6 +99,7 @@
     S.fane = fane;
     for (const b of document.querySelectorAll("#faner button")) b.classList.toggle("aktiv", b.dataset.fane === fane);
     for (const v of document.querySelectorAll(".visning")) v.hidden = v.id !== `v-${fane}`;
+    $("sidetittel").textContent = { oversikt: "Oversikt", transaksjoner: "Transaksjoner", budsjett: "Budsjett", faste: "Faste trekk", import: "Import", innstillinger: "Innstillinger" }[fane];
     window.scrollTo(0, 0);
     const vis = { oversikt: visOversikt, transaksjoner: visTransaksjoner, budsjett: visBudsjett, faste: visFaste,
       import: visImport, innstillinger: visInnstillinger }[fane];
@@ -118,7 +119,7 @@
   // ============================================================ OVERSIKT
   async function visOversikt() {
     const v = $("v-oversikt");
-    const o = await api(`oversikt${S.maned ? `?maned=${S.maned}` : ""}`);
+    const [o, fa] = await Promise.all([api(`oversikt${S.maned ? `?maned=${S.maned}` : ""}`), api("faste").catch(() => ({ faste: [] }))]);
     S.oversikt = o;
     S.maned = o.maned.maned;
     $("undertittel").textContent = o.bruker ? `Hei, ${o.bruker.split(" ")[0]}` : "";
@@ -153,7 +154,25 @@
         el("div", { class: "mnd-fremdrift", title: `Dag ${m.dag} av ${m.dager}` }, el("i", { style: `width:${Math.round(100 * m.dag / m.dager)}%` }))
       ] : el("div", { class: "helt-under" }, m.faste ? `${kr(m.faste)} av utgiftene var faste trekk` : ""));
 
-    v.replaceChildren(mnd, helt, trengerKort(o.trenger), kategoriKort(m));
+    v.replaceChildren(mnd, el("div", { class: "oversikt-rute" },
+      el("div", { class: "kol" }, helt, trengerKort(o.trenger), m.pagar ? kommendeKort(fa.faste) : null),
+      kategoriKort(m)));
+  }
+
+  // Bare på PC: de neste faste trekkene, så det er lett å se hva som kommer resten av måneden
+  function kommendeKort(faste) {
+    const lokal = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    const idag = lokal(new Date());
+    const om30 = lokal(new Date(Date.now() + 30 * 864e5));
+    const kommer = faste.filter((f) => !f.uteblitt && f.neste >= idag && f.neste <= om30).sort((a, b) => a.neste.localeCompare(b.neste)).slice(0, 6);
+    if (!kommer.length) return null;
+    return el("div", { class: "kort bare-pc" },
+      el("div", { class: "kort-hode" }, el("h2", {}, "Kommende faste trekk"), el("button", { class: "lenke", onclick: () => byttFane("faste") }, "Alle")),
+      el("ul", { class: "liste" }, kommer.map((f) => el("li", {}, el("div", { class: "txrad" },
+        el("span", { class: "k-ikon" }, f.ikon || "🔁"),
+        el("span", { class: "tx-tekst" }, el("div", { class: "tx-navn" }, f.motpart), el("div", { class: "tx-under" }, `ca. ${dato(f.neste)}`)),
+        el("span", { class: "tx-belop tall" }, `${f.fast_belop ? "" : "ca. "}${kr(f.typisk)}`))))),
+      el("div", { class: "sumlinje", style: "margin-top:8px" }, el("span", {}, "Sum neste 30 dager"), el("span", { class: "tall" }, kr(kommer.reduce((s, f) => s + f.typisk, 0)))));
   }
 
   function trengerKort(liste) {
@@ -259,6 +278,7 @@
     if (!liste) return;
     const n = d.transaksjoner.length;
     const innhold = [el("div", { class: "sumlinje" }, el("span", {}, `${n}${d.flere ? "+" : ""} ${n === 1 ? "transaksjon" : "transaksjoner"}`), el("span", { class: "tall" }, `Sum ${kr(d.sum)}`))];
+    if (n) innhold.push(el("div", { class: "txhode bare-pc" }, el("span", {}), el("span", {}, "Mottaker"), el("span", {}, "Konto"), el("span", {}, "Kategori"), el("span", {}, "Beløp")));
     if (!n) innhold.push(el("p", { class: "tom" }, "Ingen transaksjoner med dette filteret."));
     let dag = null, ul = null;
     for (const t of d.transaksjoner) {
@@ -279,7 +299,11 @@
     if (t.notat) under.push(t.notat);
     return el("button", { class: "txrad", onclick: () => apneTransaksjon(t.id) },
       el("span", { class: `k-ikon${t.kategori ? "" : " mangler"}` }, t.ikon || "?"),
-      el("span", { class: "tx-tekst" }, el("div", { class: "tx-navn" }, t.motpart), el("div", { class: "tx-under" }, under.join(" · "))),
+      el("span", { class: "tx-tekst" }, el("div", { class: "tx-navn" }, t.motpart),
+        el("div", { class: "tx-under bare-mobil" }, under.join(" · ")),
+        el("div", { class: "tx-under bare-pc", title: t.tekst }, t.notat ? `📝 ${t.notat}` : t.tekst)),
+      el("span", { class: "tx-kol bare-pc" }, t.konto),
+      el("span", { class: `tx-kol tx-kat bare-pc${t.kategori ? "" : " mangler"}` }, t.kategori || "Uten kategori"),
       el("span", { class: `tx-belop tall${t.belop_ore > 0 ? " inn" : ""}` }, kr(t.belop_ore, true)));
   }
 
@@ -385,7 +409,7 @@
         el("p", { class: "forklaring" }, d.maneder_grunnlag
           ? `«Foreslå» fyller ut snittet av de siste ${d.maneder_grunnlag} hele månedene, rundet opp. La felt stå tomme for kategorier dere ikke vil budsjettere.`
           : "Når dere har importert minst én hel måned, kan appen foreslå et budsjett ut fra det dere faktisk bruker."),
-        el("div", { style: "margin-top:10px" }, rader),
+        el("div", { class: "budliste", style: "margin-top:10px" }, rader),
         el("div", { class: "budsum" }, el("span", {}, "Sum utgifter"), sumEl)),
       el("button", { class: "knapp noytral", onclick: () => redigerKategori(null) }, ikon("pluss"), "Ny kategori"),
       el("div", { class: "lagrelinje" }, forslag, lagreKnapp));
@@ -438,7 +462,7 @@
           el("div", {}, el("span", {}, "Per måned"), el("b", { class: "tall" }, kr(sum))),
           el("div", {}, el("span", {}, "Per år"), el("b", { class: "tall" }, kr(sum * 12)))),
         el("p", { class: "forklaring", style: "margin-top:10px" }, "Funnet automatisk: samme mottaker, jevne mellomrom og omtrent samme beløp. Trykk på et trekk for å bekrefte eller fjerne det."),
-        faste.length ? el("ul", { class: "liste", style: "margin-top:6px" }, neste.map(rad), faste.filter((f) => f.uteblitt).map(rad))
+        faste.length ? el("ul", { class: "liste rute-liste", style: "margin-top:6px" }, neste.map(rad), faste.filter((f) => f.uteblitt).map(rad))
           : el("p", { class: "tom" }, "Ingen faste trekk funnet ennå. Det trengs minst tre trekk fra samme mottaker.")));
   }
 
@@ -494,7 +518,7 @@
         slipp, filInput,
         el("p", { class: "forklaring", style: "margin-top:10px" },
           "Last ned transaksjonene for hver konto (én fil per konto) og velg alle filene her. Har filen kontonummer, finner appen kontoen selv. Det gjør ingenting om periodene overlapper – det som er importert fra før, hoppes over.")),
-      el("div", { id: "filer", class: "visning", style: "gap:14px" }),
+      el("div", { id: "filer", class: "rute-filer" }),
       el("div", { id: "importlinje", class: "lagrelinje", hidden: true }),
       ...[importHistorikk(k.importer)].filter(Boolean));
     tegnFiler();
@@ -708,7 +732,6 @@
   }
 
   async function visInnstillinger() {
-    for (const b of document.querySelectorAll("#faner button")) b.classList.remove("aktiv");
     const v = $("v-innstillinger");
     const d = await api("kontoer");
     const kontoRad = (k) => el("li", {}, el("button", { class: "txrad", onclick: () => kontoArk(k, () => visInnstillinger().catch(feil)) },
@@ -717,7 +740,7 @@
         el("div", { class: "tx-navn" }, k.navn, " ", k.skjult ? el("span", { class: "merke skjult" }, "Skjult") : null),
         el("div", { class: "tx-under" }, `${k.type_navn} · ${k.antall} transaksjoner${k.til ? ` · siste ${dato(k.til, true)}` : ""}`)),
       ikon("hoyre")));
-    v.replaceChildren(
+    v.replaceChildren(el("div", { class: "rutenett" },
       el("div", { class: "kort" },
         el("div", { class: "kort-hode" }, el("h2", {}, "Kontoer")),
         d.kontoer.length ? el("ul", { class: "liste" }, d.kontoer.map(kontoRad)) : el("p", { class: "tom" }, "Ingen kontoer ennå."),
@@ -735,8 +758,23 @@
       el("div", { class: "kort" },
         el("div", { class: "kort-hode" }, el("h2", {}, "Data")),
         el("p", { class: "forklaring" }, "Alt lagres bare i denne appen i Home Assistant. Appen sender ingenting ut, har ingen tilgang til resten av Home Assistant og bruker ingen AI. Husk passord på sikkerhetskopiene."),
-        el("a", { class: "knapp noytral bred", style: "margin-top:12px", href: "api/eksport.csv", download: "pengeboka.csv" }, ikon("last-ned"), "Last ned alt som CSV")));
+        el("a", { class: "knapp noytral bred", style: "margin-top:12px", href: "api/eksport.csv", download: "pengeboka.csv" }, ikon("last-ned"), "Last ned alt som CSV"))));
   }
+
+  // ------------------------------------------------------------ tastatur (PC)
+  document.addEventListener("keydown", (e) => {
+    if (e.ctrlKey || e.metaKey || e.altKey || !$("ark").hidden) return;
+    if (["INPUT", "TEXTAREA", "SELECT"].includes(document.activeElement?.tagName)) return;
+    if (e.key === "/") {
+      e.preventDefault();
+      if (S.fane !== "transaksjoner") byttFane("transaksjoner");
+      setTimeout(() => document.querySelector('#v-transaksjoner input[type="search"]')?.focus(), 150);
+    } else if (S.fane === "oversikt" && (e.key === "ArrowLeft" || e.key === "ArrowRight")) {
+      document.querySelector(`#v-oversikt button[aria-label="${e.key === "ArrowLeft" ? "Forrige" : "Neste"} måned"]:not([disabled])`)?.click();
+    } else if (/^[1-5]$/.test(e.key)) {
+      byttFane(["oversikt", "transaksjoner", "budsjett", "faste", "import"][+e.key - 1]);
+    }
+  });
 
   // ------------------------------------------------------------ start
   byttFane("oversikt");
