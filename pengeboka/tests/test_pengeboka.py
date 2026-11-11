@@ -202,19 +202,19 @@ def test_ikke_en_overforing(pb, familie):
 # ---------------------------------------------------------------- kategorier og regler
 def test_regel_fra_transaksjon_gjelder_alle_og_nye(pb):
     k = konto(pb, "Felles")
-    pb.importer(csv([("2026-10-01", "FRISØR HÅRSTUDIO 123 SENTRUM", -50000), ("2026-11-01", "FRISØR HÅRSTUDIO 123 SENTRUM", -55000)]),
+    pb.importer(csv([("2026-10-01", "STUDIO LUNA 123 SENTRUM", -50000), ("2026-11-01", "STUDIO LUNA 123 SENTRUM", -55000)]),
                 "a.csv", k, None, "A")
     t = tx(pb)[0]
     assert t["kategori"] is None
-    hjem = next(c["id"] for c in pb.kategorier() if c["navn"] == "Hjem og klær")
+    hjem = next(c["id"] for c in pb.kategorier() if c["navn"] == "Hjem og interiør")
     pb.endre_transaksjon(t["id"], {"kategori_id": hjem, "regel": True}, "Voksen 2")
-    assert {x["kategori"] for x in tx(pb)} == {"Hjem og klær"}
-    pb.importer(csv([("2026-11-15", "FRISØR HÅRSTUDIO 999 OSLO", -60000)]), "b.csv", k, None, "A")
-    assert {x["kategori"] for x in tx(pb)} == {"Hjem og klær"}
+    assert {x["kategori"] for x in tx(pb)} == {"Hjem og interiør"}
+    pb.importer(csv([("2026-11-15", "STUDIO LUNA 999 OSLO", -60000)]), "b.csv", k, None, "A")
+    assert {x["kategori"] for x in tx(pb)} == {"Hjem og interiør"}
     regel = pb.regler()[0]
-    assert (regel["monster"], regel["laget_av"], regel["treff"]) == ("frisør hårstudio", "Voksen 2", 2)
+    assert (regel["monster"], regel["laget_av"], regel["treff"]) == ("studio luna", "Voksen 2", 2)
     pb.slett_regel(regel["id"])
-    assert {x["kategori"] for x in tx(pb)} == {"Hjem og klær", None}  # den manuelle beholdes
+    assert {x["kategori"] for x in tx(pb)} == {"Hjem og interiør", None}  # den manuelle beholdes
 
 
 def test_manuell_kategori_overstyres_ikke(pb):
@@ -505,3 +505,78 @@ def test_matplan_ikke_tilkoblet_viser_ingenting(pb):
     assert t["kvittering"] is None and not t["kvittering_mangler"]
     with pytest.raises(matplan.Matplanfeil, match="ikke koblet"):
         matplan.synk(pb.db)
+
+
+# ---------------------------------------------------------------- flere kategorier (0.5.0)
+@pytest.mark.parametrize("tekst, belop, navn, kat", [
+    ("Vipps:Ruter", -7500, "Ruter", "Kollektivtransport"),
+    ("Extra sentrum", -28426, "Coop Extra", "Dagligvarer"),
+    ("Obs sentrum", -11590, "Obs", "Dagligvarer"),
+    ("Obs bygg sentrum", -320720, "Obs Bygg", "Hus og hage"),
+    ("Byen trelast", -207800, "Byen Trelast", "Hus og hage"),
+    ("Megaflis as avd", -144900, "Megaflis", "Hus og hage"),
+    ("Elektroimportoeren.No", -559690, "Elektroimportøren", "Hus og hage"),
+    ("Clas ohl 2883", -12990, "Clas Ohlson", "Hus og hage"),
+    ("Cubus 939", -17880, "Cubus", "Klær og sko"),
+    ("Euro sko byen", -49900, "Eurosko", "Klær og sko"),
+    ("IKEA furuset", -248400, "IKEA", "Hjem og interiør"),
+    ("Vita 1213 byen", -12530, "Vita", "Personlig pleie"),
+    ("7Eleven 7149 ab", -5400, "7-Eleven", "Kafé og kiosk"),
+    ("Kaffebrenneriet", -5000, "Kaffebrenneriet", "Kafé og kiosk"),
+    ("Zettle_:Taste Restaurant", -27300, "Taste Restaurant", "Mat ute og kos"),
+    ("Paradis bar", -9000, "Paradis Bar", "Mat ute og kos"),
+    ("Mcd 074 sentrum", -15600, "McDonald's", "Mat ute og kos"),
+    ("Tv 2 No O-24560606", -40900, "TV 2", "Abonnementer"),
+    ("Duty-free 7103", -51280, "Duty Free", "Fritid og ferie"),
+    ("Renter", -233, "Renter", "Renter og gebyrer"),
+    ("Renter", 15000, "Renter", "Annen inntekt"),
+    ("Paypal_:Ukjent Butikk", -15500, "Ukjent Butikk", None),
+])
+def test_flere_kategorier(tekst, belop, navn, kat):
+    assert regler.motpart(tekst) == navn
+    assert regler.kategoriser(tekst, belop, [])[0] == kat
+
+
+def test_kategoriene_finnes_og_er_unike():
+    navn = [n for n, _, _ in regler.KATEGORIER]
+    assert len(navn) == len(set(navn))
+    assert {k for _, _, k in regler.KJENTE} <= set(navn)
+
+
+def test_oppgradering_fra_gamle_kategorier(tmp_path):
+    import sqlite3
+    from db import Database
+    from logikk import Pengeboka
+    sti = tmp_path / "gammel.db"
+    db = Database(sti)
+    # Slik så en database fra 0.4 ut: gamle kategorier, ingen versjon
+    gamle = [("Dagligvarer", "🛒", "utgift"), ("Bil og transport", "🚗", "utgift"), ("Hjem og klær", "👕", "utgift"),
+             ("Mat ute og kos", "🍕", "utgift"), ("Overføring", "🔁", "overforing")]
+    for i, (n, ik, g) in enumerate(gamle):
+        db.kjor("INSERT INTO kategorier(navn, ikon, gruppe, rekkefolge, budsjett_ore) VALUES(?,?,?,?,?)",
+                (n, ik, g, i, 300000 if n == "Hjem og klær" else None))
+    db.kjor("INSERT INTO kontoer(navn, opprettet) VALUES('Felles', '2026-01-01')")
+    hjem = db.verdi("SELECT id FROM kategorier WHERE navn = 'Hjem og klær'")
+    bil = db.verdi("SELECT id FROM kategorier WHERE navn = 'Bil og transport'")
+    for tekst, mp, kid, kilde in [("Vipps:Ruter", "Vipps: Ruter", bil, "kjent"), ("Cubus 939", "Cubus", hjem, "kjent"),
+                                  ("Maxbo byen", "Maxbo", hjem, "manuell"), ("7Eleven 7149 ab", "Ab", None, None)]:
+        db.kjor("INSERT INTO transaksjoner(konto_id, dato, belop_ore, tekst, motpart, kategori_id, kilde, fingeravtrykk) "
+                "VALUES(1, '2026-10-01', -10000, ?, ?, ?, ?, ?)", (tekst, mp, kid, kilde, tekst))
+    db.merk("fast:Vipps: Ruter", "nei")
+    db.con.close()
+
+    pb = Pengeboka(Database(sti))
+    kat = {k["navn"]: k for k in pb.kategorier()}
+    assert "Hjem og klær" not in kat and "Bil og transport" not in kat
+    assert kat["Hjem og interiør"]["id"] == hjem and kat["Hjem og interiør"]["budsjett_ore"] == 300000
+    assert {"Kollektivtransport", "Klær og sko", "Hus og hage", "Kafé og kiosk", "Gaver"} <= set(kat)
+    rader = {t["tekst"]: t for t in pb.transaksjoner({})["transaksjoner"]}
+    assert (rader["Vipps:Ruter"]["motpart"], rader["Vipps:Ruter"]["kategori"]) == ("Ruter", "Kollektivtransport")
+    assert rader["Cubus 939"]["kategori"] == "Klær og sko"
+    assert rader["Maxbo byen"]["kategori"] == "Hjem og interiør"          # valgt for hånd – beholdes
+    assert (rader["7Eleven 7149 ab"]["motpart"], rader["7Eleven 7149 ab"]["kategori"]) == ("7-Eleven", "Kafé og kiosk")
+    assert pb.db.merknader().get("fast:Ruter") == "nei"
+    # Kjøres bare én gang
+    pb.db.kjor("UPDATE kategorier SET navn = 'Bil og transport' WHERE navn = 'Bil'")
+    Pengeboka(pb.db)
+    assert pb.db.verdi("SELECT COUNT(*) FROM kategorier WHERE navn = 'Bil og transport'") == 1

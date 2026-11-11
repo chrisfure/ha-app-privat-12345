@@ -55,6 +55,8 @@ Har appen paret noe som ikke er en overføring, åpne transaksjonen og trykk **I
 
 Appen kjenner igjen vanlige norske butikker, kjeder og regninger (Kiwi, Rema, Coop, Tibber, Gjensidige, Netflix, Ruter og mange flere) og rydder bankteksten til et kort navn: «Visa 4925 NOK 249,00 KIWI 505 SENTRUM» blir «Kiwi».
 
+Utgiftskategoriene er Dagligvarer, Bolig, Lån, Renter og gebyrer, Strøm, Bil, Kollektivtransport, Barn, Forsikring, Abonnementer, Helse, Personlig pleie, Klær og sko, Hjem og interiør, Hus og hage (byggevare, jernvare, flis, elektro), Mat ute og kos, Kafé og kiosk, Fritid og ferie, Gaver, Kjæledyr og Annet. Kategorier dere ikke bruker, kan skjules under Innstillinger, og dere kan lage egne.
+
 Når dere velger kategori på en transaksjon med **Gjelder alle fra …** slått på, lages en egen regel. Egne regler går foran de innebygde, gjelder også nye importer, og vises under Innstillinger der de kan slettes. En kategori dere har satt for hånd på én transaksjon, overstyres aldri.
 
 ## Trenger dere

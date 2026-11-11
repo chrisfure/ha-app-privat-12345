@@ -67,10 +67,45 @@ class Pengeboka:
 
     # ------------------------------------------------------------ oppstart
     def _standard(self) -> None:
-        if self.db.verdi("SELECT COUNT(*) FROM kategorier"):
+        if not self.db.verdi("SELECT COUNT(*) FROM kategorier"):
+            for i, (navn, ikon, gruppe) in enumerate(regler.KATEGORIER):
+                self.db.kjor("INSERT INTO kategorier(navn, ikon, gruppe, rekkefolge) VALUES(?,?,?,?)", (navn, ikon, gruppe, i))
+            self.db.sett_innstilling("kategori_versjon", regler.KATEGORI_VERSJON)
             return
-        for i, (navn, ikon, gruppe) in enumerate(regler.KATEGORIER):
-            self.db.kjor("INSERT INTO kategorier(navn, ikon, gruppe, rekkefolge) VALUES(?,?,?,?)", (navn, ikon, gruppe, i))
+        if (self.db.innstilling("kategori_versjon") or 1) < regler.KATEGORI_VERSJON:
+            self._oppgrader_kategorier()
+
+    def _oppgrader_kategorier(self) -> None:
+        """Nye kategorier og flere kjente butikker i en database fra en eldre versjon.
+        Valg gjort for hånd og egne regler beholdes; resten sorteres på nytt."""
+        ikoner = {n: i for n, i, _ in regler.KATEGORIER}
+        with self.db.transaksjon():
+            c = self.db.con
+            for gammel, ny in regler.NYTT_NAVN.items():
+                if c.execute("SELECT 1 FROM kategorier WHERE navn = ?", (gammel,)).fetchone() and \
+                        not c.execute("SELECT 1 FROM kategorier WHERE navn = ?", (ny,)).fetchone():
+                    c.execute("UPDATE kategorier SET navn = ?, ikon = ? WHERE navn = ?", (ny, ikoner[ny], gammel))
+            finnes = {r[0] for r in c.execute("SELECT navn FROM kategorier")}
+            for navn, ikon, gruppe in regler.KATEGORIER:
+                if navn not in finnes:
+                    c.execute("INSERT INTO kategorier(navn, ikon, gruppe) VALUES(?,?,?)", (navn, ikon, gruppe))
+            orden = {n: i for i, (n, _, _) in enumerate(regler.KATEGORIER)}
+            for kid, navn in c.execute("SELECT id, navn FROM kategorier").fetchall():
+                c.execute("UPDATE kategorier SET rekkefolge = ? WHERE id = ?", (orden.get(navn, 100 + kid), kid))
+            # Bedre navn på mottakere (f.eks. «Vipps: Ruter» → «Ruter»); valg for faste trekk følger med
+            gamle = c.execute("SELECT id, tekst, motpart FROM transaksjoner").fetchall()
+            bytte: dict[str, set[str]] = {}
+            for tid, tekst, gml in gamle:
+                ny = regler.motpart(tekst)[:80]
+                bytte.setdefault(gml, set()).add(ny)
+                if ny != gml:
+                    c.execute("UPDATE transaksjoner SET motpart = ? WHERE id = ?", (ny, tid))
+            for gml, nye in bytte.items():
+                if len(nye) == 1 and gml not in nye:
+                    ny = next(iter(nye))
+                    c.execute("UPDATE OR IGNORE merknader SET nokkel = ? WHERE nokkel = ?", (f"fast:{ny}", f"fast:{gml}"))
+        self.kategoriser_alle()
+        self.db.sett_innstilling("kategori_versjon", regler.KATEGORI_VERSJON)
 
     # ------------------------------------------------------------ kontoer
     def kontoer(self) -> list[dict]:
@@ -751,7 +786,7 @@ class Pengeboka:
             if not fast_belop and avvik > 0.6 and valg != "ja":
                 continue
             # Ukentlige dagligvarekjøp o.l. hører ikke hjemme her
-            if hyppighet == "uke" and liste[-1]["kategori"] in ("Dagligvarer", "Mat ute og kos") and valg != "ja":
+            if hyppighet == "uke" and liste[-1]["kategori"] in ("Dagligvarer", "Mat ute og kos", "Kafé og kiosk") and valg != "ja":
                 continue
             siste = d[-1]
             neste = siste + timedelta(days=round(lengde))

@@ -1,5 +1,12 @@
 # Endringslogg
 
+## 0.5.0
+
+- Flere kategorier: Kollektivtransport, Hus og hage, Klær og sko, Personlig pleie, Kafé og kiosk, Renter og gebyrer, Gaver og Kjæledyr. «Hjem og klær» heter nå «Hjem og interiør», og «Bil og transport» heter «Bil».
+- Kjenner igjen rundt 100 flere butikker og tjenester, også når banken kutter navnet («Clas ohl», «7Eleven», «Mcd») eller betalingen går via Vipps, PayPal eller Zettle.
+- Steder som «… trelast», «… bar» og «… spiseri» får kategori, men beholder sitt eget navn.
+- Ved oppgradering sorteres det appen har kategorisert på nytt. Det dere har valgt selv og egne regler, beholdes.
+
 ## 0.4.0
 
 - Kobling mot Matplan: dagligvarekjøp får «🧾 Kvittering» eller «Ingen kvittering», med varene fra kvitteringen når du åpner kjøpet.
