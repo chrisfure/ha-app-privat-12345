@@ -6,6 +6,7 @@ først familiens egne regler, så de innebygde.
 """
 from __future__ import annotations
 
+import functools
 import re
 import unicodedata
 
@@ -260,12 +261,17 @@ def rydd(tekst: str) -> str:
     return _TEGN.sub(" ", t).strip()
 
 
+@functools.lru_cache(maxsize=4096)
+def _rx(monster: str):
+    return re.compile(r"(?<![\wæøå])" + re.escape(monster) + r"(?![\wæøå])")
+
+
 def _sok(monster: str, tekst: str):
     """Mønsteret må stå som egne ord: «kiwi» treffer «kiwi sentrum», ikke «kiwiplanter»."""
     m = monster.strip().lower()
     if not m:
         return None
-    return re.search(r"(?<![\wæøå])" + re.escape(m) + r"(?![\wæøå])", tekst)
+    return _rx(m).search(tekst)
 
 
 def _treff(monster: str, tekst: str) -> bool:

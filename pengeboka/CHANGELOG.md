@@ -1,5 +1,9 @@
 # Endringslogg
 
+## 0.5.1
+
+- Kategorisering og import går omtrent fem ganger raskere.
+
 ## 0.5.0
 
 - Flere kategorier: Kollektivtransport, Hus og hage, Klær og sko, Personlig pleie, Kafé og kiosk, Renter og gebyrer, Gaver og Kjæledyr. «Hjem og klær» heter nå «Hjem og interiør», og «Bil og transport» heter «Bil».
