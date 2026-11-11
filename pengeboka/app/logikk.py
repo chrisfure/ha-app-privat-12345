@@ -80,7 +80,16 @@ class Pengeboka:
             GROUP BY k.id ORDER BY k.skjult, k.rekkefolge, k.id""")
         for r in rader:
             r["type_navn"] = KONTOTYPER.get(r["type"], r["type"])
+            r["nummer_vis"] = fil.vis_nummer(r.get("nummer"))
         return rader
+
+    def _sett_nummer(self, kid: int, nummer: str | None) -> None:
+        nr = fil.kontonummer(nummer) if nummer else None
+        if nummer and not nr:
+            raise Feil("Kontonummeret må ha 11 siffer")
+        if nr and self.db.verdi("SELECT id FROM kontoer WHERE nummer = ? AND id != ?", (nr, kid)):
+            raise Feil("En annen konto har allerede det kontonummeret")
+        self.db.kjor("UPDATE kontoer SET nummer = ? WHERE id = ?", (nr, kid))
 
     def lagre_konto(self, d: dict, kid: int | None = None) -> dict:
         navn = str(d.get("navn") or "").strip()[:60]
@@ -93,13 +102,21 @@ class Pengeboka:
             kid = self.db.kjor("INSERT INTO kontoer(navn, type, skjult, rekkefolge, opprettet) VALUES(?,?,?,?,?)",
                                (navn, typ, 1 if d.get("skjult") else 0,
                                 (self.db.verdi("SELECT MAX(rekkefolge) FROM kontoer") or 0) + 1, naa_iso()))
+            if d.get("nummer"):
+                try:
+                    self._sett_nummer(kid, d["nummer"])
+                except Feil:
+                    self.db.kjor("DELETE FROM kontoer WHERE id = ?", (kid,))
+                    raise
         else:
             gml = self.db.rad("SELECT * FROM kontoer WHERE id = ?", (kid,))
             if not gml:
                 raise Feil("Fant ikke kontoen")
             self.db.kjor("UPDATE kontoer SET navn = ?, type = ?, skjult = ? WHERE id = ?",
                          (navn or gml["navn"], typ, 1 if d.get("skjult", gml["skjult"]) else 0, kid))
-            if typ != gml["type"]:
+            if "nummer" in d:
+                self._sett_nummer(kid, d["nummer"])
+            if typ != gml["type"] or ("nummer" in d and fil.kontonummer(d["nummer"]) != gml["nummer"]):
                 self.finn_overforinger(nullstill=True)
         return next(k for k in self.kontoer() if k["id"] == kid)
 
@@ -202,7 +219,28 @@ class Pengeboka:
             ut.append(f"{grunn}#{teller[grunn]}")
         return ut
 
-    def forhandsvis(self, data: bytes, konto_id: int | None, oppsett: dict | None = None) -> dict:
+    def _gjett_konto(self, nummer: str | None, fa: list[str]) -> dict | None:
+        """Hvilken konto filen hører til: kontonummeret, ellers transaksjoner som er importert før."""
+        if nummer:
+            k = self.db.rad("SELECT id FROM kontoer WHERE nummer = ?", (nummer,))
+            if k:
+                return {"id": k["id"], "grunn": "kontonummer"}
+        if not fa:
+            return None
+        beste = None
+        for k in self.db.rader("SELECT id, nummer FROM kontoer"):
+            if nummer and k["nummer"]:
+                continue  # en konto med et annet nummer kan ikke være denne
+            fins = {r["fingeravtrykk"] for r in self.db.rader(
+                "SELECT fingeravtrykk FROM transaksjoner WHERE konto_id = ?", (k["id"],))}
+            treff = sum(1 for f in fa if f in fins)
+            if treff and (beste is None or treff > beste[1]):
+                beste = (k["id"], treff)
+        if beste and beste[1] >= min(3, len(fa)) and beste[1] >= 0.2 * len(fa):
+            return {"id": beste[0], "grunn": "tidligere"}
+        return None
+
+    def forhandsvis(self, data: bytes, konto_id: int | None, oppsett: dict | None = None, filnavn: str = "") -> dict:
         rader, oppsett = self._les(data, oppsett)
         svar = {"oppsett": oppsett, "overskrifter": fil.overskrifter(rader, oppsett),
                 "radeksempel": [[str(x) for x in r] for r in rader[max(0, oppsett.get("overskrift", -1) + 1):][:5]]}
@@ -213,22 +251,39 @@ class Pengeboka:
         tx = tolket["transaksjoner"]
         if not tx:
             return {**svar, "feil": "Fant ingen transaksjoner med disse kolonnene. Sjekk valgene under."}
+        fa = self._fingeravtrykk(tx)
+        nummer = fil.finn_kontonummer(rader, tx, filnavn)
+        gjettet = self._gjett_konto(nummer, fa)
+        if not konto_id and gjettet:
+            konto_id = gjettet["id"]
         fins = set()
         if konto_id:
             fins = {r["fingeravtrykk"] for r in self.db.rader(
                 "SELECT fingeravtrykk FROM transaksjoner WHERE konto_id = ?", (konto_id,))}
-        fa = self._fingeravtrykk(tx)
         nye = sum(1 for f in fa if f not in fins)
         datoer = sorted(t["dato"] for t in tx)
         return {**svar, "antall": len(tx), "nye": nye, "duplikater": len(tx) - nye, "hoppet": tolket["hoppet"],
+                "reservert": tolket.get("reservert", 0), "konto": gjettet, "konto_id": konto_id,
+                "kontonummer": nummer, "kontonummer_vis": fil.vis_nummer(nummer),
+                "kontotype": self._gjett_type(tx),
                 "fra": datoer[0], "til": datoer[-1],
                 "eksempel": [{**t, "motpart": regler.motpart(t["tekst"])} for t in tx[:6]],
                 "sum_inn": sum(t["belop_ore"] for t in tx if t["belop_ore"] > 0),
                 "sum_ut": -sum(t["belop_ore"] for t in tx if t["belop_ore"] < 0)}
 
-    def importer(self, data: bytes, filnavn: str, konto_id: int, oppsett: dict | None, av: str | None) -> dict:
-        if not self.db.rad("SELECT id FROM kontoer WHERE id = ?", (konto_id,)):
-            raise Feil("Velg hvilken konto filen gjelder")
+    @staticmethod
+    def _gjett_type(tx: list[dict]) -> str:
+        """Grovt forslag til kontotype for en ny konto: mange kortkjøp = brukskonto, få store inn = sparing."""
+        ut = [t for t in tx if t["belop_ore"] < 0]
+        inn = [t for t in tx if t["belop_ore"] > 0]
+        if tx and len(ut) >= 0.8 * len(tx) and any("innbetaling" in t["tekst"].lower() or "betaling" in t["tekst"].lower() for t in inn):
+            if len(inn) <= max(2, len(tx) // 10):
+                return "kreditt"
+        if len(tx) <= 30 and len(ut) <= len(inn) and all(regler.ser_ut_som_overforing(t["tekst"]) or abs(t["belop_ore"]) >= 50000 for t in tx):
+            return "sparing"
+        return "bruk"
+
+    def importer(self, data: bytes, filnavn: str, konto_id: int | None, oppsett: dict | None, av: str | None) -> dict:
         rader, oppsett = self._les(data, oppsett)
         try:
             tx = fil.tolk_rader(rader, oppsett)["transaksjoner"]
@@ -236,6 +291,17 @@ class Pengeboka:
             raise Feil(str(e)) from None
         if not tx:
             raise Feil("Fant ingen transaksjoner i filen")
+        nummer = fil.finn_kontonummer(rader, tx, filnavn)
+        if not konto_id:
+            gjettet = self._gjett_konto(nummer, self._fingeravtrykk(tx))
+            konto_id = gjettet["id"] if gjettet else None
+        konto = self.db.rad("SELECT * FROM kontoer WHERE id = ?", (konto_id,)) if konto_id else None
+        if not konto:
+            raise Feil("Velg hvilken konto filen gjelder")
+        if nummer and konto["nummer"] and konto["nummer"] != nummer:
+            raise Feil(f"Filen gjelder konto {fil.vis_nummer(nummer)}, men {konto['navn']} har {fil.vis_nummer(konto['nummer'])}")
+        if nummer and not konto["nummer"] and not self.db.verdi("SELECT id FROM kontoer WHERE nummer = ?", (nummer,)):
+            self.db.kjor("UPDATE kontoer SET nummer = ? WHERE id = ?", (nummer, konto_id))  # lær nummeret
         fa = self._fingeravtrykk(tx)
         datoer = sorted(t["dato"] for t in tx)
         nye = 0
@@ -245,9 +311,10 @@ class Pengeboka:
                 (konto_id, (filnavn or "")[:120], naa_iso(), av, datoer[0], datoer[-1])).lastrowid
             for t, f in zip(tx, fa):
                 cur = self.db.con.execute(
-                    "INSERT OR IGNORE INTO transaksjoner(konto_id, import_id, dato, belop_ore, tekst, motpart, fingeravtrykk) "
-                    "VALUES(?,?,?,?,?,?,?)",
-                    (konto_id, iid, t["dato"], t["belop_ore"], t["tekst"][:300], regler.motpart(t["tekst"])[:80], f))
+                    "INSERT OR IGNORE INTO transaksjoner(konto_id, import_id, dato, belop_ore, tekst, motpart, motkonto, fingeravtrykk) "
+                    "VALUES(?,?,?,?,?,?,?,?)",
+                    (konto_id, iid, t["dato"], t["belop_ore"], t["tekst"][:300], regler.motpart(t["tekst"])[:80],
+                     t.get("motkonto"), f))
                 nye += cur.rowcount
             self.db.con.execute("UPDATE importer SET nye = ?, duplikater = ? WHERE id = ?", (nye, len(tx) - nye, iid))
         if nye == 0:
@@ -255,7 +322,7 @@ class Pengeboka:
         self.db.sett_innstilling("sist_oppsett", oppsett)
         self.finn_overforinger()
         self.kategoriser_alle()
-        return {"nye": nye, "duplikater": len(tx) - nye, "fra": datoer[0], "til": datoer[-1],
+        return {"nye": nye, "duplikater": len(tx) - nye, "fra": datoer[0], "til": datoer[-1], "konto_id": konto_id,
                 "ukategorisert": self.db.verdi(
                     "SELECT COUNT(*) FROM transaksjoner WHERE import_id = ? AND kategori_id IS NULL", (iid,)) or 0}
 
@@ -287,15 +354,28 @@ class Pengeboka:
 
     def finn_overforinger(self, nullstill: bool = False) -> int:
         """Parer penger ut av én egen konto med samme beløp inn på en annen egen konto innen noen dager."""
-        kontotype = {k["id"]: k["type"] for k in self.db.rader("SELECT id, type FROM kontoer")}
+        kontoer = self.db.rader("SELECT id, type, nummer FROM kontoer")
+        kontotype = {k["id"]: k["type"] for k in kontoer}
+        nummer_til = {k["nummer"]: k["id"] for k in kontoer if k["nummer"]}
         kat = {k["navn"]: k["id"] for k in self.kategorier()}
+
+        def kategorier_for(fra_t, til_t):
+            # Penger til sparing/lån teller som sparing/lån; uttak fra sparing gir «negativ sparing».
+            ut_kat, inn_kat = regler.OVERFORING, regler.OVERFORING
+            if til_t == "sparing" and fra_t != "sparing":
+                ut_kat = regler.SPARING
+            elif til_t == "lan" and fra_t != "lan":
+                ut_kat = regler.LAN
+            elif fra_t == "sparing" and til_t != "sparing":
+                inn_kat = regler.SPARING
+            return ut_kat, inn_kat
         with self.db.transaksjon():
             if nullstill:
                 self.db.con.execute("UPDATE transaksjoner SET par_id = NULL, kategori_id = NULL, kilde = NULL "
                                     "WHERE kilde = 'overforing'")
             rader = [dict(r) for r in self.db.con.execute(
-                "SELECT id, konto_id, dato, belop_ore, tekst FROM transaksjoner "
-                "WHERE par_id IS NULL AND ikke_overforing = 0 AND (kilde IS NULL OR kilde IN ('regel', 'kjent')) "
+                "SELECT id, konto_id, dato, belop_ore, tekst, motkonto FROM transaksjoner "
+                "WHERE par_id IS NULL AND ikke_overforing = 0 AND (kilde IS NULL OR kilde IN ('regel', 'kjent', 'overforing')) "
                 "ORDER BY dato, id").fetchall()]
             inn: dict[int, list[dict]] = defaultdict(list)
             for r in rader:
@@ -312,25 +392,37 @@ class Pengeboka:
                     avstand = abs((date.fromisoformat(m["dato"]) - d0).days)
                     if avstand <= OVERFORING_DAGER:
                         hint = regler.ser_ut_som_overforing(ut["tekst"]) or regler.ser_ut_som_overforing(m["tekst"])
-                        kandidater.append((avstand - (0.5 if hint else 0), m["id"], m))
+                        sikker = nummer_til.get(ut["motkonto"]) == m["konto_id"] or nummer_til.get(m["motkonto"]) == ut["konto_id"]
+                        kandidater.append((avstand - (0.5 if hint else 0) - (10 if sikker else 0), m["id"], m))
                 if not kandidater:
                     continue
                 _, _, m = min(kandidater, key=lambda x: (x[0], x[1]))
                 brukt.add(m["id"])
-                fra_t, til_t = kontotype.get(ut["konto_id"]), kontotype.get(m["konto_id"])
-                # Penger til sparing/lån teller som sparing/lån; uttak fra sparing gir «negativ sparing».
-                ut_kat, inn_kat = regler.OVERFORING, regler.OVERFORING
-                if til_t == "sparing" and fra_t != "sparing":
-                    ut_kat = regler.SPARING
-                elif til_t == "lan" and fra_t != "lan":
-                    ut_kat = regler.LAN
-                elif fra_t == "sparing" and til_t != "sparing":
-                    inn_kat = regler.SPARING
+                brukt.add(ut["id"])
+                ut_kat, inn_kat = kategorier_for(kontotype.get(ut["konto_id"]), kontotype.get(m["konto_id"]))
                 self.db.con.execute("UPDATE transaksjoner SET par_id = ?, kategori_id = ?, kilde = 'overforing', regel_id = NULL "
                                     "WHERE id = ?", (m["id"], kat.get(ut_kat), ut["id"]))
                 self.db.con.execute("UPDATE transaksjoner SET par_id = ?, kategori_id = ?, kilde = 'overforing', regel_id = NULL "
                                     "WHERE id = ?", (ut["id"], kat.get(inn_kat), m["id"]))
                 par += 1
+            # Filen sier at pengene gikk til/kom fra en av deres egne kontoer, men den andre halvdelen
+            # er ikke importert (ennå): da er det likevel en overføring.
+            for r in rader:
+                if r["id"] in brukt or not r["motkonto"]:
+                    continue
+                annen = nummer_til.get(r["motkonto"])
+                if not annen or annen == r["konto_id"]:
+                    if self.db.con.execute("SELECT kilde FROM transaksjoner WHERE id = ?", (r["id"],)).fetchone()[0] == "overforing":
+                        self.db.con.execute("UPDATE transaksjoner SET kategori_id = NULL, kilde = NULL WHERE id = ?", (r["id"],))
+                    continue
+                if r["belop_ore"] < 0:
+                    navn = kategorier_for(kontotype.get(r["konto_id"]), kontotype.get(annen))[0]
+                else:
+                    navn = kategorier_for(kontotype.get(annen), kontotype.get(r["konto_id"]))[1]
+                self.db.con.execute("UPDATE transaksjoner SET kategori_id = ?, kilde = 'overforing', regel_id = NULL "
+                                    "WHERE id = ?", (kat.get(navn), r["id"]))
+        if nullstill:
+            self.kategoriser_alle()  # det som ikke lenger er overføringer, trenger kategori igjen
         return par
 
     # ------------------------------------------------------------ transaksjoner

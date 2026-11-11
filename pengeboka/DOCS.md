@@ -4,11 +4,12 @@ Husholdningsøkonomi for hele familien: importer kontoutskrifter fra nettbanken,
 
 ## Kom i gang
 
-1. Åpne Pengeboka fra sidemenyen og gå til **Import**.
-2. Trykk **+** og lag en konto for hver bankkonto dere vil ha med (felleskonto, brukskontoer, kredittkort, sparekontoer, lån). Velg riktig type – den styrer hvordan overføringer telles.
-3. Last ned transaksjonene fra nettbanken som **CSV eller Excel** (åpne kontoen, velg periode og last ned/eksporter).
-4. Velg kontoen og filen. Sjekk forhåndsvisningen og trykk **Importer**.
-5. Gjenta for hver konto. Ta gjerne med de siste 3–6 månedene første gang, så får appen noe å regne snitt og faste trekk ut fra.
+1. Last ned transaksjonene fra nettbanken som **CSV eller Excel**, én fil per konto (felleskonto, brukskontoer, kredittkort, sparekontoer, lån). Ta gjerne med de siste 3–6 månedene første gang, så får appen noe å regne snitt og faste trekk ut fra.
+2. Åpne Pengeboka fra sidemenyen, gå til **Import** og velg alle filene på én gang.
+3. Appen viser ett kort per fil og finner kontoen selv:
+   * Har filen kontonummer (f.eks. kolonnene «Fra konto» og «Til konto»), kjennes kontoen igjen. Er nummeret nytt, foreslår appen en ny konto – gi den et navn og sjekk typen.
+   * Har filen ikke kontonummer, velger du kontoen første gang. Neste gang kjenner appen den igjen på transaksjonene den har sett før.
+4. Trykk **Importer**.
 
 Etter det holder det å importere én gang i måneden. Det gjør ingenting om periodene overlapper – det som finnes fra før, hoppes over.
 
@@ -31,7 +32,7 @@ Etter det holder det å importere én gang i måneden. Det gjør ingenting om pe
 
 Ta med alle kontoene, også de dere sjelden ser på. Da kan appen se pengene gå fra én konto og komme inn på en annen.
 
-* **Overføring:** samme beløp ut av én egen konto og inn på en annen innen fire dager. Telles ikke som forbruk.
+* **Overføring:** samme beløp ut av én egen konto og inn på en annen innen fire dager. Telles ikke som forbruk. Har filen kontonummeret pengene gikk til, og det er en av deres egne kontoer, regnes det som overføring selv om den andre kontoen ikke er importert ennå.
 * **Sparekonto:** penger *til* sparekontoen telles som **sparing**, penger *fra* den trekkes fra sparingen.
 * **Kredittkort:** kjøpene på kortet telles i sine kategorier. Betalingen av kortregningen fra brukskontoen er en overføring og telles ikke en gang til.
 * **Lån:** betaling til en lånekonto telles som **Lån**.
@@ -68,6 +69,7 @@ For hver kategori ser appen på hvor stor del av månedsforbruket som pleier å 
 * Excel (.xlsx).
 * Datoer som 14.10.2026, 14.10.26 eller 2026-10-14. Beløp med desimalkomma eller -punktum.
 * Beløp i én kolonne (minus = ut) eller ut og inn i hver sin kolonne.
+* Nettbankens «Transaksjonsliste» med kontonumre, status og summer nederst. Reserverte kjøp hoppes over og kommer med i neste import når de er bokført.
 
 Gjetter appen feil kolonner, åpne **Feil kolonner? Endre her** i forhåndsvisningen. PDF kan ikke leses.
 

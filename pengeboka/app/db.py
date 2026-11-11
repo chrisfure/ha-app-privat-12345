@@ -15,6 +15,7 @@ CREATE TABLE IF NOT EXISTS kontoer (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
     navn        TEXT NOT NULL,
     type        TEXT NOT NULL DEFAULT 'bruk',   -- bruk | felles | kreditt | sparing | lan | annet
+    nummer      TEXT,                           -- kontonummer (11 siffer), lært fra filene
     skjult      INTEGER NOT NULL DEFAULT 0,     -- vises ikke i oversikten, men brukes til å finne overføringer
     rekkefolge  INTEGER NOT NULL DEFAULT 0,
     opprettet   TEXT NOT NULL
@@ -60,6 +61,7 @@ CREATE TABLE IF NOT EXISTS transaksjoner (
     par_id        INTEGER,                      -- den andre halvdelen av en overføring
     ikke_overforing INTEGER NOT NULL DEFAULT 0,
     notat         TEXT,
+    motkonto      TEXT,                         -- kontonummeret pengene gikk til/kom fra, når filen har det
     fingeravtrykk TEXT NOT NULL,
     endret_av     TEXT,
     endret        TEXT,
@@ -92,6 +94,14 @@ class Database:
         self.con.execute("PRAGMA foreign_keys = ON")
         self.con.execute("PRAGMA journal_mode = WAL")
         self.con.executescript(SKJEMA)
+        self._migrer()
+
+    def _migrer(self) -> None:
+        """Legger til kolonner som kom i senere versjoner."""
+        for tabell, kolonne, typ in (("kontoer", "nummer", "TEXT"), ("transaksjoner", "motkonto", "TEXT")):
+            finnes = {r[1] for r in self.con.execute(f"PRAGMA table_info({tabell})")}
+            if kolonne not in finnes:
+                self.con.execute(f"ALTER TABLE {tabell} ADD COLUMN {kolonne} {typ}")
 
     # ---- grunnleggende
     def rader(self, sql: str, args=()) -> list[dict]:

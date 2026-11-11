@@ -91,3 +91,31 @@ def csv_enkel(rader: list[tuple[date, str, int]]) -> bytes:
     for d, t, o in rader:
         linjer.append(f'{d.isoformat()},"{t}",{o / 100:.2f}')
     return "\n".join(linjer).encode("utf-8")
+
+
+TRANSAKSJONSLISTE = ["Utført dato", "Bokført dato", "Rentedato", "Beskrivelse", "Type", "Undertype", "Fra konto", "Avsender",
+                     "Til konto", "Mottakernavn", "Beløp inn", "Beløp ut", "Valuta", "Status", "Melding/KID/Fakt.nr"]
+
+
+def csv_transaksjonsliste(konto: str, rader: list[tuple], reservert: list[tuple] = ()) -> bytes:
+    """Nettbankens «Transaksjonsliste»: 15 kolonner, UTF-8 med BOM, semikolon, punktum som desimaltegn,
+    kontonummer i «Fra konto»/«Til konto» og en bunntekst med summer. rader: (dato, tekst, øre, motkonto|None)."""
+    linjer = [";".join(TRANSAKSJONSLISTE)]
+
+    def linje(d, tekst, ore, mot, status):
+        fra, til = (konto, mot or "") if ore < 0 else (mot or "", konto)
+        inn, ut = (f"{ore / 100:g}", "") if ore > 0 else ("", f"{ore / 100:g}")
+        bokfort = "" if status == "Reservert" else f"{d:%d.%m.%Y}"
+        return ";".join([f"{d:%d.%m.%Y}", bokfort, f"{d:%d.%m.%Y}", tekst, "Varekjøp" if ore < 0 else "Overføring", "",
+                         fra, "Fiktiv Testesen", til, "", inn, ut, "NOK", status, tekst])
+    for d, t, o, m in reservert:
+        linjer.append(linje(d, t, o, m, "Reservert"))
+    for d, t, o, m in sorted(rader, key=lambda x: x[0], reverse=True):
+        linjer.append(linje(d, t, o, m, "Bokført"))
+    tom = ";" * 14
+    sum_inn = sum(o for _, _, o, _ in rader if o > 0) / 100
+    sum_ut = sum(o for _, _, o, _ in rader if o < 0) / 100
+    linjer += [tom, f"Total beløp inn på konto:;;{sum_inn:.2f} NOK".replace(".", ",") + ";" * 12, tom,
+               f"Totalt beløp ut av konto:;;{sum_ut:.2f} NOK".replace(".", ",") + ";" * 12, tom,
+               "Inngående saldo pr. 01.10.2026:;;1 000,00 NOK" + ";" * 12]
+    return ("﻿" + "\r\n".join(linjer)).encode("utf-8")

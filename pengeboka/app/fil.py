@@ -9,6 +9,7 @@ import csv
 import io
 import re
 import zipfile
+from collections import Counter
 from datetime import date, timedelta
 from xml.etree import ElementTree as ET
 
@@ -17,14 +18,20 @@ FELT = ("dato", "tekst", "belop", "ut", "inn")
 
 # Ord i kolonneoverskrifter → felt. Mer presise ord først.
 _HINT = {
-    "dato": ["bokført dato", "bokfort dato", "bokføringsdato", "transaksjonsdato", "kjøpsdato", "dato", "bokført",
-             "date", "utført", "posted"],
+    # Utført dato (kjøpsdagen) før bokført dato: et kjøp den 31. hører til den måneden det ble gjort
+    "dato": ["utført dato", "utfort dato", "transaksjonsdato", "kjøpsdato", "bokført dato", "bokfort dato",
+             "bokføringsdato", "dato", "bokført", "date", "utført", "posted"],
     "tekst": ["forklaring", "beskrivelse", "transaksjonstekst", "tekst", "description", "mottaker", "navn",
               "melding", "spesifikasjon", "text"],
     "belop": ["beløp i nok", "beløp", "belop", "amount", "sum", "nok"],
     "ut": ["ut fra konto", "uttak", "utgående", "ut", "debet", "belastet", "debit"],
     "inn": ["inn på konto", "innskudd", "inngående", "inn", "kredit", "godskrevet", "credit"],
+    # Valgfrie: brukes til å finne kontoen filen gjelder, overføringer og reserverte rader
+    "status": ["status"],
+    "fra": ["fra konto", "fra kontonummer", "avsenderkonto", "fra kontonr"],
+    "til": ["til konto", "til kontonummer", "mottakerkonto", "til kontonr"],
 }
+VALGFRIE = ("status", "fra", "til")
 _IKKE_DATO = ("rentedato", "valuteringsdato", "valørdato", "rente dato", "forfallsdato")
 
 
@@ -198,7 +205,7 @@ def gjett_oppsett(rader: list[list]) -> dict:
     for i, rad in enumerate(rader[:15]):
         h = [_norm(x) for x in rad]
         kart: dict[str, int] = {}
-        for felt in ("dato", "tekst", "ut", "inn", "belop"):
+        for felt in ("dato", "tekst", "ut", "inn", "belop", "status", "fra", "til"):
             for ord in _HINT[felt]:
                 for j, x in enumerate(h):
                     if j in kart.values() or not x:
@@ -212,7 +219,7 @@ def gjett_oppsett(rader: list[list]) -> dict:
                         break
                 if felt in kart:
                     break
-        poeng = len(kart)
+        poeng = sum(1 for f in kart if f not in VALGFRIE)
         if poeng > best[1]:
             best = (i, poeng, kart)
     rad_nr, poeng, kart = best
@@ -252,7 +259,7 @@ def tolk_rader(rader: list[list], oppsett: dict) -> dict:
     if "dato" not in k or "tekst" not in k or not ("belop" in k or ("ut" in k or "inn" in k)):
         raise Filfeil("Velg hvilke kolonner som er dato, tekst og beløp")
     start = int(oppsett.get("overskrift", -1)) + 1
-    ut, hoppet = [], 0
+    ut, hoppet, reservert = [], 0, 0
     for rad in rader[start:]:
         def celle(f):
             j = k.get(f)
@@ -267,11 +274,52 @@ def tolk_rader(rader: list[list], oppsett: dict) -> dict:
             else:
                 b = (i or 0) - abs(u or 0)
         tekst = str(celle("tekst") or "").strip()
-        if not d or b is None or (b == 0 and not tekst):
+        if not d:
+            continue  # tomme linjer, summer og saldo nederst i filen
+        if b is None or (b == 0 and not tekst):
             hoppet += 1
             continue
-        ut.append({"dato": d.isoformat(), "tekst": tekst or "(uten tekst)", "belop_ore": b})
-    return {"transaksjoner": ut, "hoppet": hoppet}
+        if "reserv" in str(celle("status") or "").lower():
+            # Reserverte kjøp kan endre seg før de bokføres – de kommer med i neste import
+            reservert += 1
+            continue
+        fra, til = kontonummer(celle("fra")), kontonummer(celle("til"))
+        ut.append({"dato": d.isoformat(), "tekst": tekst or "(uten tekst)", "belop_ore": b,
+                   "konto_nr": til if b > 0 else fra, "motkonto": fra if b > 0 else til})
+    return {"transaksjoner": ut, "hoppet": hoppet, "reservert": reservert}
+
+
+def kontonummer(v) -> str | None:
+    """«1111 22 33001» / «1111.22.33001» → «11112233001». Bare norske kontonumre (11 siffer)."""
+    if v is None:
+        return None
+    s = str(v).strip()
+    if not re.fullmatch(r"[\d .]{11,14}", s):
+        return None
+    sifre = re.sub(r"\D", "", s)
+    return sifre if len(sifre) == 11 else None
+
+
+_KONTONR = re.compile(r"(?<!\d)(\d{4}[ .]?\d{2}[ .]?\d{5})(?!\d)")
+
+
+def finn_kontonummer(rader: list[list], transaksjoner: list[dict], filnavn: str = "") -> str | None:
+    """Kontoen filen gjelder: «Fra konto» på penger ut og «Til konto» på penger inn, ellers et
+    kontonummer i filnavnet eller i linjene over tabellen."""
+    tall = Counter(t["konto_nr"] for t in transaksjoner if t.get("konto_nr"))
+    if tall:
+        nr, n = tall.most_common(1)[0]
+        if n >= 0.6 * sum(tall.values()):
+            return nr
+    for tekst in [filnavn] + [" ".join(str(x) for x in r) for r in rader[:8]]:
+        m = _KONTONR.search(tekst or "")
+        if m:
+            return kontonummer(m.group(1))
+    return None
+
+
+def vis_nummer(nr: str | None) -> str | None:
+    return f"{nr[:4]} {nr[4:6]} {nr[6:]}" if nr else None
 
 
 def overskrifter(rader: list[list], oppsett: dict) -> list[str]:

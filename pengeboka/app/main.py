@@ -141,7 +141,8 @@ def _oppsett(r) -> dict | None:
         return None
     try:
         d = json.loads(o)
-        k = {f: int(v) for f, v in (d.get("kolonner") or {}).items() if v not in (None, "") and f in ("dato", "tekst", "belop", "ut", "inn")}
+        k = {f: int(v) for f, v in (d.get("kolonner") or {}).items()
+             if v not in (None, "") and f in ("dato", "tekst", "belop", "ut", "inn", "status", "fra", "til")}
         return {"overskrift": int(d.get("overskrift", -1)), "kolonner": k}
     except (ValueError, TypeError, AttributeError):
         raise Feil("Ugyldig kolonneoppsett") from None
@@ -150,14 +151,13 @@ def _oppsett(r) -> dict | None:
 @route("POST", r"/api/import/forhandsvis")
 def forhandsvis(r):
     konto = int(r.q["konto"]) if r.q.get("konto") else None
-    return PB.forhandsvis(r.fil(), konto, _oppsett(r))
+    return PB.forhandsvis(r.fil(), konto, _oppsett(r), r.filnavn)
 
 
 @route("POST", r"/api/import")
 def importer(r):
-    if not r.q.get("konto"):
-        raise Feil("Velg hvilken konto filen gjelder")
-    return PB.importer(r.fil(), r.filnavn, int(r.q["konto"]), _oppsett(r), r.bruker)
+    konto = int(r.q["konto"]) if r.q.get("konto") else None  # uten konto: appen finner den selv
+    return PB.importer(r.fil(), r.filnavn, konto, _oppsett(r), r.bruker)
 
 
 @route("DELETE", r"/api/importer/(\d+)")

@@ -464,111 +464,203 @@
   }
 
   // ============================================================ IMPORT
-  const imp = { fil: null, data: null, konto: hent("importkonto", ""), oppsett: null, forhand: null };
+  // Flere filer på én gang. Appen finner kontoen selv (kontonummer i filen, eller transaksjoner den har sett før).
+  const imp = { filer: [], kontoer: [] };
+  let filTeller = 0;
 
   async function visImport() {
     const v = $("v-import");
     const k = await api("kontoer");
-    const kontoer = k.kontoer;
-    if (imp.konto && !kontoer.some((x) => String(x.id) === String(imp.konto))) imp.konto = "";
-    const kontoValg = el("select", { "aria-label": "Konto" },
-      el("option", { value: "" }, kontoer.length ? "Velg konto …" : "Lag en konto først"),
-      kontoer.map((x) => el("option", { value: x.id, selected: String(x.id) === String(imp.konto) }, `${x.navn}${x.navn.toLowerCase() === x.type_navn.toLowerCase() ? "" : ` – ${x.type_navn}`}${x.skjult ? " (skjult)" : ""}`)));
-    kontoValg.addEventListener("change", () => { imp.konto = kontoValg.value; lagre("importkonto", imp.konto); if (imp.data) forhandsvis(); });
-    const filInput = el("input", { type: "file", accept: ".csv,.txt,.xlsx,text/csv", hidden: true });
+    imp.kontoer = k.kontoer;
+    const filInput = el("input", { type: "file", accept: ".csv,.txt,.xlsx,text/csv", multiple: true, hidden: true });
     const slipp = el("button", { class: "slipp", onclick: () => filInput.click() }, ikon("fil"),
-      el("b", {}, imp.fil ? imp.fil.name : "Velg fil eller slipp den her"),
-      el("span", {}, "CSV eller Excel fra nettbanken"));
-    const ta = async (fil) => {
-      if (!fil) return;
-      imp.fil = fil; imp.data = await fil.arrayBuffer(); imp.oppsett = null;
-      slipp.querySelector("b").textContent = fil.name;
-      forhandsvis();
+      el("b", {}, "Velg filer eller slipp dem her"),
+      el("span", {}, "CSV eller Excel – gjerne alle kontoene på én gang"));
+    const ta = async (filer) => {
+      for (const fil of filer) {
+        const f = { nr: ++filTeller, navn: fil.name, data: await fil.arrayBuffer(), oppsett: null, forhand: null, valg: null, nyNavn: "", nyType: "bruk" };
+        imp.filer.push(f);
+      }
+      tegnFiler();
+      await Promise.all(imp.filer.filter((f) => !f.forhand).map((f) => forhandsvisFil(f)));
     };
-    filInput.addEventListener("change", () => ta(filInput.files[0]));
+    filInput.addEventListener("change", () => { ta([...filInput.files]); filInput.value = ""; });
     slipp.addEventListener("dragover", (e) => { e.preventDefault(); slipp.classList.add("over"); });
     slipp.addEventListener("dragleave", () => slipp.classList.remove("over"));
-    slipp.addEventListener("drop", (e) => { e.preventDefault(); slipp.classList.remove("over"); ta(e.dataTransfer.files[0]); });
-
+    slipp.addEventListener("drop", (e) => { e.preventDefault(); slipp.classList.remove("over"); ta([...e.dataTransfer.files]); });
     v.replaceChildren(
       el("div", { class: "kort" },
-        el("div", { class: "steg" }, el("i", {}, "1"), "Hvilken konto?"),
-        el("div", { style: "display:flex;gap:8px" }, kontoValg, el("button", { class: "ikonknapp flat", "aria-label": "Ny konto", title: "Ny konto", onclick: () => kontoArk(null, (ny) => { imp.konto = String(ny.id); lagre("importkonto", imp.konto); visImport().catch(feil); }) }, ikon("pluss"))),
-        el("div", { class: "steg", style: "margin-top:18px" }, el("i", {}, "2"), "Velg filen"),
+        el("div", { class: "kort-hode" }, el("h2", {}, "Importer fra nettbanken")),
         slipp, filInput,
-        el("p", { class: "forklaring", style: "margin-top:10px" }, "I nettbanken: åpne kontoen, velg periode og last ned transaksjonene som CSV eller Excel. Det gjør ingenting om periodene overlapper – det som er importert fra før, hoppes over.")),
-      el("div", { id: "forhand" }),
+        el("p", { class: "forklaring", style: "margin-top:10px" },
+          "Last ned transaksjonene for hver konto (én fil per konto) og velg alle filene her. Har filen kontonummer, finner appen kontoen selv. Det gjør ingenting om periodene overlapper – det som er importert fra før, hoppes over.")),
+      el("div", { id: "filer", class: "visning", style: "gap:14px" }),
+      el("div", { id: "importlinje", class: "lagrelinje", hidden: true }),
       ...[importHistorikk(k.importer)].filter(Boolean));
-    if (imp.data) forhandsvis();
+    tegnFiler();
   }
 
-  async function forhandsvis() {
-    const boks = $("forhand");
-    if (!boks || !imp.data) return;
+  async function forhandsvisFil(f) {
     const q = new URLSearchParams();
-    if (imp.konto) q.set("konto", imp.konto);
-    if (imp.oppsett) q.set("oppsett", JSON.stringify(imp.oppsett));
-    let d;
-    try { d = await api(`import/forhandsvis?${q}`, { metode: "POST", kropp: imp.data, hoder: { "Content-Type": "application/octet-stream" } }); }
-    catch (e) { boks.replaceChildren(el("div", { class: "feilmelding" }, e.message)); return; }
-    imp.forhand = d;
+    if (/^\d+$/.test(String(f.valg ?? ""))) q.set("konto", f.valg);
+    if (f.oppsett) q.set("oppsett", JSON.stringify(f.oppsett));
+    try {
+      f.forhand = await api(`import/forhandsvis?${q}`, { metode: "POST", kropp: f.data,
+        hoder: { "Content-Type": "application/octet-stream", "X-Filnavn": encodeURIComponent(f.navn) } });
+      f.feil = null;
+    } catch (e) { f.forhand = null; f.feil = e.message; }
+    const d = f.forhand;
+    if (d) {
+      const kol = d.oppsett.kolonner || {};
+      f.oppsett = { ...d.oppsett, toKol: f.oppsett?.toKol ?? ("ut" in kol || "inn" in kol) };
+      if (f.valg == null) {
+        // Første gang: bruk kontoen appen fant, ellers foreslå ny konto når filen har et ukjent kontonummer
+        if (d.konto) f.valg = String(d.konto.id);
+        else if (d.kontonummer && !imp.kontoer.some((k) => k.nummer === d.kontonummer)) {
+          const samme = imp.filer.find((x) => x !== f && x.valg === "ny" && x.forhand?.kontonummer === d.kontonummer);
+          f.valg = samme ? `samme:${samme.nr}` : "ny";
+          f.nyNavn = `Konto ${d.kontonummer_vis}`;
+          f.nyType = d.kontotype || "bruk";
+        } else f.valg = imp.kontoer.length ? "" : "ny";
+        if (f.valg === "ny" && !f.nyNavn) { f.nyNavn = f.navn.replace(/\.[^.]+$/, "").slice(0, 40); f.nyType = d.kontotype || "bruk"; }
+      }
+    }
+    tegnFiler();
+  }
+
+  const KLAR = (f) => f.forhand && !f.forhand.feil && f.valg && (f.valg !== "ny" || f.nyNavn.trim());
+
+  function tegnFiler() {
+    const boks = $("filer");
+    if (!boks) return;
+    boks.replaceChildren(...imp.filer.map(filKort));
+    tegnLinje();
+  }
+
+  function tegnLinje() {
+    const linje = $("importlinje");
+    if (!linje) return;
+    const klare = imp.filer.filter(KLAR);
+    const nye = klare.reduce((s, f) => s + (f.forhand.nye || 0), 0);
+    linje.hidden = !imp.filer.length;
+    const venter = imp.filer.length - klare.length;
+    linje.replaceChildren(
+      el("button", { class: "knapp noytral", onclick: () => { imp.filer = []; tegnFiler(); } }, "Tøm"),
+      el("button", { class: "knapp", disabled: !klare.length || !nye || venter > 0, onclick: importerAlle }, ikon("opp"),
+        venter > 0 ? `${venter} ${venter === 1 ? "fil mangler" : "filer mangler"} konto` : nye ? `Importer ${nye} nye` : "Alt er importert fra før"));
+  }
+
+  function filKort(f) {
+    const d = f.forhand;
+    const fjern = el("button", { class: "ikonknapp flat", "aria-label": "Fjern filen", onclick: () => { imp.filer = imp.filer.filter((x) => x !== f); tegnFiler(); } }, ikon("kryss"));
+    const hode = el("div", { class: "kort-hode" }, el("h2", { style: "font-size:16px;word-break:break-all" }, f.navn), fjern);
+    if (!d && !f.feil) return el("div", { class: "kort" }, hode, el("p", { class: "forklaring" }, "Leser filen …"));
+    if (f.feil) return el("div", { class: "kort" }, hode, el("div", { class: "feilmelding" }, f.feil));
+
+    // Konto
+    const andreNye = imp.filer.filter((x) => x !== f && x.valg === "ny");
+    const sel = el("select", { "aria-label": "Konto" },
+      el("option", { value: "", selected: !f.valg }, "Velg konto …"),
+      imp.kontoer.map((k) => el("option", { value: k.id, selected: String(k.id) === f.valg }, `${k.navn}${k.nummer_vis ? ` (${k.nummer_vis})` : ""}`)),
+      andreNye.map((x) => el("option", { value: `samme:${x.nr}`, selected: f.valg === `samme:${x.nr}` }, `Samme nye konto som ${x.nyNavn || x.navn}`)),
+      el("option", { value: "ny", selected: f.valg === "ny" }, "+ Ny konto"));
+    sel.addEventListener("change", () => { f.valg = sel.value; if (f.valg === "ny" && !f.nyNavn) f.nyNavn = d.kontonummer_vis ? `Konto ${d.kontonummer_vis}` : ""; forhandsvisFil(f); });
+    let hint = null;
+    if (d.konto && String(d.konto.id) === f.valg) hint = el("p", { class: "forklaring ok" }, "✓ ", d.konto.grunn === "kontonummer" ? `Funnet fra kontonummeret ${d.kontonummer_vis}` : "Funnet – transaksjonene er importert til denne kontoen før");
+    else if (f.valg === "ny" && d.kontonummer) hint = el("p", { class: "forklaring" }, `Kontonummer ${d.kontonummer_vis} er nytt. Kontoen lages når du importerer.`);
+    else if (!f.valg) hint = el("p", { class: "forklaring" }, "Fant ikke kontonummer i filen. Velg kontoen – neste gang kjenner appen den igjen.");
+    const ny = f.valg === "ny" ? (() => {
+      const navn = el("input", { value: f.nyNavn, placeholder: "Navn, f.eks. Felleskonto", maxlength: 60 });
+      navn.addEventListener("input", () => { f.nyNavn = navn.value; tegnLinje(); });
+      const typ = el("select", {}, TYPER.map(([v, t]) => el("option", { value: v, selected: f.nyType === v }, t)));
+      typ.addEventListener("change", () => { f.nyType = typ.value; });
+      return el("div", { class: "felt-rad", style: "margin-top:8px" }, el("label", { class: "felt" }, el("span", {}, "Navn"), navn), el("label", { class: "felt" }, el("span", {}, "Type"), typ));
+    })() : null;
+
+    const innhold = [hode, el("div", { class: "felt" }, el("span", {}, "Konto"), sel), hint, ny];
+
+    if (d.feil) {
+      innhold.push(el("div", { class: "feilmelding", style: "margin-top:10px" }, d.feil), kolonneValg(f));
+      return el("div", { class: "kort" }, innhold);
+    }
+    innhold.push(
+      el("div", { class: "nokkeltall", style: "margin-top:12px" },
+        el("div", {}, el("span", {}, "Nye"), el("b", {}, /^\d+$/.test(f.valg || "") || f.valg === "ny" || String(f.valg).startsWith("samme") ? d.nye : d.antall)),
+        el("div", {}, el("span", {}, "Fra før"), el("b", {}, /^\d+$/.test(f.valg || "") ? d.duplikater : 0)),
+        el("div", {}, el("span", {}, "Periode"), el("b", { style: "font-size:15px" }, `${dato(d.fra)} – ${dato(d.til, true)}`))),
+      el("p", { class: "forklaring", style: "margin-top:8px" }, `Inn ${kr(d.sum_inn)} · ut ${kr(d.sum_ut)}`,
+        d.reservert ? ` · ${d.reservert} reserverte kjøp kommer med når de er bokført` : "",
+        d.hoppet ? ` · ${d.hoppet} linjer uten dato eller beløp hoppes over` : ""),
+      el("details", { style: "margin-top:6px" },
+        el("summary", { class: "forklaring", style: "cursor:pointer;font-weight:800" }, "Se eksempel og kolonner"),
+        el("div", { class: "tabell-wrap", style: "margin-top:8px" }, el("table", { class: "eksempel" },
+          el("tr", {}, el("th", {}, "Dato"), el("th", {}, "Mottaker"), el("th", { style: "text-align:right" }, "Beløp")),
+          d.eksempel.map((t) => el("tr", {}, el("td", {}, dato(t.dato)), el("td", {}, t.motpart), el("td", { class: `b${t.belop_ore > 0 ? " inn" : ""}` }, kr(t.belop_ore, true)))))),
+        kolonneValg(f)));
+    return el("div", { class: "kort" }, innhold);
+  }
+
+  function kolonneValg(f) {
+    const d = f.forhand;
     const kol = d.oppsett.kolonner || {};
-    imp.oppsett = { ...d.oppsett, toKol: imp.oppsett?.toKol ?? ("ut" in kol || "inn" in kol) };
     const valg = (felt, navn, valgfri) => {
       const s = el("select", { "aria-label": navn },
         el("option", { value: "" }, valgfri ? "–" : "Velg …"),
         d.overskrifter.map((h, i) => el("option", { value: i, selected: kol[felt] === i }, h)));
       s.addEventListener("change", () => {
-        const k = { ...imp.oppsett.kolonner };
+        const k = { ...f.oppsett.kolonner };
         if (s.value === "") delete k[felt]; else k[felt] = +s.value;
-        imp.oppsett = { ...imp.oppsett, kolonner: k };
-        forhandsvis();
+        f.oppsett = { ...f.oppsett, kolonner: k };
+        forhandsvisFil(f);
       });
       return el("label", { class: "felt" }, el("span", {}, navn), s);
     };
-    const toKol = imp.oppsett.toKol;
-    const bytt = (tilTo) => el("button", { class: "knapp noytral liten", style: "align-self:flex-start", onclick: () => {
+    const toKol = f.oppsett.toKol;
+    const bytt = el("button", { class: "knapp noytral liten", style: "align-self:flex-start", onclick: () => {
       const k = { ...kol }; delete k.belop; delete k.ut; delete k.inn;
-      imp.oppsett = { ...imp.oppsett, kolonner: k, toKol: tilTo }; forhandsvis();
-    } }, tilTo ? "Ut og inn står i hver sin kolonne" : "Beløpet står i én kolonne");
-    const oppsett = el("div", { class: "skjema", style: "margin-top:12px" },
+      f.oppsett = { ...f.oppsett, kolonner: k, toKol: !toKol }; forhandsvisFil(f);
+    } }, toKol ? "Beløpet står i én kolonne" : "Ut og inn står i hver sin kolonne");
+    return el("div", { class: "skjema", style: "margin-top:12px" },
       el("div", { class: "felt-rad" }, valg("dato", "Dato"), valg("tekst", "Tekst")),
-      toKol ? el("div", { class: "felt-rad" }, valg("ut", "Penger ut", true), valg("inn", "Penger inn", true))
-        : valg("belop", "Beløp (minus = ut)"),
-      bytt(!toKol));
-    const innhold = [el("div", { class: "steg" }, el("i", {}, "3"), "Sjekk og importer")];
-    if (d.feil) {
-      innhold.push(el("div", { class: "feilmelding" }, d.feil), oppsett);
-      if (d.radeksempel?.length) innhold.push(el("div", { class: "tabell-wrap", style: "margin-top:12px" }, el("table", { class: "eksempel" },
-        el("tr", {}, d.overskrifter.map((h) => el("th", {}, h))), d.radeksempel.map((r) => el("tr", {}, r.map((c) => el("td", {}, c)))))));
-      boks.replaceChildren(el("div", { class: "kort" }, innhold));
-      return;
-    }
-    innhold.push(
-      el("div", { class: "nokkeltall" },
-        el("div", {}, el("span", {}, "Nye"), el("b", {}, d.nye)),
-        el("div", {}, el("span", {}, "Fra før"), el("b", {}, d.duplikater)),
-        el("div", {}, el("span", {}, "Periode"), el("b", { style: "font-size:15px" }, `${dato(d.fra)} – ${dato(d.til, true)}`))),
-      el("p", { class: "forklaring", style: "margin-top:8px" }, `Inn ${kr(d.sum_inn)} · ut ${kr(d.sum_ut)}${d.hoppet ? ` · ${d.hoppet} rader uten dato eller beløp hoppes over` : ""}`),
-      el("div", { class: "tabell-wrap", style: "margin-top:8px" }, el("table", { class: "eksempel" },
-        el("tr", {}, el("th", {}, "Dato"), el("th", {}, "Mottaker"), el("th", { style: "text-align:right" }, "Beløp")),
-        d.eksempel.map((t) => el("tr", {}, el("td", {}, dato(t.dato)), el("td", {}, t.motpart), el("td", { class: `b${t.belop_ore > 0 ? " inn" : ""}` }, kr(t.belop_ore, true)))))),
-      el("details", { style: "margin-top:10px" }, el("summary", { class: "forklaring", style: "cursor:pointer;font-weight:800" }, "Feil kolonner? Endre her"), oppsett),
-      el("button", { class: "knapp bred", style: "margin-top:14px", disabled: !imp.konto || !d.nye, onclick: importer },
-        ikon("opp"), !imp.konto ? "Velg konto først" : d.nye ? `Importer ${d.nye} nye` : "Alt er importert fra før"));
-    boks.replaceChildren(el("div", { class: "kort" }, innhold));
+      toKol ? el("div", { class: "felt-rad" }, valg("ut", "Penger ut", true), valg("inn", "Penger inn", true)) : valg("belop", "Beløp (minus = ut)"),
+      bytt,
+      d.feil && d.radeksempel?.length ? el("div", { class: "tabell-wrap" }, el("table", { class: "eksempel" },
+        el("tr", {}, d.overskrifter.map((h) => el("th", {}, h))), d.radeksempel.map((r) => el("tr", {}, r.map((c) => el("td", {}, c)))))) : null);
   }
 
-  async function importer() {
-    const q = new URLSearchParams({ konto: imp.konto });
-    if (imp.oppsett) q.set("oppsett", JSON.stringify(imp.oppsett));
+  async function importerAlle() {
+    const knapp = $("importlinje").querySelector(".knapp:last-child");
+    knapp.disabled = true;
+    const nyeKontoer = {};  // fil-nr → konto-id for kontoer laget nå
+    let nye = 0, trenger = 0;
+    const ferdige = [];
     try {
-      const r = await api(`import?${q}`, { metode: "POST", kropp: imp.data, hoder: { "Content-Type": "application/octet-stream", "X-Filnavn": encodeURIComponent(imp.fil?.name || "") } });
-      imp.fil = imp.data = imp.forhand = null;
-      toast(`${r.nye} transaksjoner importert${r.ukategorisert ? ` – ${r.ukategorisert} trenger kategori` : ""}`, 5000);
+      for (const f of imp.filer.filter(KLAR)) {
+        let kid = f.valg;
+        if (kid === "ny") {
+          const r = await api("kontoer", { metode: "POST", data: { navn: f.nyNavn.trim(), type: f.nyType, nummer: f.forhand.kontonummer || undefined } });
+          kid = String(r.konto.id);
+          nyeKontoer[f.nr] = kid;
+        } else if (kid.startsWith("samme:")) {
+          kid = nyeKontoer[kid.slice(6)];
+          if (!kid) throw new Error(`Fant ikke den nye kontoen for ${f.navn}`);
+        }
+        const q = new URLSearchParams({ konto: kid });
+        if (f.oppsett) q.set("oppsett", JSON.stringify(f.oppsett));
+        const r = await api(`import?${q}`, { metode: "POST", kropp: f.data, hoder: { "Content-Type": "application/octet-stream", "X-Filnavn": encodeURIComponent(f.navn) } });
+        nye += r.nye; trenger += r.ukategorisert;
+        ferdige.push(f);
+      }
+    } catch (e) {
+      feil(e);
+    }
+    imp.filer = imp.filer.filter((f) => !ferdige.includes(f));
+    if (ferdige.length) {
+      toast(`${nye} transaksjoner importert fra ${ferdige.length} ${ferdige.length === 1 ? "fil" : "filer"}${trenger ? ` – ${trenger} trenger kategori` : ""}`, 5000);
       S.oversikt = null; S.maned = null;
-      byttFane("oversikt");
-    } catch (e) { feil(e); }
+      if (!imp.filer.length) { byttFane("oversikt"); return; }
+    }
+    visImport().catch(feil);
   }
 
   function importHistorikk(liste) {

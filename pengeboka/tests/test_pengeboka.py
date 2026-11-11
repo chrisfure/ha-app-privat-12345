@@ -106,8 +106,8 @@ def test_excel():
                   [46296, "KIWI 505 SENTRUM", 46296, 249.5, ""], [46297, "Lønn", 46297, "", 42000]])
     rader = fil.les(data)
     t = fil.tolk_rader(rader, fil.gjett_oppsett(rader))["transaksjoner"]
-    assert t == [{"dato": "2026-10-01", "tekst": "KIWI 505 SENTRUM", "belop_ore": -24950},
-                 {"dato": "2026-10-02", "tekst": "Lønn", "belop_ore": 4_200_000}]
+    assert [(x["dato"], x["tekst"], x["belop_ore"]) for x in t] == [("2026-10-01", "KIWI 505 SENTRUM", -24950),
+                                                                    ("2026-10-02", "Lønn", 4_200_000)]
 
 
 def test_pdf_avvises():
@@ -268,6 +268,84 @@ def test_import_paminnelse(pb):
     k = konto(pb, "Felles")
     pb.importer(csv([("2026-09-01", "KIWI", -100)]), "a.csv", k, None, "A")
     assert any(t["type"] == "import" for t in pb.trenger())
+
+
+# ---------------------------------------------------------------- finne kontoen selv
+BRUK, SPAR, ANNEN = "1111 22 33001", "1111 22 33004", "9001 00 00001"
+
+
+def _liste(konto, rader, reservert=()):
+    return eksempel.csv_transaksjonsliste(konto, [(date.fromisoformat(d), t, o, m) for d, t, o, m in rader],
+                                          [(date.fromisoformat(d), t, o, m) for d, t, o, m in reservert])
+
+
+def test_transaksjonsliste_format():
+    data = _liste(BRUK, [("2026-10-05", "KIWI 505 SENTRUM", -8850, None), ("2026-10-25", "Lønn", 4_200_000, ANNEN)],
+                  reservert=[("2026-10-30", "REMA 1000 TORGET", -5300, None)])
+    rader = fil.les(data)
+    o = fil.gjett_oppsett(rader)
+    assert o["overskrift"] == 0
+    assert o["kolonner"] == {"dato": 0, "tekst": 3, "ut": 11, "inn": 10, "status": 13, "fra": 6, "til": 8}
+    t = fil.tolk_rader(rader, o)
+    assert [(x["dato"], x["belop_ore"], x["konto_nr"], x["motkonto"]) for x in t["transaksjoner"]] == [
+        ("2026-10-25", 4_200_000, "11112233001", "90010000001"), ("2026-10-05", -8850, "11112233001", None)]
+    assert t["reservert"] == 1  # den reserverte raden og bunnteksten er ikke med
+    assert fil.finn_kontonummer(rader, t["transaksjoner"]) == "11112233001"
+
+
+def test_kontonummer_i_filnavn_eller_toppen():
+    rader = fil.les("Kontoutskrift for 1111.22.33001\nDato;Tekst;Beløp\n01.10.2026;KIWI;-10,00\n".encode())
+    assert fil.finn_kontonummer(rader, []) == "11112233001"
+    assert fil.finn_kontonummer([], [], "Transaksjoner 1111 22 33004 okt.csv") == "11112233004"
+    assert fil.finn_kontonummer([], [], "Transaksjonsliste-07-11-25-07-11-26.csv") is None
+
+
+def test_finner_konto_fra_kontonummer_og_laerer_det(pb):
+    data = _liste(BRUK, [("2026-10-05", "KIWI 505", -8850, None)])
+    f = pb.forhandsvis(data, None)
+    assert (f["konto"], f["kontonummer"], f["kontonummer_vis"]) == (None, "11112233001", "1111 22 33001")
+    k = pb.lagre_konto({"navn": "Brukskonto", "type": "bruk", "nummer": f["kontonummer"]})
+    assert k["nummer_vis"] == "1111 22 33001"
+    f = pb.forhandsvis(data, None)
+    assert f["konto"] == {"id": k["id"], "grunn": "kontonummer"} and f["nye"] == 1
+    r = pb.importer(data, "x.csv", None, None, "A")  # ingen konto valgt – appen finner den
+    assert (r["konto_id"], r["nye"]) == (k["id"], 1)
+    with pytest.raises(Feil):
+        pb.lagre_konto({"navn": "Dobbel", "nummer": BRUK})
+
+
+def test_finner_konto_fra_tidligere_import_uten_nummer(pb):
+    k = konto(pb, "Felles")
+    pb.importer(csv([("2026-10-01", "KIWI 505", -100), ("2026-10-02", "REMA 1000", -200), ("2026-10-03", "COOP", -300)]),
+                "a.csv", k, None, "A")
+    f = pb.forhandsvis(csv([("2026-10-02", "REMA 1000", -200), ("2026-10-03", "COOP", -300), ("2026-10-04", "KIWI", -50),
+                            ("2026-10-01", "KIWI 505", -100)]), None)
+    assert f["konto"] == {"id": k, "grunn": "tidligere"} and f["nye"] == 1
+    assert pb.forhandsvis(csv([("2026-11-01", "Helt ny", -100)]), None)["konto"] is None
+
+
+def test_feil_konto_stoppes(pb):
+    pb.lagre_konto({"navn": "Spar", "type": "sparing", "nummer": SPAR})
+    annen = konto(pb, "Bruk", "bruk")
+    pb.lagre_konto({"navn": "Bruk", "type": "bruk", "nummer": BRUK}, annen)
+    with pytest.raises(Feil):
+        pb.importer(_liste(SPAR, [("2026-10-05", "Renter", 100, None)]), "x.csv", annen, None, "A")
+
+
+def test_overforing_til_egen_konto_som_ikke_er_importert_enna(pb):
+    b = pb.lagre_konto({"navn": "Bruk", "type": "bruk", "nummer": BRUK})["id"]
+    pb.lagre_konto({"navn": "Spar", "type": "sparing", "nummer": SPAR, "skjult": True})
+    pb.importer(_liste(BRUK, [("2026-10-26", "Til sparing", -500_000, SPAR), ("2026-10-27", "Vipps", -500_000, ANNEN)]),
+                "b.csv", None, None, "A")
+    kats = {t["tekst"]: (t["kategori"], t["par_id"]) for t in tx(pb)}
+    assert kats["Til sparing"] == ("Sparing", None)       # egen konto, selv om sparekontoen ikke er importert
+    assert kats["Vipps"][0] != "Sparing"                  # et annet kontonummer er ikke en overføring
+    # Når sparekontoen importeres, pares de
+    pb.importer(_liste(SPAR, [("2026-10-26", "Fra brukskonto", 500_000, BRUK)]), "s.csv", None, None, "A")
+    t = next(t for t in tx(pb) if t["tekst"] == "Til sparing")
+    assert t["kategori"] == "Sparing" and t["par_id"]
+    assert pb.maned("2026-10")["sparing"] == 500_000
+    assert b
 
 
 # ---------------------------------------------------------------- server

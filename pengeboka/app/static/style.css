@@ -290,3 +290,4 @@ table.eksempel td.b { text-align: right; font-weight: 800; font-variant-numeric:
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
 }
+.forklaring.ok { color: var(--aksent-blekk); font-weight: 800; margin-top: 8px; }
