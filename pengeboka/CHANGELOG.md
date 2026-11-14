@@ -1,5 +1,12 @@
 # Endringslogg
 
+## 0.7.0
+
+- Oversikten kan vise **Måned, Kvartal, År eller siste 12 måneder**. Pilene blar en hel periode om gangen.
+- Trykk på periodenavnet for å hoppe rett til en måned, et kvartal eller et år.
+- Lengre perioder viser hva som ble igjen, snitt per måned, en graf med inn og ut måned for måned, og hver kategori med sum, snitt, budsjett for perioden og en liten trendgraf. Inneværende måned holdes utenfor hovedtallet til den er ferdig.
+- Trykk på en kategori i en lengre periode for å se alle transaksjonene i perioden. Transaksjoner kan også filtreres på et helt år.
+
 ## 0.6.1
 
 - Dagligvarekjøp uten kvittering sendes til Matplan, som viser dem i kvitteringslista og teller dem med i snittet (krever Matplan 0.25.0).

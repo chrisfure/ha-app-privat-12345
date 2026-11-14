@@ -517,8 +517,10 @@ class Pengeboka:
         elif not q.get("skjulte"):
             hvor.append("k.skjult = 0")
         if q.get("maned"):
-            hvor.append("substr(t.dato, 1, 7) = ?")
-            args.append(q["maned"])
+            # «2026-03» eller en periode «2026-01:2026-12»
+            fra, _, til = str(q["maned"]).partition(":")
+            hvor.append("substr(t.dato, 1, 7) BETWEEN ? AND ?")
+            args += [min(fra, til or fra), max(fra, til or fra)]
         if q.get("kategori") == "ingen":
             hvor.append("t.kategori_id IS NULL")
         elif q.get("kategori"):
@@ -751,6 +753,75 @@ class Pengeboka:
             "kategorier": rader,
         }
 
+    def periode(self, fra: str, til: str) -> dict:
+        """Samlet oversikt over flere måneder: summer, snitt per måned og utviklingen måned for måned."""
+        if not (re.fullmatch(r"\d{4}-\d{2}", fra or "") and re.fullmatch(r"\d{4}-\d{2}", til or "")):
+            raise Feil("Ugyldig periode")
+        if fra > til:
+            fra, til = til, fra
+        na = _ym(self.i_dag())
+        alle = [m for m in self.maneder() if fra <= m <= til]
+        rader = self.db.rader("""
+            SELECT substr(t.dato, 1, 7) AS ym, t.kategori_id, c.gruppe,
+                   COALESCE(SUM(CASE WHEN t.belop_ore > 0 THEN t.belop_ore END), 0) AS pluss,
+                   COALESCE(SUM(CASE WHEN t.belop_ore < 0 THEN -t.belop_ore END), 0) AS minus,
+                   SUM(t.belop_ore) AS netto
+            FROM transaksjoner t JOIN kontoer k ON k.id = t.konto_id LEFT JOIN kategorier c ON c.id = t.kategori_id
+            WHERE k.skjult = 0 AND substr(t.dato, 1, 7) BETWEEN ? AND ?
+              AND (c.gruppe IS NULL OR c.gruppe != 'overforing')
+            GROUP BY ym, t.kategori_id""", (fra, til))
+        serie = {m: {"maned": m, "inn": 0, "ut": 0, "sparing": 0, "data": False} for m in alle}
+        per_kat: dict[int, dict[str, int]] = defaultdict(lambda: defaultdict(int))
+        ukat_ut = 0
+        for r in rader:
+            s = serie.setdefault(r["ym"], {"maned": r["ym"], "inn": 0, "ut": 0, "sparing": 0, "data": False})
+            s["data"] = True
+            if r["kategori_id"] is None:  # som i maned(): inn teller som inn, ut som ut
+                s["inn"] += r["pluss"]
+                s["ut"] += r["minus"]
+                ukat_ut += r["minus"]
+            elif r["gruppe"] == "inntekt":
+                s["inn"] += r["netto"]
+            elif r["gruppe"] == "sparing":
+                s["sparing"] += -r["netto"]
+            elif r["gruppe"] == "utgift":
+                s["ut"] += -r["netto"]
+                per_kat[r["kategori_id"]][r["ym"]] += -r["netto"]
+        maneder = sorted(serie.values(), key=lambda s: s["maned"])
+        for s in maneder:
+            s["igjen"] = s["inn"] - s["ut"] - s["sparing"]
+            s["pagar"] = s["maned"] == na
+        med_data = [s for s in maneder if s["data"]]
+        # Snittet regnes av hele måneder når det finnes, så en halv inneværende måned ikke drar det ned
+        hele = [s for s in med_data if not s["pagar"]] or med_data
+        n = len(hele) or 1
+        inn = sum(s["inn"] for s in maneder)
+        ut = sum(s["ut"] for s in maneder)
+        sparing = sum(s["sparing"] for s in maneder)
+        kats = []
+        for k in self.kategorier():
+            if k["gruppe"] != "utgift":
+                continue
+            pm = per_kat.get(k["id"], {})
+            brukt = sum(pm.values())
+            if not brukt and not k["budsjett_ore"]:
+                continue
+            topp = max(pm.items(), key=lambda x: x[1]) if pm else None
+            kats.append({"id": k["id"], "navn": k["navn"], "ikon": k["ikon"], "brukt": brukt,
+                         "snitt": round(sum(pm.get(s["maned"], 0) for s in hele) / n),
+                         "budsjett": k["budsjett_ore"] * len(med_data) if k["budsjett_ore"] else None,
+                         "topp": {"maned": topp[0], "brukt": topp[1]} if topp and len(med_data) > 1 else None,
+                         "serie": [pm.get(s["maned"], 0) for s in maneder]})
+        kats.sort(key=lambda r: -r["brukt"])
+        return {
+            "fra": fra, "til": til, "maneder": maneder, "antall": len(med_data), "hele": len(hele),
+            "med_pagar": any(s["pagar"] and s["data"] for s in maneder),
+            "inn": inn, "ut": ut, "sparing": sparing, "igjen": inn - ut - sparing,
+            "snitt": {"inn": round(sum(s["inn"] for s in hele) / n), "ut": round(sum(s["ut"] for s in hele) / n),
+                      "sparing": round(sum(s["sparing"] for s in hele) / n), "igjen": round(sum(s["igjen"] for s in hele) / n)},
+            "ukategorisert": ukat_ut, "kategorier": kats,
+        }
+
     def budsjett(self) -> dict:
         ym = _ym(self.i_dag())
         snitt = self.snitt(ym)
@@ -946,8 +1017,9 @@ class Pengeboka:
         self.db.merk(nokkel, "sett")
 
     # ------------------------------------------------------------ samlet
-    def oversikt(self, ym: str | None = None) -> dict:
-        return {"maned": self.maned(ym), "trenger": self.trenger(), "maneder": self.maneder(),
+    def oversikt(self, ym: str | None = None, fra: str | None = None, til: str | None = None) -> dict:
+        del_ = {"periode": self.periode(fra, til)} if fra and til else {"maned": self.maned(ym)}
+        return {**del_, "trenger": self.trenger(), "maneder": self.maneder(),
                 "kontoer": self.kontoer(), "har_data": bool(self.db.verdi("SELECT COUNT(*) FROM transaksjoner"))}
 
     def eksport_csv(self) -> str:

@@ -68,8 +68,53 @@ a { color: inherit; }
 
 /* ---- månedsvelger ---- */
 .mnd { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-.mnd b { font-size: 18px; font-weight: 800; text-transform: capitalize; }
+.mnd b { font-size: 18px; font-weight: 800; }
 .mnd .ikonknapp:disabled { opacity: .3; }
+.periodelinje { display: flex; flex-direction: column; gap: 10px; }
+.mnd-navn { display: inline-flex; align-items: center; gap: 6px; padding: 8px 12px; border-radius: 14px; min-width: 0; }
+.mnd-navn b { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mnd-pil { color: var(--dempet); font-size: 13px; }
+.segment { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 4px; padding: 4px; background: var(--flate-2); border-radius: 14px; }
+.segment button { min-height: 36px; border-radius: 10px; font-weight: 800; font-size: 14px; color: var(--dempet); padding: 0 10px; }
+.segment button.valgt { background: var(--flate); color: var(--blekk); box-shadow: var(--skygge); }
+.segment.bred { margin-top: 6px; }
+.periodegrid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+.periodegrid.kv { grid-template-columns: repeat(2, 1fr); }
+.periodegrid.aar { grid-template-columns: repeat(3, 1fr); margin-top: 14px; }
+.periodegrid button { min-height: 44px; border-radius: 12px; background: var(--flate-2); font-weight: 800; font-size: 15px; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 6px; }
+.periodegrid:not(.kv) button { text-transform: capitalize; }
+.periodegrid button small { font-size: 12px; font-weight: 700; color: var(--dempet); }
+.periodegrid button.valgt { background: var(--aksent); color: #fff; }
+.periodegrid button.valgt small { color: rgba(255,255,255,.85); }
+.periodegrid button:disabled { opacity: .35; cursor: default; }
+
+/* ---- måned for måned ---- */
+.forklaring-merker { display: flex; gap: 12px; font-size: 13px; font-weight: 800; color: var(--dempet); }
+.forklaring-merker span::before { content: ""; display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 5px; vertical-align: -1px; }
+.merke-inn::before { background: var(--inn); }
+.merke-ut::before { background: var(--gul); }
+.mgraf { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 6px; align-items: end; margin-top: 4px; }
+.mg-kol { display: flex; flex-direction: column; align-items: stretch; gap: 6px; padding: 4px 2px; border-radius: 10px; min-width: 0; }
+.mg-kol:disabled { opacity: .4; cursor: default; }
+.mg-stolper { height: 130px; display: flex; align-items: flex-end; justify-content: center; gap: 3px; }
+.mg-stolper i { display: block; width: 40%; max-width: 18px; min-height: 2px; border-radius: 4px 4px 1px 1px; }
+.mg-stolper i.inn { background: var(--inn); }
+.mg-stolper i.ut { background: var(--gul); }
+.mg-kol.minus .mg-stolper i.ut { background: var(--fare); }
+.mg-kol.pagar .mg-stolper i { opacity: .55; }
+.mg-navn { font-size: 12px; font-weight: 800; color: var(--dempet); text-align: center; text-transform: capitalize; line-height: 1.15; }
+.mg-navn small { display: block; font-size: 10px; font-weight: 700; }
+.mgraf.tett { gap: 2px; }
+.mgraf.tett .mg-stolper { gap: 2px; }
+.mgraf.tett .mg-stolper i { width: 44%; }
+.mgraf.tett .mg-navn { font-size: 11px; }
+.mg-fakta { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 12px; }
+.mg-fakta div { background: var(--flate-2); border-radius: 14px; padding: 8px 12px; min-width: 0; }
+.mg-fakta .mg-etikett { display: block; font-size: 12px; font-weight: 800; color: var(--dempet); text-transform: uppercase; letter-spacing: .04em; }
+.mg-fakta b { font-size: 15px; font-weight: 800; }
+.helt-liten { font-size: 13px; font-weight: 600; opacity: .85; margin-top: 4px; }
+.gnist { display: inline-flex; align-items: flex-end; gap: 2px; height: 16px; flex: none; }
+.gnist i { display: block; width: 4px; border-radius: 1px; background: var(--dempet); opacity: .5; }
 
 /* ---- kort ---- */
 .kort { background: var(--flate); border-radius: 28px; padding: 16px; box-shadow: var(--skygge); }
@@ -116,7 +161,7 @@ a { color: inherit; }
 .stolpe.snitt i.prognose { opacity: .15; }
 .stolpe.kurs i { background: var(--gul); }
 .stolpe.over i { background: var(--fare); }
-.katrad .k-under { grid-column: 2 / 4; font-size: 13px; color: var(--dempet); font-weight: 700; }
+.katrad .k-under { grid-column: 2 / 4; font-size: 13px; color: var(--dempet); font-weight: 700; display: flex; align-items: flex-end; justify-content: space-between; gap: 10px; }
 .katrad .k-under .over { color: var(--fare); }
 
 /* ---- lister ---- */
@@ -327,6 +372,9 @@ table.eksempel td.b { text-align: right; font-weight: 800; font-variant-numeric:
   /* Oversikt: to kolonner */
   .mnd { justify-content: flex-start; gap: 14px; }
   .mnd b { font-size: 22px; min-width: 190px; text-align: center; }
+  .periodelinje { flex-direction: row; align-items: center; justify-content: space-between; gap: 18px; }
+  .periodelinje .segment { width: 360px; flex: none; }
+  .mg-stolper { height: 160px; }
   .oversikt-rute { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr); gap: 18px; align-items: start; }
   .helt-tall { font-size: 52px; }
 
@@ -368,6 +416,8 @@ table.eksempel td.b { text-align: right; font-weight: 800; font-variant-numeric:
 
 /* Pekeplate og mus: tydelig hvor man kan klikke */
 @media (hover: hover) and (pointer: fine) {
+  .mnd-navn:hover, .mg-kol:hover:not(:disabled) { background: var(--flate-2); }
+  .periodegrid button:hover:not(:disabled):not(.valgt), .segment button:hover:not(.valgt) { background: var(--linje); }
   .txrad, .katrad { border-radius: 12px; transition: background .15s; }
   button.txrad:hover, button.katrad:hover { background: var(--flate-2); }
   .katvalg button:hover:not(.valgt) { background: var(--linje); }

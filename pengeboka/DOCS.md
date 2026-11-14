@@ -22,7 +22,9 @@ Etter det holder det å importere én gang i måneden. Det gjør ingenting om pe
 ## Faner
 
 * **Oversikt** – denne måneden: brukt så langt (eller hva som ble igjen for en ferdig måned), inn, ut og spart, prognose for resten av måneden, lista over det som trenger dere, og hver kategori med budsjett eller snitt. Trykk på en kategori for å se transaksjonene.
-* **Transaksjoner** – søk og filtrer på måned, kategori og konto. Trykk på en transaksjon for å endre kategori, skrive notat eller si at den ikke er en overføring.
+  * Bytt mellom **Måned, Kvartal, År og 12 mnd** øverst. Trykk på periodenavnet for å hoppe rett til en måned, et kvartal eller et år uten å bla.
+  * For lengre perioder vises hva som ble igjen, snitt per måned, en graf med inn og ut måned for måned (trykk på en måned for å åpne den) og hver kategori med sum, snitt og utvikling. Inneværende måned telles ikke med i hovedtallet før den er ferdig, siden lønna ofte kommer sent.
+* **Transaksjoner** – søk og filtrer på måned (eller et helt år), kategori og konto. Trykk på en transaksjon for å endre kategori, skrive notat eller si at den ikke er en overføring.
 * **Budsjett** – et beløp per kategori i måneden. **Foreslå** fyller ut snittet av de tre siste hele månedene, rundet opp. Trykk på et kategorinavn for å endre navn og ikon eller skjule den.
 * **Faste** – abonnementer og regninger appen har funnet selv, med neste trekk og hva det koster i måneden og året.
 * **Import** – nye filer og tidligere importer. En import kan angres.
@@ -36,7 +38,7 @@ På en bred skjerm får appen sidemeny til venstre, oversikten i to kolonner med
 |---|---|
 | 1–5 | Bytt mellom Oversikt, Transaksjoner, Budsjett, Faste og Import |
 | / | Søk i transaksjonene |
-| ← → | Forrige og neste måned på Oversikt |
+| ← → | Forrige og neste periode på Oversikt |
 | Esc | Lukk panelet |
 
 ## Kontoer, skjulte kontoer og overføringer

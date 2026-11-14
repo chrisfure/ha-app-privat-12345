@@ -599,3 +599,26 @@ def test_synk_sender_kjop_uten_kvittering(pb):
     uten = falsk.mottatt["uten_kvittering"]
     assert [(u["butikk"], u["dato"], u["belop"], u["konto"]) for u in uten] == [("Rema 1000", "2026-10-09", 540.0, "Felles")]
     assert uten[0]["ref"].isdigit()
+
+
+def test_periode_over_flere_maneder(pb, familie):
+    k = konto(pb, "Felles")
+    pb.importer(csv([("2026-09-25", "Lønn", 3_000_000), ("2026-09-05", "KIWI 505", -60_000),
+                     ("2026-08-05", "KIWI 505", -40_000)]), "p.csv", k, None, "A")
+    p = pb.periode("2026-08", "2026-10")
+    okt = pb.maned("2026-10")
+    assert [s["maned"] for s in p["maneder"]] == ["2026-08", "2026-09", "2026-10"]
+    assert p["maneder"][2]["inn"] == okt["inn"] and p["maneder"][2]["ut"] == okt["ut"]
+    assert p["inn"] == okt["inn"] + 3_000_000
+    assert p["ut"] == okt["ut"] + 100_000
+    assert p["igjen"] == p["inn"] - p["ut"] - p["sparing"]
+    dagligvarer = next(c for c in p["kategorier"] if c["navn"] == "Dagligvarer")
+    assert dagligvarer["brukt"] == 180_000 and dagligvarer["serie"] == [40_000, 60_000, 80_000]
+    assert dagligvarer["snitt"] == 60_000 and dagligvarer["topp"]["maned"] == "2026-10"
+    assert pb.periode("2026-10", "2026-08")["fra"] == "2026-08"  # snus hvis feil vei
+    # Transaksjonslista kan filtreres på samme periode
+    alle = pb.transaksjoner({"maned": "2026-08:2026-10", "kategori": str(dagligvarer["id"])})["transaksjoner"]
+    assert len(alle) == 3
+    assert len(pb.transaksjoner({"maned": "2026-09", "kategori": str(dagligvarer["id"])})["transaksjoner"]) == 1
+    o = pb.oversikt(fra="2026-08", til="2026-10")
+    assert "periode" in o and "maned" not in o

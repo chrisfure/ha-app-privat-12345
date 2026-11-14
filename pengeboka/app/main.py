@@ -45,7 +45,7 @@ PB: Pengeboka | None = None
 # ---------------------------------------------------------------- API
 @route("GET", r"/api/oversikt")
 def oversikt(r):
-    return {**PB.oversikt(r.q.get("maned")), "bruker": r.bruker}
+    return {**PB.oversikt(r.q.get("maned"), r.q.get("fra"), r.q.get("til")), "bruker": r.bruker}
 
 
 @route("GET", r"/api/transaksjoner")

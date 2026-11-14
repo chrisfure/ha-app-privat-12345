@@ -88,6 +88,7 @@
   const S = {
     fane: "oversikt",
     maned: null,
+    periode: "maned",
     oversikt: null,
     kategorier: [],
     filter: hent("filter", { sok: "", maned: "", konto: "", kategori: "", skjulte: false }),
@@ -116,12 +117,112 @@
     if (n) knapp.append(el("span", { class: "prikk" }, String(n)));
   }
 
+  // ============================================================ PERIODER
+  // Oversikten kan vise én måned, et kvartal, et år eller de siste 12 månedene.
+  // S.maned er «ankeret»: måneden perioden regnes ut fra.
+  const pad2 = (n) => String(n).padStart(2, "0");
+  const ymPluss = (ym, n) => { const [y, m] = ym.split("-").map(Number); const t = y * 12 + m - 1 + n; return `${Math.floor(t / 12)}-${pad2(t % 12 + 1)}`; };
+  const naYm = () => { const d = new Date(); return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}`; };
+  const PERIODER = [["maned", "Måned"], ["kvartal", "Kvartal"], ["aar", "År"], ["tolv", "12 mnd"]];
+  const STEG = { maned: 1, kvartal: 3, aar: 12, tolv: 1 };
+  function spenn(type, anker) {
+    const [y, m] = anker.split("-").map(Number);
+    if (type === "kvartal") { const q = Math.floor((m - 1) / 3) * 3; return [`${y}-${pad2(q + 1)}`, `${y}-${pad2(q + 3)}`]; }
+    if (type === "aar") return [`${y}-01`, `${y}-12`];
+    if (type === "tolv") return [ymPluss(anker, -11), anker];
+    return [anker, anker];
+  }
+  const stor = (t) => t.charAt(0).toUpperCase() + t.slice(1);
+  function periodeNavn(fra, til, type) {
+    if (fra === til) return stor(mndNavn(fra));
+    const [y1, m1] = fra.split("-").map(Number), [y2, m2] = til.split("-").map(Number);
+    if (type === "tolv" && til === naYm()) return "Siste 12 måneder";
+    if (y1 === y2 && m1 === 1 && m2 === 12) return `Hele ${y1}`;
+    if (y1 === y2 && (m1 - 1) % 3 === 0 && m2 === m1 + 2) return `${(m1 - 1) / 3 + 1}. kvartal ${y1}`;
+    const k = (m) => MND[m - 1].slice(0, 3);
+    return stor(y1 === y2 ? `${k(m1)}–${k(m2)} ${y1}` : `${k(m1)} ${y1} – ${k(m2)} ${y2}`);
+  }
+  const klem = (ym, maneder) => ym < maneder[0] ? maneder[0] : ym > maneder[maneder.length - 1] ? maneder[maneder.length - 1] : ym;
+  // Det finnes mer å bla til så lenge perioden ikke allerede dekker første/siste måned
+  function kanFlytte(retning, maneder) {
+    const [fra, til] = spenn(S.periode, S.maned);
+    return retning < 0 ? fra > maneder[0] : til < maneder[maneder.length - 1];
+  }
+  function flytt(retning) {
+    const ms = S.oversikt.maneder;
+    // Kvartal og år hopper til samme del av forrige/neste periode, men aldri utenfor månedene med data
+    S.maned = klem(ymPluss(S.maned, retning * STEG[S.periode]), ms);
+    visOversikt().catch(feil);
+  }
+  function settPeriode(type, anker) {
+    S.periode = type;
+    if (anker) S.maned = anker;
+    visOversikt().catch(feil);
+  }
+
+  // Øverst i oversikten: piler, periodenavn (trykk for å hoppe) og valg av periodelengde
+  function periodeLinje(o) {
+    const [fra, til] = spenn(S.periode, S.maned);
+    const segment = el("div", { class: "segment", role: "tablist", "aria-label": "Periode" }, PERIODER.map(([t, navn]) =>
+      el("button", { class: S.periode === t ? "valgt" : "", role: "tab", "aria-selected": S.periode === t ? "true" : "false", onclick: () => settPeriode(t) }, navn)));
+    return el("div", { class: "periodelinje" },
+      el("div", { class: "mnd" },
+        el("button", { class: "ikonknapp", "aria-label": "Forrige periode", "data-steg": "-1", disabled: !kanFlytte(-1, o.maneder), onclick: () => flytt(-1) }, ikon("venstre")),
+        el("button", { class: "mnd-navn", title: "Velg periode", onclick: () => periodeArk(o) }, el("b", {}, periodeNavn(fra, til, S.periode)), el("span", { class: "mnd-pil", "aria-hidden": "true" }, "▾")),
+        el("button", { class: "ikonknapp", "aria-label": "Neste periode", "data-steg": "1", disabled: !kanFlytte(1, o.maneder), onclick: () => flytt(1) }, ikon("hoyre"))),
+      segment);
+  }
+
+  // Hopp rett til en måned, et kvartal eller et år uten å bla
+  function periodeArk(o) {
+    const forste = o.maneder[0], siste = o.maneder[o.maneder.length - 1];
+    let type = S.periode;
+    const innhold = el("div");
+    const velg = (t, anker) => { lukkArk(); settPeriode(t, klem(anker, o.maneder)); };
+    const tegn = () => {
+      const [fra, til] = spenn(S.periode, S.maned);
+      const aar = [...new Set(o.maneder.map((m) => m.slice(0, 4)))].reverse();
+      const valgt = (f, t) => type === S.periode && f === fra && t === til;
+      let rutenett;
+      if (type === "aar") {
+        rutenett = el("div", { class: "periodegrid aar" }, aar.map((y) => el("button", { class: valgt(`${y}-01`, `${y}-12`) ? "valgt" : "", onclick: () => velg("aar", `${y}-12`) }, y)));
+      } else {
+        rutenett = aar.map((y) => [el("div", { class: "ark-etikett" }, y),
+          type === "kvartal"
+            ? el("div", { class: "periodegrid kv" }, [1, 2, 3, 4].map((q) => {
+              const f = `${y}-${pad2(q * 3 - 2)}`, t = `${y}-${pad2(q * 3)}`;
+              return el("button", { disabled: t < forste || f > siste, class: valgt(f, t) ? "valgt" : "", onclick: () => velg("kvartal", t) },
+                `${q}. kvartal`, el("small", {}, `${MND[q * 3 - 3].slice(0, 3)}–${MND[q * 3 - 1].slice(0, 3)}`));
+            }))
+            : el("div", { class: "periodegrid" }, MND.map((navn, i) => {
+              const ym = `${y}-${pad2(i + 1)}`;
+              const [f, t] = spenn(type, ym);
+              return el("button", { disabled: ym < forste || ym > siste, class: valgt(f, t) ? "valgt" : "", onclick: () => velg(type, ym) }, navn.slice(0, 3));
+            }))]);
+      }
+      innhold.replaceChildren(...[
+        el("div", { class: "segment bred" }, PERIODER.map(([t, navn]) => el("button", { class: type === t ? "valgt" : "", onclick: () => { type = t; tegn(); } }, navn))),
+        type === "tolv" ? el("p", { class: "hint", style: "margin-top:10px" }, "Velg siste måned i perioden.") : null,
+        rutenett].flat(Infinity).filter(Boolean));
+    };
+    tegn();
+    visArk(
+      el("h3", {}, "Velg periode"),
+      innhold,
+      el("div", { class: "ark-knapper" },
+        el("button", { class: "knapp noytral", onclick: lukkArk }, "Avbryt"),
+        el("button", { class: "knapp sekundaer", onclick: () => velg("maned", naYm()) }, "Denne måneden")));
+  }
+
   // ============================================================ OVERSIKT
   async function visOversikt() {
     const v = $("v-oversikt");
-    const [o, fa] = await Promise.all([api(`oversikt${S.maned ? `?maned=${S.maned}` : ""}`), api("faste").catch(() => ({ faste: [] }))]);
+    if (S.periode !== "maned" && !S.maned) S.maned = naYm();
+    const [fra, til] = S.maned ? spenn(S.periode, S.maned) : [];
+    const q = S.periode === "maned" ? (S.maned ? `?maned=${S.maned}` : "") : `?fra=${fra}&til=${til}`;
+    const [o, fa] = await Promise.all([api(`oversikt${q}`), api("faste").catch(() => ({ faste: [] }))]);
     S.oversikt = o;
-    S.maned = o.maned.maned;
+    if (o.maned) S.maned = o.maned.maned;
     $("undertittel").textContent = o.bruker ? `Hei, ${o.bruker.split(" ")[0]}` : "";
     settPrikk(o.trenger.length);
     if (!o.har_data) {
@@ -131,12 +232,9 @@
         el("button", { class: "knapp", onclick: () => byttFane("import") }, ikon("opp"), "Importer første fil")));
       return;
     }
+    const mnd = periodeLinje(o);
+    if (o.periode) { visPeriode(v, mnd, o); return; }
     const m = o.maned;
-    const idx = o.maneder.indexOf(m.maned);
-    const mnd = el("div", { class: "mnd" },
-      el("button", { class: "ikonknapp", "aria-label": "Forrige måned", disabled: idx <= 0, onclick: () => { S.maned = o.maneder[idx - 1]; visOversikt().catch(feil); } }, ikon("venstre")),
-      el("b", {}, mndNavn(m.maned)),
-      el("button", { class: "ikonknapp", "aria-label": "Neste måned", disabled: idx >= o.maneder.length - 1, onclick: () => { S.maned = o.maneder[idx + 1]; visOversikt().catch(feil); } }, ikon("hoyre")));
 
     // Midt i måneden har lønna ofte ikke kommet ennå – da er «brukt så langt» et ærligere hovedtall enn «igjen».
     const helt = el("div", { class: `helt${!m.pagar && m.igjen < 0 ? " minus" : ""}` },
@@ -157,6 +255,109 @@
     v.replaceChildren(mnd, el("div", { class: "oversikt-rute" },
       el("div", { class: "kol" }, helt, trengerKort(o.trenger), m.pagar ? kommendeKort(fa.faste) : null),
       kategoriKort(m)));
+  }
+
+  // ------------------------------------------------------------ større perioder
+  function visPeriode(v, topp, o) {
+    const p = o.periode;
+    const periode = `${p.fra}:${p.til}`;
+    if (!p.antall) {
+      v.replaceChildren(topp, el("div", { class: "kort" }, el("p", { class: "tom" }, "Ingen transaksjoner i denne perioden.")));
+      return;
+    }
+    // Lønna kommer ofte sent i måneden, så en uferdig måned ville gjort hovedtallet misvisende.
+    // Hovedtallet er derfor hele måneder; inneværende måned vises for seg under.
+    const ms = p.maneder.filter((s) => s.data);
+    const hele = ms.filter((s) => !s.pagar);
+    const grunn = hele.length ? hele : ms;
+    const sum = (f) => grunn.reduce((t, s) => t + s[f], 0);
+    const g = { inn: sum("inn"), ut: sum("ut"), sparing: sum("sparing"), igjen: sum("igjen") };
+    const na = ms.find((s) => s.pagar);
+    const utenNa = hele.length && na;
+    const helt = el("div", { class: `helt${g.igjen < 0 ? " minus" : ""}` },
+      el("div", { class: "helt-etikett" }, g.igjen < 0 ? "Brukt mer enn dere fikk inn" : "Igjen etter perioden",
+        utenNa ? ` (${hele.length} hele ${hele.length === 1 ? "måned" : "måneder"})` : !hele.length ? " – så langt" : ""),
+      el("div", { class: "helt-tall tall" }, kr(g.igjen)),
+      el("div", { class: "helt-rad" },
+        el("div", {}, el("span", {}, "Inn"), el("b", { class: "tall" }, kr(g.inn))),
+        el("div", {}, el("span", {}, "Ut"), el("b", { class: "tall" }, kr(g.ut))),
+        el("div", {}, el("span", {}, "Spart"), el("b", { class: "tall" }, kr(g.sparing)))),
+      el("div", { class: "helt-under" },
+        grunn.length > 1 ? `Snitt per måned: inn ${kr(p.snitt.inn)} · ut ${kr(p.snitt.ut)} · ${p.snitt.igjen < 0 ? `${kr(-p.snitt.igjen)} for mye` : `${kr(p.snitt.igjen)} igjen`}` : null,
+        utenNa ? el("div", { class: "helt-liten" }, `${stor(MND[+na.maned.slice(5) - 1])} er ikke med før den er ferdig – brukt ${kr(na.ut)} så langt.`) : null));
+    v.replaceChildren(topp, el("div", { class: "oversikt-rute" },
+      el("div", { class: "kol" }, helt, manedGraf(p), trengerKort(o.trenger)),
+      periodeKategoriKort(p, periode)));
+  }
+
+  // Inn og ut måned for måned. Trykk på en måned for å se den.
+  function manedGraf(p) {
+    const ms = p.maneder;
+    const maks = Math.max(...ms.map((s) => Math.max(s.inn, s.ut)), 1);
+    const kort = el("div", { class: "kort" },
+      el("div", { class: "kort-hode" }, el("h2", {}, "Måned for måned"),
+        el("span", { class: "forklaring-merker" }, el("span", { class: "merke-inn" }, "Inn"), el("span", { class: "merke-ut" }, "Ut"))));
+    const graf = el("div", { class: `mgraf${ms.length > 8 ? " tett" : ""}` }, ms.map((s) => {
+      const [y, m] = s.maned.split("-").map(Number);
+      const tittel = `${mndNavn(s.maned)}: inn ${kr(s.inn)}, ut ${kr(s.ut)}, ${s.igjen < 0 ? `${kr(-s.igjen)} for mye` : `${kr(s.igjen)} igjen`}`;
+      return el("button", { class: `mg-kol${s.igjen < 0 && !s.pagar ? " minus" : ""}${s.pagar ? " pagar" : ""}`, title: tittel, "aria-label": tittel, disabled: !s.data,
+        onclick: () => settPeriode("maned", s.maned) },
+        el("span", { class: "mg-stolper" },
+          el("i", { class: "inn", style: `height:${(100 * s.inn / maks).toFixed(1)}%` }),
+          el("i", { class: "ut", style: `height:${(100 * s.ut / maks).toFixed(1)}%` })),
+        el("span", { class: "mg-navn" }, MND[m - 1].slice(0, 3), m === 1 || s === ms[0] ? el("small", {}, String(y).slice(2)) : null));
+    }));
+    kort.append(graf);
+    const med = ms.filter((s) => s.data && !s.pagar);
+    if (med.length > 1) {
+      const best = med.reduce((a, b) => (b.igjen > a.igjen ? b : a));
+      const dyr = med.reduce((a, b) => (b.ut > a.ut ? b : a));
+      kort.append(el("div", { class: "mg-fakta" },
+        el("div", {}, el("span", { class: "mg-etikett" }, "Mest igjen"), el("b", {}, stor(MND[+best.maned.slice(5) - 1]), " · ", el("span", { class: "tall" }, kr(best.igjen)))),
+        el("div", {}, el("span", { class: "mg-etikett" }, "Mest brukt"), el("b", {}, stor(MND[+dyr.maned.slice(5) - 1]), " · ", el("span", { class: "tall" }, kr(dyr.ut))))));
+    }
+    return kort;
+  }
+
+  function periodeKategoriKort(p, periode) {
+    const kort = el("div", { class: "kort" }, el("div", { class: "kort-hode" }, el("h2", {}, "Kategorier"),
+      el("span", { class: "forklaring" }, "sum · snitt per måned")));
+    const rader = p.kategorier.filter((k) => k.brukt || k.budsjett);
+    if (p.ukategorisert) rader.push({ id: "ingen", ikon: "?", navn: "Uten kategori", brukt: p.ukategorisert, snitt: null });
+    if (!rader.length) { kort.append(el("p", { class: "tom" }, "Ingen utgifter i perioden.")); return kort; }
+    const maks = Math.max(...rader.map((k) => Math.max(k.brukt, k.budsjett || 0)), 1);
+    const ul = el("ul", { class: "katliste" });
+    for (const k of rader) {
+      const mal = k.budsjett || null;
+      const skala = mal ? Math.max(mal, k.brukt) : maks;
+      const stolpe = el("div", { class: `stolpe ${!mal ? "snitt" : k.brukt > mal ? "over" : ""}` }, el("i", { style: `width:${Math.min(100, 100 * k.brukt / skala)}%` }));
+      const under = [];
+      if (k.snitt != null && p.antall > 1) under.push(`Snitt ${kr(k.snitt)}/mnd`);
+      if (mal) {
+        const rest = mal - k.brukt;
+        under.push(rest >= 0 ? `${kr(rest)} under budsjett` : el("span", { class: "over" }, `${kr(-rest)} over budsjett`));
+      }
+      if (k.topp) under.push(`mest i ${MND[+k.topp.maned.slice(5) - 1]}`);
+      const linje = [];
+      under.forEach((u, i) => { if (i) linje.push(" · "); linje.push(u); });
+      ul.append(el("li", {}, el("button", { class: "katrad", onclick: () => {
+        S.filter = { ...S.filter, kategori: String(k.id), maned: periode, konto: "", sok: "" };
+        byttFane("transaksjoner");
+      } },
+        el("span", { class: "k-ikon" }, k.ikon),
+        el("span", { class: "k-navn" }, k.navn),
+        el("span", { class: "k-tall tall" }, kr(k.brukt)),
+        stolpe,
+        linje.length || k.serie ? el("span", { class: "k-under" }, el("span", {}, linje), k.serie && k.serie.length > 1 ? gnist(k.serie) : null) : null)));
+    }
+    kort.append(ul);
+    return kort;
+  }
+
+  // Liten søylerekke som viser hvordan en kategori har variert gjennom perioden
+  function gnist(serie) {
+    const maks = Math.max(...serie, 1);
+    return el("span", { class: "gnist", "aria-hidden": "true" }, serie.map((x) => el("i", { style: `height:${Math.max(x ? 12 : 4, Math.round(100 * x / maks))}%` })));
   }
 
   // Bare på PC: de neste faste trekkene, så det er lett å se hva som kommer resten av måneden
@@ -250,7 +451,12 @@
       const s = el("select", { "aria-label": navn }, valg.map(([v, t]) => el("option", { value: v, selected: String(verdi) === String(v) }, t)));
       return s;
     };
-    const mndValg = [["", "Måned"], ...S.oversikt.maneder.slice().reverse().map((m) => [m, mndNavn(m)])];
+    const aarValg = [...new Set(S.oversikt.maneder.map((m) => m.slice(0, 4)))].reverse().map((y) => [`${y}-01:${y}-12`, `Hele ${y}`]);
+    const mndValg = [["", "Måned"], ...S.oversikt.maneder.slice().reverse().map((m) => [m, mndNavn(m)]), ...aarValg];
+    if (f.maned && !mndValg.some(([v]) => v === f.maned)) {
+      const [a, b] = f.maned.split(":");
+      mndValg.splice(1, 0, [f.maned, periodeNavn(a, b || a)]);
+    }
     const kontoValg = [["", "Konto"], ["skjulte", "Alle, også skjulte"], ...S.oversikt.kontoer.map((k) => [String(k.id), k.navn + (k.skjult ? " (skjult)" : "")])];
     const katValg = [["", "Kategori"], ["ingen", "Uten kategori"], ...S.kategorier.map((k) => [String(k.id), `${k.ikon} ${k.navn}`])];
     const sM = velg("Måned", mndValg, f.maned);
@@ -969,7 +1175,7 @@
       if (S.fane !== "transaksjoner") byttFane("transaksjoner");
       setTimeout(() => document.querySelector('#v-transaksjoner input[type="search"]')?.focus(), 150);
     } else if (S.fane === "oversikt" && (e.key === "ArrowLeft" || e.key === "ArrowRight")) {
-      document.querySelector(`#v-oversikt button[aria-label="${e.key === "ArrowLeft" ? "Forrige" : "Neste"} måned"]:not([disabled])`)?.click();
+      document.querySelector(`#v-oversikt button[data-steg="${e.key === "ArrowLeft" ? "-1" : "1"}"]:not([disabled])`)?.click();
     } else if (/^[1-5]$/.test(e.key)) {
       byttFane(["oversikt", "transaksjoner", "budsjett", "faste", "import"][+e.key - 1]);
     }
