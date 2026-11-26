@@ -82,9 +82,9 @@ CREATE TABLE IF NOT EXISTS kvitteringer (           -- kopi av Matplans kvitteri
     total_ore   INTEGER,
     varer       INTEGER
 );
-CREATE TABLE IF NOT EXISTS kvittering_kobling (
+CREATE TABLE IF NOT EXISTS kvittering_kobling (     -- én kvittering kan dekke flere bankkjøp (delt betaling)
     transaksjon_id INTEGER PRIMARY KEY REFERENCES transaksjoner(id) ON DELETE CASCADE,
-    matplan_id     INTEGER NOT NULL UNIQUE
+    matplan_id     INTEGER NOT NULL
 );
 CREATE TABLE IF NOT EXISTS bank_okter (            -- samtykker hos banken via Enable Banking
     session_id  TEXT PRIMARY KEY,
@@ -137,6 +137,12 @@ class Database:
             if kolonne not in finnes:
                 self.con.execute(f"ALTER TABLE {tabell} ADD COLUMN {kolonne} {typ}")
         self.con.execute("CREATE INDEX IF NOT EXISTS tx_bank_ref ON transaksjoner(konto_id, bank_ref)")
+        # Før 0.8.0 kunne en kvittering bare kobles til ett kjøp (UNIQUE på matplan_id). Tabellen bygges
+        # fra Matplan ved hver synk, så den kan trygt lages på nytt.
+        sql = self.con.execute("SELECT sql FROM sqlite_master WHERE name = 'kvittering_kobling'").fetchone()
+        if sql and "UNIQUE" in (sql[0] or ""):
+            self.con.execute("DROP TABLE kvittering_kobling")
+            self.con.executescript(SKJEMA)
 
     # ---- grunnleggende
     def rader(self, sql: str, args=()) -> list[dict]:

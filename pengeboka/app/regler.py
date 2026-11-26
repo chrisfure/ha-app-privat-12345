@@ -261,6 +261,23 @@ def rydd(tekst: str) -> str:
     return _TEGN.sub(" ", t).strip()
 
 
+_STOYORD = {"nok", "kl", "dato", "aut", "versjon", "tpp"}
+
+
+def ord_i(tekst: str) -> frozenset[str]:
+    """Ordene i en banktekst uten tall og referanser – «Visa 100022, Nok 34,00 Google» → {visa, google}."""
+    return frozenset(w for w in re.findall(r"[a-zæøåäöü]{2,}", _norm(tekst).lower()) if w not in _STOYORD)
+
+
+def lik_tekst(a: str, b: str) -> float:
+    """0–1: hvor mye av den korteste teksten som finnes i den andre. Banken kan skrive samme kjøp
+    med og uten referansenummer, eller i en annen rekkefølge."""
+    x, y = ord_i(a), ord_i(b)
+    if not x or not y:
+        return 0.0
+    return len(x & y) / min(len(x), len(y))
+
+
 @functools.lru_cache(maxsize=4096)
 def _rx(monster: str):
     return re.compile(r"(?<![\wæøå])" + re.escape(monster) + r"(?![\wæøå])")

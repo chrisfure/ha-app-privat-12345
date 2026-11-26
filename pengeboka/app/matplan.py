@@ -6,11 +6,14 @@ funnet. Bankdata forlater aldri Pengeboka – Matplan får bare «funnet: Felles
 11. nov, 249 kr» eller «mangler» per kvittering.
 
 Matching (ingen AI):
+  0. Koblinger gjort for hånd i Matplan gjelder alltid først
   1. Samme beløp (på øret, eller innenfor 1 kr ved øresavrunding)
   2. Samme kjede når begge er kjent (Kiwi mot Kiwi, Coop Extra mot Coop …)
-  3. Dato innen 3 dager (Oda: 6 dager, fordi kortet ofte belastes ved levering)
+  3. Dato innen 5 dager (Oda: 8 dager, fordi kortet ofte belastes ved levering). Banken fører
+     ofte kjøp fra fredag og helgen først mandag eller tirsdag.
   Nærmeste dato vinner, og hver kvittering kobles til høyst ett kjøp.
   Deretter en runde for det som er igjen: samme kjede, beløp innen 20 kr eller 3 %.
+  Til slutt: to kjøp i samme kjede som til sammen er kvitteringens sum (Oda deler ofte betalingen).
 
 Dagligvarekjøp i banken uten kvittering sendes også til Matplan (butikk, dato, sum og konto),
 så Matplan kan telle dem med i det familien bruker på mat.
@@ -19,6 +22,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import threading
 import urllib.error
 import urllib.request
@@ -29,8 +33,8 @@ from db import naa_iso
 log = logging.getLogger("pengeboka.matplan")
 
 STANDARD_URL = "http://f0f11513-matplan:8099"
-DAGER = 3
-DAGER_ODA = 6
+DAGER = 5
+DAGER_ODA = 8
 TOLERANSE_ORE = 100
 
 # Kjede ut fra navn – samme kjede selv om banken skriver «COOP EXTRA STASJONEN» og kvitteringen «Coop»
@@ -44,6 +48,26 @@ _lås = threading.Lock()
 
 class Matplanfeil(Exception):
     pass
+
+
+_KJOPSDATO = re.compile(r"\bdato (\d{1,2})\.(\d{1,2})\b", re.I)
+
+
+def _dager(t: dict, kd: date) -> int:
+    """Dager mellom kjøpet i banken og kvitteringen. Banken fører ofte kjøpet dager senere, men
+    teksten har gjerne den egentlige kjøpsdatoen («Varekjøp, Kiwi …, Dato 13.11 kl. 20.12»)."""
+    bd = date.fromisoformat(t["dato"])
+    beste = abs((bd - kd).days)
+    m = _KJOPSDATO.search(t.get("tekst") or "")
+    if m:
+        try:
+            dd, mm = int(m.group(1)), int(m.group(2))
+            kjop = date(bd.year - (1 if mm > bd.month else 0), mm, dd)
+            if 0 <= (bd - kjop).days <= 10:
+                beste = min(beste, abs((kjop - kd).days))
+        except ValueError:
+            pass
+    return beste
 
 
 def kjede(navn: str | None) -> str | None:
@@ -90,10 +114,22 @@ def _kall(url: str, kode: str, sti: str, metode: str = "GET", data: dict | None 
 
 # ---------------------------------------------------------------- matching
 def match(transaksjoner: list[dict], kvitteringer: list[dict]) -> dict[int, int]:
-    """{transaksjon_id: matplan_id}. transaksjoner: id, dato, belop_ore (negativ), motpart.
-    kvitteringer: matplan_id, dato, total_ore, butikk."""
+    """{transaksjon_id: matplan_id} – flere kjøp kan peke på samme kvittering ved delt betaling.
+    transaksjoner: id, dato, belop_ore (negativ), motpart. kvitteringer: matplan_id, dato, total_ore,
+    butikk, og eventuelt «manuell»: kjøp brukeren har koblet for hånd i Matplan."""
+    brukt_t, brukt_k, ut = set(), set(), {}
+    finnes = {t["id"] for t in transaksjoner}
+    for k in kvitteringer:
+        manuell = [int(x) for x in k.get("manuell") or [] if str(x).isdigit() and int(x) in finnes and int(x) not in brukt_t]
+        if manuell:
+            brukt_k.add(k["matplan_id"])
+            for tid in manuell:
+                brukt_t.add(tid)
+                ut[tid] = k["matplan_id"]
     par = []
     for k in kvitteringer:
+        if k["matplan_id"] in brukt_k:
+            continue
         if not k.get("dato") or not k.get("total_ore"):
             continue
         kd = date.fromisoformat(k["dato"])
@@ -103,7 +139,7 @@ def match(transaksjoner: list[dict], kvitteringer: list[dict]) -> dict[int, int]
             diff = abs(-t["belop_ore"] - k["total_ore"])
             if diff > TOLERANSE_ORE:
                 continue
-            dager = abs((date.fromisoformat(t["dato"]) - kd).days)
+            dager = _dager(t, kd)
             if dager > grense:
                 continue
             tk = kjede(t.get("motpart")) or kjede(t.get("tekst"))
@@ -112,9 +148,10 @@ def match(transaksjoner: list[dict], kvitteringer: list[dict]) -> dict[int, int]
             usikker = not (tk and kk)
             if usikker and (diff or dager > 1):
                 continue  # ukjent kjede: bare helt likt beløp og nesten samme dag
+            if t["id"] in brukt_t:
+                continue
             par.append(((1 if diff else 0, 1 if usikker else 0, dager, t["id"]), t["id"], k["matplan_id"]))
     par.sort()
-    brukt_t, brukt_k, ut = set(), set(), {}
     for _, tid, kid in par:
         if tid in brukt_t or kid in brukt_k:
             continue
@@ -136,7 +173,7 @@ def match(transaksjoner: list[dict], kvitteringer: list[dict]) -> dict[int, int]
             if t["id"] in brukt_t or (kjede(t.get("motpart")) or kjede(t.get("tekst"))) != kk:
                 continue
             diff = abs(-t["belop_ore"] - k["total_ore"])
-            dager = abs((date.fromisoformat(t["dato"]) - kd).days)
+            dager = _dager(t, kd)
             if dager <= grense and diff <= max(2000, k["total_ore"] * 0.03):
                 par.append(((diff, dager, t["id"]), t["id"], k["matplan_id"]))
     par.sort()
@@ -146,6 +183,31 @@ def match(transaksjoner: list[dict], kvitteringer: list[dict]) -> dict[int, int]
         brukt_t.add(tid)
         brukt_k.add(kid)
         ut[tid] = kid
+    # Runde 3: delt betaling – to kjøp i samme kjede innenfor datogrensen som til sammen er summen
+    for k in kvitteringer:
+        if k["matplan_id"] in brukt_k or not k.get("dato") or not k.get("total_ore"):
+            continue
+        kk = kjede(k.get("butikk"))
+        if not kk:
+            continue
+        kd = date.fromisoformat(k["dato"])
+        grense = DAGER_ODA if kk == "oda" else DAGER
+        rest = [t for t in transaksjoner if t["id"] not in brukt_t
+                and (kjede(t.get("motpart")) or kjede(t.get("tekst"))) == kk
+                and _dager(t, kd) <= grense]
+        beste = None
+        for i, a in enumerate(rest):
+            for b in rest[i + 1:]:
+                diff = abs(-(a["belop_ore"] + b["belop_ore"]) - k["total_ore"])
+                if diff <= TOLERANSE_ORE:
+                    n = (diff, _dager(a, kd) + _dager(b, kd))
+                    if beste is None or n < beste[0]:
+                        beste = (n, a["id"], b["id"])
+        if beste:
+            brukt_k.add(k["matplan_id"])
+            for tid in beste[1:]:
+                brukt_t.add(tid)
+                ut[tid] = k["matplan_id"]
     return ut
 
 
@@ -194,7 +256,8 @@ def synk(db, url: str | None = None, kode: str | None = None) -> dict:
             data = _kall(url, kode, f"/kobling/kvitteringer?fra={fra}")
             kv = [{"matplan_id": int(k["id"]), "butikk": str(k.get("store") or "")[:60], "dato": str(k.get("purchased_on") or "")[:10],
                    "total_ore": int(round(float(k["total"]) * 100)) if k.get("total") is not None else None,
-                   "varer": int(k.get("varer") or 0)} for k in data.get("kvitteringer", []) if k.get("id") is not None]
+                   "varer": int(k.get("varer") or 0), "manuell": [str(x) for x in (k.get("bank_manuell") or [])][:10]}
+                  for k in data.get("kvitteringer", []) if k.get("id") is not None]
         tx = kandidater(db)
         koblet = match(tx, kv)
         with db.transaksjon():
@@ -206,13 +269,16 @@ def synk(db, url: str | None = None, kode: str | None = None) -> dict:
         # Svar til Matplan: bare for kvitteringer i perioden banken dekker
         dekket = dekket_til(db)
         tx_map = {t["id"]: t for t in tx}
-        funnet = {kid: tid for tid, kid in koblet.items()}
+        funnet: dict[int, list[dict]] = {}
+        for tid, kid in koblet.items():
+            funnet.setdefault(kid, []).append(tx_map[tid])
         svar = []
         for k in kv:
             if k["matplan_id"] in funnet:
-                t = tx_map[funnet[k["matplan_id"]]]
-                svar.append({"kvittering": k["matplan_id"], "status": "funnet", "dato": t["dato"],
-                             "konto": t["konto"], "belop": -t["belop_ore"] / 100})
+                ts = sorted(funnet[k["matplan_id"]], key=lambda t: t["dato"])
+                svar.append({"kvittering": k["matplan_id"], "status": "funnet", "dato": ts[0]["dato"],
+                             "konto": ts[0]["konto"], "belop": -sum(t["belop_ore"] for t in ts) / 100,
+                             "manuell": bool(k["manuell"])})
             elif dekket and fra and fra <= (k["dato"] or "") <= dekket:
                 svar.append({"kvittering": k["matplan_id"], "status": "mangler"})
         uten = [{"ref": str(t["id"]), "dato": t["dato"], "butikk": t["motpart"], "belop": -t["belop_ore"] / 100,
@@ -220,7 +286,7 @@ def synk(db, url: str | None = None, kode: str | None = None) -> dict:
         _kall(url, kode, "/kobling/bank", "PUT", {"koblinger": svar, "dekket_til": dekket, "kilde": "Pengeboka",
                                                    "uten_kvittering": uten})
         status = {"synket": naa_iso(), "feil": None, "kvitteringer": len(kv), "koblet": len(koblet),
-                  "kjop": len(tx), "uten_kvittering": len(tx) - len(koblet)}
+                  "kjop": len(tx), "uten_kvittering": len(uten)}
         db.sett_innstilling("matplan_status", status)
         return status
     except Matplanfeil as e:

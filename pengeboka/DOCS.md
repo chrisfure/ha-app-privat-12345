@@ -95,13 +95,15 @@ Bruker dere Matplan til kvitteringer, kan Pengeboka koble dem til dagligvarekjø
 1. I Matplan: **Mer → Innstillinger → Pengeboka**, trykk **Kopier** på koblingskoden.
 2. Her: **Innstillinger → Matplan**, lim inn koden og trykk **Koble til Matplan**.
 
-Pengeboka finner kjøpet med samme beløp (innen 1 kr), samme kjede og dato innen 3 dager (Oda: 6 dager). Det som er igjen, kobles hvis kjeden er den samme og beløpet er innen 20 kr eller 3 % (Oda justerer ofte beløpet etter bytter). Ingen AI. Da får dere:
+Pengeboka finner kjøpet med samme beløp (innen 1 kr), samme kjede og dato innen 5 dager (Oda: 8 dager). Det som er igjen, kobles hvis kjeden er den samme og beløpet er innen 20 kr eller 3 % (Oda justerer ofte beløpet etter bytter). Ingen AI. Da får dere:
 
 * **🧾 Kvittering** på kjøpet. Trykk på kjøpet for å se varene på kvitteringen.
 * **Ingen kvittering** på dagligvarekjøp uten kvittering (bare fra datoen den første kvitteringen kom inn).
 * Filteret **Kvittering** i Transaksjoner, og «X av Y med kvittering» under Dagligvarer i Oversikt.
 * I Matplan står det hvilken konto kvitteringen ble betalt fra, eller «Ikke i banken».
 * Dagligvarekjøp uten kvittering vises i Matplan med merket «Mangler kvittering» og telles med i snittet der. Når kvitteringen kommer, forsvinner de.
+* Kvittering og kjøp kobles når beløpet er likt og datoen er innen fem dager (Oda: åtte). Står den egentlige kjøpsdatoen i bankteksten («Dato 13.11»), brukes den. Betaler Oda i to deler, kobles begge til kvitteringen.
+* Finner Pengeboka ikke sammenhengen, kan du koble for hånd i Matplan: åpne kvitteringen og trykk **Koble til bankkjøp**. Pengeboka bruker koblingen foran sin egen gjetting.
 
 Koblingen oppdateres hver time og rett etter hver import. **Koble fra** sletter kopien av kvitteringene her.
 
@@ -123,7 +125,7 @@ I stedet for å laste ned filer kan Pengeboka hente transaksjonene selv hver nat
 2. Etter BankID havner du på en side som ikke laster (`https://localhost/?code=…`). Det er meningen. Kopier hele adressen fra adressefeltet og lim den inn i Pengeboka.
 3. Trykk **Fullfør**. Kontoene kobles til kontoene i Pengeboka med samme kontonummer. Kontoer som ikke finnes, opprettes. Under hver konto kan du velge en annen Pengeboka-konto eller **Ikke hent**.
 
-Etterpå hentes nye bokførte transaksjoner hver natt rundt kl. 05, og når du trykker **Hent nå**. Reserverte beløp kommer med når de er bokført. Kjøp som allerede er importert fra fil, blir ikke dobbelt: samme beløp innen tre dager regnes som samme transaksjon, både når banken henter etter en fil og når en fil importeres etter banken.
+Etterpå hentes nye bokførte transaksjoner hver natt rundt kl. 05, og når du trykker **Hent nå**. Reserverte beløp kommer med når de er bokført. Kjøp som allerede er importert fra fil, blir ikke dobbelt: samme beløp innen tre dager regnes som samme transaksjon, både når banken henter etter en fil og når en fil importeres etter banken. Banken sender av og til samme kjøp på nytt med ny id og litt annen tekst (med eller uten referansenummer); det gjenkjennes også, og blir ikke ført to ganger.
 
 **Samtykket varer i opptil 180 dager.** To uker før det går ut, står det under «Trenger dere», og da fornyer du med BankID. Har dere hver deres bankinnlogging, kobler dere til én gang hver (og begge må koble kontoene sine under «Link accounts» hos Enable Banking).
 

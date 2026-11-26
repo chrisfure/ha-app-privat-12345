@@ -6,6 +6,7 @@ import json
 import os
 import sys
 import threading
+from datetime import date
 import urllib.request
 import zipfile
 from datetime import date, timedelta
@@ -482,7 +483,7 @@ def test_synk_med_matplan(pb):
     assert (st["kvitteringer"], st["koblet"], st["kjop"], st["uten_kvittering"]) == (3, 1, 3, 2)
     # Svaret til Matplan: Kiwi funnet, Rema mangler (beløpet stemmer ikke), Coop 30. nov er etter siste bankdato → ikke vurdert
     assert falsk.mottatt["koblinger"] == [
-        {"kvittering": 7, "status": "funnet", "dato": "2026-10-05", "konto": "Felles", "belop": 249.0},
+        {"kvittering": 7, "status": "funnet", "dato": "2026-10-05", "konto": "Felles", "belop": 249.0, "manuell": False},
         {"kvittering": 8, "status": "mangler"}]
     assert falsk.mottatt["dekket_til"] == "2026-10-26"
     rader = {t["motpart"]: t for t in pb.transaksjoner({})["transaksjoner"]}
@@ -622,3 +623,68 @@ def test_periode_over_flere_maneder(pb, familie):
     assert len(pb.transaksjoner({"maned": "2026-09", "kategori": str(dagligvarer["id"])})["transaksjoner"]) == 1
     o = pb.oversikt(fra="2026-08", til="2026-10")
     assert "periode" in o and "maned" not in o
+
+
+def _b(dato, ore, tekst, ref):
+    return {"dato": dato, "belop_ore": ore, "tekst": tekst, "motkonto": None, "ref": ref}
+
+
+def test_banken_bytter_id_og_tekst(pb):
+    """Samme kjøp sendt på nytt med ny id og litt annen tekst skal ikke dobbeltføres."""
+    k = konto(pb, "Brukskonto", "bruk")
+    pb.importer_bank(k, [_b("2026-11-23", -3400, "Visa  100022, Nok 34,00 Google Google:One 2", "a1"),
+                         _b("2026-11-20", -14400, "Varekjøp, Mcd 001 Byen Storgata Byen, Dato 19.11 kl. 20.05", "a2"),
+                         _b("2026-11-21", -5000, "Kiwi 100 Sentrum", "a3")], "DNB", None)
+    r = pb.importer_bank(k, [_b("2026-11-23", -3400, "Visa, Nok 34,00 Google Google:One 2", "b1"),
+                             _b("2026-11-20", -14400, "Varekjøp, Kl. 20.05 Versjon 1 Aut. 515027, Mcd 001 Byen  Storgata  Byen", "b2"),
+                             _b("2026-11-21", -5000, "Kiwi 100 Sentrum", "a3"),
+                             _b("2026-11-24", -3400, "Visa, Nok 34,00 Google Google:One 2", "b4")], "DNB", None)
+    assert r["nye"] == 1   # bare det nye kjøpet 24. nov
+    rader = pb.db.rader("SELECT dato, bank_ref FROM transaksjoner WHERE konto_id = ? ORDER BY dato", (k,))
+    assert [(x["dato"], x["bank_ref"]) for x in rader] == [
+        ("2026-11-20", "b2"), ("2026-11-21", "a3"), ("2026-11-23", "b1"), ("2026-11-24", "b4")]
+
+
+def test_rydd_dobbelthentede_kjop(pb):
+    """Duplikater fra før rettelsen slås sammen, og valg gjort for hånd beholdes."""
+    k = konto(pb, "Felles")
+    pb.importer_bank(k, [_b("2026-11-16", 4629800, "Kontoregulering  766, Kari Fellesutgifter", "a1"),
+                         _b("2026-11-16", -50000, "Kari Nordmann", "a2"),
+                         _b("2026-11-17", -2690, "Kiwi 100 Sentrum", "a3")], "DNB", None)
+    # Simuler gammel feil: samme kjøp kom inn igjen med ny id, uten at rettelsen fanget det
+    pb.db.kjor("INSERT INTO importer(konto_id, filnavn, tid) VALUES(?, 'DNB', '2026-11-18')", (k,))
+    iid = pb.db.verdi("SELECT MAX(id) FROM importer")
+    for i, (d, b, t) in enumerate([("2026-11-16", 4629800, "Kontoregulering, Kari Fellesutgifter"),
+                                   ("2026-11-16", -50000, "Ola Hansen"),           # annen person, samme beløp
+                                   ("2026-11-18", -2690, "Kiwi 100 Sentrum")]):      # likt kjøp neste dag
+        pb.db.kjor("INSERT INTO transaksjoner(konto_id, import_id, dato, belop_ore, tekst, motpart, fingeravtrykk, bank_ref) "
+                   "VALUES(?,?,?,?,?,?,?,?)", (k, iid, d, b, t, t, f"bank:b{i}", f"b{i}"))
+    ny = pb.db.verdi("SELECT id FROM transaksjoner WHERE bank_ref = 'b0'")
+    pb.db.kjor("UPDATE transaksjoner SET notat = 'skatt', kilde = 'manuell' WHERE id = ?", (ny,))
+    assert pb.rydd_duplikater() == 1
+    assert pb.db.verdi("SELECT COUNT(*) FROM transaksjoner WHERE konto_id = ?", (k,)) == 5
+    igjen = pb.db.rad("SELECT * FROM transaksjoner WHERE belop_ore = 4629800")
+    assert igjen["id"] == ny and igjen["notat"] == "skatt" and igjen["bank_ref"] == "b0"
+    assert pb.rydd_duplikater() == 0
+
+
+def test_match_delt_betaling_og_lengre_vindu():
+    tx = [_t(1, "2026-09-21", -177134, "Oda"), _t(2, "2026-09-21", -17640, "Oda"),
+          _t(3, "2026-11-24", -93415, "Kiwi"), _t(4, "2026-11-23", -5000, "Rema 1000")]
+    kv = [_k(10, "2026-09-22", 194774, "Oda"),     # betalt i to deler
+          _k(11, "2026-11-20", 93415, "Kiwi")]     # kjøpt fredag, ført tirsdag
+    assert matplan.match(tx, kv) == {1: 10, 2: 10, 3: 11}
+
+
+def test_match_manuell_kobling_gjelder_forst():
+    tx = [_t(1, "2026-10-05", -24900, "Kiwi"), _t(2, "2026-10-20", -31000, "Vipps: Butikken")]
+    kv = [{**_k(10, "2026-10-05", 24900, "Kiwi"), "manuell": ["2"]},   # brukeren vet best
+          _k(11, "2026-10-05", 24900, "Kiwi")]
+    assert matplan.match(tx, kv) == {2: 10, 1: 11}
+
+
+def test_match_bruker_kjopsdato_fra_teksten():
+    t = _t(1, "2026-11-23", -12040, "Extra Sentrum")
+    t["tekst"] = "Varekjøp, Extra Sentrum Storgata Byen, Dato 13.11 kl. 20.12"
+    assert matplan.match([t], [_k(10, "2026-11-13", 12040, "Coop")]) == {1: 10}   # 10 dager etter i banken
+    assert matplan._dager({"dato": "2027-01-02", "tekst": "Dato 30.12 kl. 10.00"}, date(2026, 12, 30)) == 0

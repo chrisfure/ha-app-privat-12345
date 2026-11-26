@@ -424,6 +424,18 @@ def data_dir() -> Path:
 def start(port: int | None = None, db_sti: Path | None = None) -> ThreadingHTTPServer:
     global PB
     PB = Pengeboka(Database(db_sti or data_dir() / "pengeboka.db"))
+    try:
+        # Sikkerhetskopi før første opprydding av dobbelthentede kjøp (0.8.0)
+        kopi = Path(db_sti or data_dir() / "pengeboka.db").with_name("pengeboka-for-0.8.0.db")
+        if not kopi.exists() and PB.db.verdi("SELECT COUNT(*) FROM transaksjoner WHERE bank_ref IS NOT NULL"):
+            import sqlite3
+            with sqlite3.connect(kopi) as mål:
+                PB.db.con.backup(mål)
+        n = PB.rydd_duplikater()
+        if n:
+            log.info("Slo sammen %s kjøp som var hentet fra banken to ganger", n)
+    except Exception:
+        log.exception("Kunne ikke rydde dobbelthentede kjøp")
     srv = ThreadingHTTPServer(("0.0.0.0" if not UTVIKLING else "127.0.0.1", port or int(os.environ.get("PENGEBOKA_PORT", "8099"))), Handler)
     return srv
 

@@ -347,7 +347,67 @@ class Pengeboka:
         """Transaksjoner hentet automatisk fra banken (se bank.py). tx har i tillegg «ref» fra banken."""
         if not self.db.verdi("SELECT 1 FROM kontoer WHERE id = ?", (konto_id,)):
             raise Feil("Fant ikke kontoen")
-        return self._lagre(konto_id, tx, navn, av, bank=True)
+        r = self._lagre(konto_id, tx, navn, av, bank=True)
+        fjernet = self.rydd_duplikater(konto_id)
+        return {**r, "nye": max(0, r["nye"] - fjernet)}
+
+    def rydd_duplikater(self, konto_id: int | None = None) -> int:
+        """Slår sammen kjøp som er hentet fra banken to ganger fordi banken byttet id og tekst.
+
+        To rader regnes som samme kjøp bare når alt dette stemmer: begge kom fra banken, i hver sin
+        henting, på samme konto, med samme beløp, innen en dag, med ulik tekst som likevel har de
+        samme ordene (bare tall, referanser og rekkefølge skiller). To like kjøp på samme dag kommer
+        i samme henting og med lik tekst, og blir derfor aldri slått sammen.
+        Raden med valg gjort for hånd beholdes; den får bankens nyeste id."""
+        sql = ("SELECT t.id, t.konto_id, t.import_id, t.dato, t.belop_ore, t.tekst, t.bank_ref, t.kilde, t.kategori_id, "
+               "t.regel_id, t.notat, t.endret_av, t.endret, t.ikke_overforing, kk.matplan_id FROM transaksjoner t "
+               "LEFT JOIN kvittering_kobling kk ON kk.transaksjon_id = t.id WHERE t.bank_ref IS NOT NULL")
+        rader = self.db.rader(sql + (" AND t.konto_id = ?" if konto_id else "") + " ORDER BY t.id", (konto_id,) if konto_id else ())
+        grupper: dict[tuple[int, int], list[dict]] = defaultdict(list)
+        for r in rader:
+            grupper[(r["konto_id"], r["belop_ore"])].append(r)
+        par = []
+        borte: set[int] = set()
+        for liste in grupper.values():
+            if len(liste) < 2:
+                continue
+            for i, b in enumerate(liste):
+                if b["id"] in borte:
+                    continue
+                for a in liste[:i]:
+                    if a["id"] in borte or a["import_id"] == b["import_id"] or a["tekst"] == b["tekst"]:
+                        continue
+                    if abs((date.fromisoformat(a["dato"]) - date.fromisoformat(b["dato"])).days) > 1:
+                        continue
+                    if regler.lik_tekst(a["tekst"], b["tekst"]) < 0.6:
+                        continue
+                    par.append((a, b))
+                    borte.update((a["id"], b["id"]))
+                    break
+        if not par:
+            return 0
+
+        def verdi(r):  # hvor mye som er gjort for hånd på raden
+            return (r["matplan_id"] is not None, r["kilde"] == "manuell", bool(r["notat"]), r["ikke_overforing"], -r["id"])
+        with self.db.transaksjon():
+            c = self.db.con
+            for a, b in par:
+                behold, fjern = (a, b) if verdi(a) >= verdi(b) else (b, a)
+                nyeste = max((a, b), key=lambda r: r["id"])
+                endr = {"bank_ref": nyeste["bank_ref"], "tekst": nyeste["tekst"]}
+                if not behold["notat"] and fjern["notat"]:
+                    endr["notat"] = fjern["notat"]
+                if fjern["kilde"] == "manuell" and behold["kilde"] != "manuell":
+                    endr.update(kategori_id=fjern["kategori_id"], kilde="manuell", regel_id=None,
+                                endret_av=fjern["endret_av"], endret=fjern["endret"])
+                if fjern["ikke_overforing"]:
+                    endr["ikke_overforing"] = 1
+                c.execute("UPDATE transaksjoner SET par_id = NULL WHERE par_id = ?", (fjern["id"],))
+                c.execute("DELETE FROM transaksjoner WHERE id = ?", (fjern["id"],))
+                c.execute(f"UPDATE transaksjoner SET {', '.join(f'{k} = ?' for k in endr)} WHERE id = ?",
+                          (*endr.values(), behold["id"]))
+        self.finn_overforinger()
+        return len(par)
 
     def _lagre(self, konto_id: int, tx: list[dict], filnavn: str, av: str | None, bank: bool) -> dict:
         """Felles for fil og bank. Det samme kjøpet kan komme både fra en fil og fra banken, med litt
@@ -372,6 +432,17 @@ class Pengeboka:
                                               (date.fromisoformat(datoer[0]) - timedelta(days=3)).isoformat(),
                                               (date.fromisoformat(datoer[-1]) + timedelta(days=3)).isoformat())):
                 andre[belop].append((date.fromisoformat(dato), rid))
+            # Banken bytter av og til id og tekst på et kjøp den har sendt før («Visa 100022, Nok 34,00 …»
+            # blir «Visa, Nok 34,00 …»). Et kjøp vi har fra banken, men som banken ikke lenger sender med
+            # sin gamle id, er da det samme kjøpet – ikke et nytt.
+            borte: dict[int, list[tuple[date, int, str]]] = defaultdict(list)
+            if bank:
+                denne = {t["ref"] for t in tx}
+                for rid, dato, belop, ref, tekst in c.execute(
+                        "SELECT id, dato, belop_ore, bank_ref, tekst FROM transaksjoner WHERE konto_id = ? "
+                        "AND bank_ref IS NOT NULL AND dato BETWEEN ? AND ?", (konto_id, datoer[0], datoer[-1])):
+                    if ref not in denne:
+                        borte[belop].append((date.fromisoformat(dato), rid, tekst))
             brukt: set[int] = set()
             for t, f in zip(tx, fa):
                 if (bank and t["ref"] in refs) or f in fins:
@@ -379,11 +450,21 @@ class Pengeboka:
                 d = date.fromisoformat(t["dato"])
                 kandidater = sorted((abs((d - kd).days), rid) for kd, rid in andre.get(t["belop_ore"], [])
                                     if rid not in brukt and abs((d - kd).days) <= 3)
+                if bank and not kandidater:
+                    kandidater = sorted((abs((d - kd).days), rid) for kd, rid, tekst in borte.get(t["belop_ore"], [])
+                                        if rid not in brukt and abs((d - kd).days) <= 3
+                                        and (kd == d or regler.lik_tekst(tekst, t["tekst"]) >= 0.5))
                 if kandidater:
                     rid = kandidater[0][1]
                     brukt.add(rid)
                     if bank:
-                        c.execute("UPDATE transaksjoner SET bank_ref = ? WHERE id = ?", (t["ref"], rid))
+                        # Bankens nyeste tekst tas også med, så et nytt, likt kjøp senere får lik tekst
+                        # og aldri forveksles med dette (kategori og notat beholdes)
+                        c.execute("UPDATE transaksjoner SET bank_ref = ?, tekst = ? WHERE id = ? AND fingeravtrykk LIKE 'bank:%'",
+                                  (t["ref"], t["tekst"][:300], rid))
+                        c.execute("UPDATE transaksjoner SET bank_ref = ? WHERE id = ? AND fingeravtrykk NOT LIKE 'bank:%'",
+                                  (t["ref"], rid))
+                        refs.add(t["ref"])
                     else:
                         c.execute("UPDATE transaksjoner SET fingeravtrykk = ? WHERE id = ?", (f, rid))
                     continue

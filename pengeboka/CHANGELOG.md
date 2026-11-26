@@ -1,5 +1,11 @@
 # Endringslogg
 
+## 0.8.0
+
+- **Rettet: kjøp og inntekter fra banken ble ført dobbelt.** Banken sender av og til samme transaksjon på nytt med ny id og litt annen tekst («Visa 100022, Nok 34,00 …» blir «Visa, Nok 34,00 …»). Det gjenkjennes nå, og duplikatene som allerede er hentet, slås sammen automatisk ved oppstart. Kategori, notat og kvittering gjort for hånd beholdes.
+- Kvitteringer fra Matplan kobles oftere: datoen kan være opptil fem dager unna (Oda: åtte), kjøpsdatoen i bankteksten brukes når banken fører kjøpet senere, og Oda-betalinger delt i to kobles til samme kvittering.
+- Koblinger gjort for hånd i Matplan brukes foran Pengebokas egen gjetting.
+
 ## 0.7.0
 
 - Oversikten kan vise **Måned, Kvartal, År eller siste 12 måneder**. Pilene blar en hel periode om gangen.
