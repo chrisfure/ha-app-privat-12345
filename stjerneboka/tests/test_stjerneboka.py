@@ -1,0 +1,130 @@
+"""Tester for regler, sperrer, godkjenning og ukepenger. Kjør: python3 -m pytest stjerneboka/tests"""
+from __future__ import annotations
+
+import sys
+from datetime import datetime, timedelta
+from pathlib import Path
+from zoneinfo import ZoneInfo
+
+import pytest
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "app"))
+
+from db import Database  # noqa: E402
+from logikk import MALER, Feil, Sperret, Stjerneboka  # noqa: E402
+
+TZ = ZoneInfo("Europe/Oslo")
+
+
+def kl(dag: int, t: int, m: int = 0) -> datetime:
+    """Tidspunkt i uke 48 2026 (mandag 23. nov = dag 0)."""
+    return datetime(2026, 11, 23 + dag, t, m, tzinfo=TZ)
+
+
+@pytest.fixture
+def sb(tmp_path):
+    s = Stjerneboka(Database(tmp_path / "t.db"))
+    a = s.lagre_barn({"navn": "Ola", "farge": "blaa"})
+    b = s.lagre_barn({"navn": "Kari", "farge": "rosa"})
+    s.a, s.b = a["id"], b["id"]
+    s.tann = s.lagre_oppgave({**MALER[0], "barn": [a["id"], b["id"]]})["id"]
+    s.do = s.lagre_oppgave({**MALER[1], "barn": [a["id"]]})["id"]
+    s.bord = s.lagre_oppgave({"navn": "Ta av bordet", "type": "familie", "poeng": 1, "penger": 1,
+                              "nar": "hele_dagen", "sperre": "intervall", "intervall_min": 120,
+                              "barn": [a["id"]]})["id"]
+    s.oppvask = s.lagre_oppgave({"navn": "Oppvask", "type": "ekstra", "poeng": 3, "penger": 1,
+                                 "godkjenning": 1, "sperre": "dag", "barn": [a["id"]]})["id"]
+    return s
+
+
+def test_okter(sb):
+    assert sb.okt(kl(0, 7)) == "morgen"
+    assert sb.okt(kl(0, 13)) == "dag"
+    assert sb.okt(kl(0, 19)) == "kveld"
+    assert sb.okt(kl(1, 2)) == "kveld"
+    assert sb.okt_start(kl(1, 2)) == kl(0, 16)
+
+
+def test_tannpuss_en_gang_per_okt(sb):
+    sb.registrer(sb.a, sb.tann, t=kl(0, 7))
+    with pytest.raises(Sperret):
+        sb.registrer(sb.a, sb.tann, t=kl(0, 8))
+    sb.registrer(sb.a, sb.tann, t=kl(0, 19))   # ny økt
+    sb.registrer(sb.b, sb.tann, t=kl(0, 19))   # annet barn
+    assert sb.stjerner_i_dag(sb.a, kl(0, 20)) == 2
+
+
+def test_do_intervall(sb):
+    sb.registrer(sb.a, sb.do, t=kl(0, 10))
+    with pytest.raises(Sperret):
+        sb.registrer(sb.a, sb.do, t=kl(0, 10, 20))
+    sb.registrer(sb.a, sb.do, t=kl(0, 10, 31))
+
+
+def test_ikke_tildelt(sb):
+    with pytest.raises(Feil):
+        sb.registrer(sb.b, sb.do, t=kl(0, 10))
+
+
+def test_godkjenning_og_ukepenger(sb):
+    r = sb.registrer(sb.a, sb.oppvask, t=kl(1, 17))["registrering"]
+    assert r["status"] == "venter"
+    with pytest.raises(Sperret):  # venter allerede
+        sb.registrer(sb.a, sb.oppvask, t=kl(1, 17, 5))
+    s = sb.ukesum(sb.a, sb.uke_start(kl(1, 18)))
+    assert s["stjerner"] == 0 and s["kroner"] is None
+    sb.godkjenn(r["id"], av="Voksen")
+    sb.registrer(sb.a, sb.bord, t=kl(1, 18))
+    sb.registrer(sb.a, sb.tann, t=kl(1, 19))   # rutine – ingen penger
+    sb.lagre_innstillinger({"ukepenger_aktiv": "1", "kr_per_poeng": "2,5"})
+    s = sb.ukesum(sb.a, sb.uke_start(kl(1, 20)))
+    assert s["stjerner"] == 3 and s["poeng_penger"] == 4 and s["kroner"] == 10.0
+
+
+def test_avvist_kan_proves_igjen(sb):
+    r = sb.registrer(sb.a, sb.oppvask, t=kl(2, 17))["registrering"]
+    sb.godkjenn(r["id"], godkjent=False)
+    sb.registrer(sb.a, sb.oppvask, t=kl(2, 17, 30))
+
+
+def test_rutine_kan_ikke_gi_penger(sb):
+    o = sb.lagre_oppgave({"navn": "Test", "type": "rutine", "penger": 1})
+    assert o["penger"] == 0
+    with pytest.raises(Feil):
+        sb.lagre_oppgave({"penger": 1}, sb.tann)
+    # men kan flyttes til familiebidrag og bli pengeoppgave
+    assert sb.lagre_oppgave({"type": "familie", "penger": 1}, sb.tann)["penger"] == 1
+
+
+def test_barnevisning_mangler(sb):
+    v = sb.barnevisning(kl(3, 19))
+    ola = next(b for b in v["barn"] if b["navn"] == "Ola")
+    assert "Tannpuss" in ola["mangler"] and not ola["alt_ferdig"]
+    sb.registrer(sb.a, sb.tann, t=kl(3, 19))
+    sb.registrer(sb.a, sb.do, t=kl(3, 19))
+    ola = next(b for b in sb.barnevisning(kl(3, 19, 1))["barn"] if b["navn"] == "Ola")
+    assert ola["alt_ferdig"] and {k["navn"] for k in ola["hjelpe"]} == {"Ta av bordet", "Oppvask"}
+
+
+def test_kort(sb):
+    assert sb.skann("04a1b2c3")["handling"] == "ukjent"
+    assert sb.db.ukjente_kort()[0]["uid"] == "04A1B2C3"
+    sb.lagre_kort("04a1b2c3", {"barn_id": sb.b, "oppgave_id": sb.tann})
+    assert not sb.db.ukjente_kort()
+    assert sb.skann("04A1B2C3")["handling"] == "registrert"
+    assert sb.skann("04A1B2C3")["handling"] == "sperret"
+    with pytest.raises(Feil):
+        sb.lagre_kort("XYZ12345", {"barn_id": sb.b, "oppgave_id": sb.do})  # ikke tildelt Kari
+
+
+def test_angre_tidsgrense(sb):
+    t0 = datetime.now(TZ) - timedelta(minutes=10)
+    r = sb.registrer(sb.a, sb.bord, t=t0)["registrering"]
+    with pytest.raises(Feil):
+        sb.angre(r["id"])
+    sb.angre(r["id"], fra_skjerm=False)
+
+
+def test_sensorer(sb):
+    s = sb.sensorer()
+    assert "sensor.stjerneboka_ola" in s and "sensor.stjerneboka_venter_godkjenning" in s

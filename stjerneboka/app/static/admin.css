@@ -1,0 +1,87 @@
+/* Stjerneboka – administrasjon. Samme formspråk som de andre appene. */
+:root {
+  --bg: #FBF6EF; --flate: #fff; --flate-2: #F4EEE6; --blekk: #2A2733; --dempet: #7A7484; --linje: #ECE4DA;
+  --aksent: #E0A800; --aksent-lys: #FFF3C8; --ok: #3E9E6E; --ok-lys: #E0F3E8; --fare: #D0473B; --fare-lys: #FCE6E2;
+  --skygge: 0 1px 2px rgba(60, 40, 20, .05), 0 6px 20px rgba(60, 40, 20, .06);
+  --radius: 18px; --font: "Nunito", ui-rounded, system-ui, sans-serif;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root { --bg: #15151D; --flate: #1E1E29; --flate-2: #262633; --blekk: #EEEAF4; --dempet: #9A95A8; --linje: #2E2E3C;
+    --aksent: #FFD23F; --aksent-lys: #3A3119; --ok: #5BC08D; --ok-lys: #1C3529; --fare: #F07A69; --fare-lys: #42221E;
+    --skygge: 0 1px 2px rgba(0,0,0,.3), 0 6px 20px rgba(0,0,0,.25); color-scheme: dark; }
+}
+.farge-rosa { --b: #ff5fa2; } .farge-blaa { --b: #3d8bff; } .farge-lilla { --b: #9b5de5; }
+.farge-gronn { --b: #2ecc71; } .farge-oransje { --b: #ff9f1c; } .farge-gul { --b: #e0b000; }
+
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html, body { margin: 0; background: var(--bg); color: var(--blekk); font-family: var(--font); font-size: 16px; }
+.app { max-width: 920px; margin: 0 auto; padding: 16px 16px 80px; }
+.topp { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+h1 { font-size: 26px; font-weight: 900; margin: 6px 0; }
+h2 { font-size: 19px; font-weight: 900; margin: 22px 0 10px; }
+h3 { font-size: 16px; font-weight: 800; margin: 14px 0 6px; }
+.lenke { color: var(--blekk); font-weight: 800; text-decoration: none; background: var(--aksent-lys); padding: 8px 14px; border-radius: 999px; }
+.faner { display: flex; gap: 6px; overflow-x: auto; margin: 12px 0 8px; padding-bottom: 4px; }
+.faner button { font: inherit; font-weight: 800; border: 0; background: var(--flate-2); color: var(--dempet); padding: 9px 16px;
+  border-radius: 999px; cursor: pointer; white-space: nowrap; }
+.faner button.aktiv { background: var(--blekk); color: var(--bg); }
+
+.kort { background: var(--flate); border-radius: var(--radius); box-shadow: var(--skygge); padding: 14px 16px; margin-bottom: 12px; }
+.hint { color: var(--dempet); font-size: 14px; line-height: 1.45; }
+.rad { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.rad > .vokse { flex: 1; min-width: 0; }
+.liste-rad { display: flex; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--linje); }
+.liste-rad:last-child { border-bottom: 0; }
+.liste-rad .vokse { flex: 1; min-width: 0; }
+.liste-rad .tittel { font-weight: 800; }
+.liste-rad .under { color: var(--dempet); font-size: 14px; }
+.thumb { width: 54px; height: 52px; border-radius: 12px; background: #fffaf2; display: flex; align-items: center; justify-content: center;
+  overflow: hidden; flex: none; font-size: 34px; }
+.thumb img { width: 100%; height: 100%; object-fit: contain; }
+.prikk { width: 14px; height: 14px; border-radius: 50%; background: var(--b); display: inline-block; flex: none; }
+.merke { display: inline-block; font-size: 12px; font-weight: 800; padding: 2px 8px; border-radius: 999px; background: var(--flate-2); color: var(--dempet); margin-right: 4px; }
+.merke.gul { background: var(--aksent-lys); color: var(--blekk); }
+.merke.gronn { background: var(--ok-lys); color: var(--ok); }
+
+button.knapp, .knapp { font: inherit; font-weight: 800; border: 0; border-radius: 12px; padding: 9px 14px; cursor: pointer;
+  background: var(--flate-2); color: var(--blekk); }
+.knapp.primar { background: var(--blekk); color: var(--bg); }
+.knapp.ok { background: var(--ok); color: #fff; }
+.knapp.fare { background: var(--fare-lys); color: var(--fare); }
+.knapp.liten { padding: 6px 10px; font-size: 14px; border-radius: 10px; }
+.knapp:disabled { opacity: .4; cursor: default; }
+
+label.felt { display: block; margin: 10px 0; font-weight: 700; font-size: 14px; color: var(--dempet); }
+label.felt > input, label.felt > select, label.felt > textarea { display: block; width: 100%; margin-top: 4px; }
+input, select, textarea { font: inherit; color: var(--blekk); background: var(--flate-2); border: 1px solid var(--linje); border-radius: 10px; padding: 9px 11px; }
+input[type=checkbox] { width: 20px; height: 20px; accent-color: var(--blekk); }
+.valg { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.valg label { display: flex; align-items: center; gap: 6px; background: var(--flate-2); border-radius: 999px; padding: 6px 12px; font-weight: 700; color: var(--blekk); cursor: pointer; }
+.segment { display: inline-flex; background: var(--flate-2); border-radius: 12px; padding: 3px; gap: 3px; margin-top: 6px; }
+.segment button { font: inherit; font-weight: 800; border: 0; background: transparent; color: var(--dempet); border-radius: 9px; padding: 7px 14px; cursor: pointer; }
+.segment button.aktiv { background: var(--flate); color: var(--blekk); box-shadow: var(--skygge); }
+.bildevalg { display: grid; grid-template-columns: repeat(auto-fill, minmax(70px, 1fr)); gap: 8px; margin-top: 6px; }
+.bildevalg button { border: 3px solid transparent; border-radius: 14px; background: #fffaf2; padding: 4px; cursor: pointer; aspect-ratio: 1; display: flex; align-items: center; justify-content: center; font-size: 34px; }
+.bildevalg button img { width: 100%; height: 100%; object-fit: contain; }
+.bildevalg button.aktiv { border-color: var(--aksent); }
+
+table { width: 100%; border-collapse: collapse; font-size: 15px; }
+th, td { text-align: left; padding: 8px 6px; border-bottom: 1px solid var(--linje); }
+th { color: var(--dempet); font-weight: 800; font-size: 13px; }
+td.tall, th.tall { text-align: right; font-variant-numeric: tabular-nums; }
+
+.barnekort { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; }
+.barnekort .kort { border-top: 6px solid var(--b); margin: 0; }
+.stort { font-size: 34px; font-weight: 900; }
+
+dialog { border: 0; border-radius: 22px; padding: 0; background: var(--flate); color: var(--blekk); width: min(620px, 94vw); box-shadow: 0 20px 60px rgba(0,0,0,.35); }
+dialog::backdrop { background: rgba(0, 0, 0, .45); }
+#dialog-innhold { padding: 18px 20px 20px; max-height: 88vh; overflow-y: auto; }
+.knapperad { display: flex; gap: 8px; justify-content: flex-end; margin-top: 16px; flex-wrap: wrap; }
+.knapperad .venstre { margin-right: auto; }
+
+.toast { position: fixed; left: 50%; bottom: 22px; transform: translateX(-50%); background: var(--blekk); color: var(--bg);
+  padding: 11px 18px; border-radius: 999px; font-weight: 800; box-shadow: var(--skygge); z-index: 50; max-width: 92vw; }
+.tom { color: var(--dempet); padding: 8px 0; }

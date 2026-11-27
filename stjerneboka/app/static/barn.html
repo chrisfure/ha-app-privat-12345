@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="nb">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+  <meta name="theme-color" content="#14141c">
+  <title>Stjerneboka</title>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Nunito:wght@700;800;900&display=swap">
+  <link rel="stylesheet" href="static/barn.css">
+</head>
+<body>
+  <main id="app">
+    <header class="topp">
+      <div class="okt" id="okt"></div>
+      <div class="klokke" id="klokke"></div>
+    </header>
+    <div id="barn"></div>
+    <p class="tom" id="tom" hidden>Ingen oppgaver ennå. En voksen legger dem inn i Stjerneboka.</p>
+  </main>
+
+  <div class="feiring" id="feiring" hidden>
+    <div class="feiring-himmel" id="feiring-himmel"></div>
+    <svg class="rakett" viewBox="0 0 200 320" aria-hidden="true">
+      <g class="flamme"><path d="M80 262 Q100 330 120 262 Z" fill="#ff9f1c"/><path d="M88 262 Q100 305 112 262 Z" fill="#ffe066"/></g>
+      <path class="vinge" d="M62 200 L38 262 L82 246 Z"/><path class="vinge" d="M138 200 L162 262 L118 246 Z"/>
+      <path d="M100 20 C142 62 154 150 136 262 H64 C46 150 58 62 100 20 Z" fill="#fff" stroke="#2b2150" stroke-width="8" stroke-linejoin="round"/>
+      <path class="nese" d="M100 20 C121 41 132 62 136 80 H64 C68 62 79 41 100 20 Z" stroke="#2b2150" stroke-width="7" stroke-linejoin="round"/>
+      <circle cx="100" cy="140" r="26" fill="#9fd8ff" stroke="#2b2150" stroke-width="7"/>
+      <circle cx="92" cy="132" r="7" fill="#fff"/>
+    </svg>
+    <div class="feiring-tekst">
+      <div class="feiring-linje1" id="feiring-linje1"></div>
+      <div class="feiring-linje2" id="feiring-linje2"></div>
+      <div class="feiring-linje3" id="feiring-linje3"></div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast" hidden>
+    <span id="toast-tekst"></span>
+    <button id="toast-angre" hidden>Angre</button>
+  </div>
+
+  <script src="static/barn.js"></script>
+</body>
+</html>
