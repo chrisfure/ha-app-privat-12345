@@ -1,5 +1,9 @@
 # Endringslogg
 
+## 0.1.1
+
+- Barnesiden bruker port 8210 som standard (8097 var opptatt hos mange).
+
 ## 0.1.0
 
 - Første versjon: barn, oppgaver med tegning/emoji/eget bilde, tre typer (rutine, familiebidrag, ekstra innsats) og 1–3 poeng.

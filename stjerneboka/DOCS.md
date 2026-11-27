@@ -7,7 +7,7 @@ Appen har to deler:
 | Del | Hvor | Hvem |
 |---|---|---|
 | **Administrasjon** | Stjerneboka i sidemenyen (ingress) | De voksne: oppgaver, barn, godkjenning, kort og innstillinger |
-| **Barnesiden** | `http://<home-assistant>:8097/` på hjemmenettet | Barna – på veggskjermen eller et nettbrett |
+| **Barnesiden** | `http://<home-assistant>:8210/` på hjemmenettet | Barna – på veggskjermen eller et nettbrett |
 
 ## Kom i gang
 
@@ -58,11 +58,11 @@ Barnesiden viser oppgavene som gjelder nå, med ett felt per barn i barnets farg
 
 Vis den på veggskjermen på én av disse måtene:
 
-* et **nettsidekort** (iframe) i dashbordet med adressen `http://<ip-til-home-assistant>:8097/`,
+* et **nettsidekort** (iframe) i dashbordet med adressen `http://<ip-til-home-assistant>:8210/`,
 * en **knapp som åpner en Browser Mod-popup** med samme adresse,
 * eller la appen åpne den selv når et kort skannes (Innstillinger → Veggskjermen).
 
-Barnesiden er bare for hjemmenettet. Ikke åpne port 8097 mot internett.
+Barnesiden er bare for hjemmenettet. Ikke åpne porten mot internett. Porten (8210 som standard) kan endres under appens Nettverk-innstillinger i Home Assistant – husk da å endre adressen under Innstillinger → Veggskjermen.
 
 ## NFC-kort
 

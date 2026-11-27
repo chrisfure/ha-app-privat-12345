@@ -46,7 +46,7 @@
     if (art === "emoji") return el("div", { class: "thumb" }, v);
     return el("div", { class: "thumb" }, el("img", { src: art === "innebygd" ? `static/bilder/${v}.png?v=1` : `bilder/${v}`, alt: "" }));
   }
-  const barneUrl = () => D.innstillinger.barneside_url || `http://${location.hostname}:8097/`;
+  const barneUrl = () => D.innstillinger.barneside_url || `http://${location.hostname}:8210/`;
 
   // ------------------------------------------------------------ dialog
   function dialog(tittel, innhold, knapper) {
