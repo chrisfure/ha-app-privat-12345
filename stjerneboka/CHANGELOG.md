@@ -1,5 +1,9 @@
 # Endringslogg
 
+## 0.1.2
+
+- Barnesiden åpnes i fullskjerm på veggskjermen når et kort skannes.
+
 ## 0.1.1
 
 - Barnesiden bruker port 8210 som standard (8097 var opptatt hos mange).

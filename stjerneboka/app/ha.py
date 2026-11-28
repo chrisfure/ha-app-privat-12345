@@ -115,8 +115,8 @@ class HAKobling:
             return False
         return await self.tjeneste("browser_mod", "popup", {
             "browser_id": [inn["skjerm_browser"]], "tag": "stjerneboka", "title": "⭐ Stjerneboka",
-            "initial_style": "wide", "dismissable": True, "timeout": 600000, "timeout_hide_progress": True,
-            "content": {"type": "iframe", "url": inn["barneside_url"], "aspect_ratio": "150%"},
+            "initial_style": "fullscreen", "dismissable": True, "timeout": 600000, "timeout_hide_progress": True,
+            "content": {"type": "iframe", "url": inn["barneside_url"], "aspect_ratio": "170%"},
         })
 
     def _varsel_tjenester(self) -> list[str]:
