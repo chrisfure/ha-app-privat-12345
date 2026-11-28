@@ -25,7 +25,7 @@ OKT_NAVN = {"morgen": "Morgen", "dag": "Dag", "kveld": "Kveld", "hele_dagen": "H
 SPERRER = ("okt", "dag", "intervall", "fri")
 FARGER = ("rosa", "blaa", "lilla", "gronn", "oransje", "gul")
 INNEBYGDE_BILDER = ("tannpuss", "gre_haret", "do", "kle_pa", "neseskylling", "ta_av_bordet",
-                    "dekke_bordet", "rydde_rommet", "oppvaskmaskin", "skittentoy")
+                    "dekke_bordet", "rydde_rommet", "rydde_leker", "oppvaskmaskin", "skittentoy")
 
 STANDARD = {
     "morgen_fra": "04:00", "dag_fra": "12:00", "kveld_fra": "16:00",
@@ -56,6 +56,8 @@ MALER = [
      "sperre": "intervall", "intervall_min": 120, "ros": "dekket bordet"},
     {"navn": "Klær i skittentøyet", "bilde": "innebygd:skittentoy", "type": "familie", "poeng": 1,
      "nar": "kveld", "sperre": "okt", "ros": "lagt klærne i skittentøyet"},
+    {"navn": "Rydde leker", "bilde": "innebygd:rydde_leker", "type": "familie", "poeng": 1, "nar": "hele_dagen",
+     "sperre": "okt", "ros": "ryddet lekene"},
     {"navn": "Rydde rommet", "bilde": "innebygd:rydde_rommet", "type": "familie", "poeng": 2, "nar": "hele_dagen",
      "sperre": "dag", "godkjenning": 1, "ros": "ryddet rommet"},
     {"navn": "Tømme oppvaskmaskinen", "bilde": "innebygd:oppvaskmaskin", "type": "ekstra", "poeng": 3,

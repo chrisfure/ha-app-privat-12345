@@ -1,5 +1,9 @@
 # Endringslogg
 
+## 0.2.2
+
+- Ny tegning og nytt forslag: «Rydde leker».
+
 ## 0.2.1
 
 - Ny regel: maks antall ganger per dag. Kan kombineres med pause mellom, én gang per morgen/dag/kveld eller «så ofte de vil». Barnesiden viser f.eks. 1/3.
