@@ -151,6 +151,7 @@
       el("span", { class: `merke ${TYPE_FARGE[o.type]}` }, D.konstanter.typer.find((t) => t.id === o.type).navn),
       o.type !== "rutine" ? el("span", { class: "merke" }, "⭐".repeat(o.poeng)) : null,
       el("span", { class: "merke" }, o.nar.split(",").map((n) => NAR[n]).join(" + ")),
+      o.maks_per_dag ? el("span", { class: "merke" }, `Maks ${o.maks_per_dag}/dag`) : null,
       o.godkjenning ? el("span", { class: "merke" }, "Godkjennes") : null,
       o.penger ? el("span", { class: "merke gul" }, "💰 Ukepenger") : null,
       !o.aktiv ? el("span", { class: "merke" }, "Av") : null,
@@ -211,7 +212,7 @@
   function oppgaveDialog(o) {
     const ny = !o;
     const s = ny ? { navn: "", bilde: "emoji:⭐", type: "familie", poeng: 1, godkjenning: 0, penger: 0, nar: "hele_dagen",
-      sperre: "okt", intervall_min: 30, ros: "", aktiv: 1, barn: D.barn.filter((b) => b.aktiv).map((b) => b.id) } : { ...o, barn: [...o.barn] };
+      sperre: "okt", intervall_min: 30, maks_per_dag: 0, ros: "", aktiv: 1, barn: D.barn.filter((b) => b.aktiv).map((b) => b.id) } : { ...o, barn: [...o.barn] };
     const navn = el("input", { value: s.navn, maxlength: 40, placeholder: "F.eks. Ta av bordet" });
     const ros = el("input", { value: s.ros, maxlength: 80, placeholder: "F.eks. tatt av bordet" });
     // bilde
@@ -261,6 +262,8 @@
     const sperre = el("select", {}, Object.entries(SPERRE).map(([k, v]) => el("option", { value: k, selected: k === s.sperre }, v)));
     sperre.onchange = () => { intervallRad.hidden = sperre.value !== "intervall"; };
     intervallRad.hidden = s.sperre !== "intervall";
+    const maks = el("input", { type: "number", min: 0, max: 20, value: s.maks_per_dag || 0, style: "width:100px" });
+    const maksRad = el("label", { class: "felt" }, "Maks antall ganger per dag (0 = ingen grense)", maks);
     const godkjenning = el("input", { type: "checkbox", checked: !!s.godkjenning });
     const aktiv = el("input", { type: "checkbox", checked: !!s.aktiv });
     const barnValg = el("div", { class: "valg" }, D.barn.map((b) => {
@@ -278,7 +281,7 @@
       el("div", { class: "felt" }, el("b", { class: "hint" }, "Hvor krevende (poeng)"),
         el("div", {}, segment([[1, "⭐ Lett"], [2, "⭐⭐ Middels"], [3, "⭐⭐⭐ Krevende"]], s.poeng, (v) => { s.poeng = v; }))),
       el("div", { class: "felt" }, el("b", { class: "hint" }, "Når vises den"), narValg),
-      el("label", { class: "felt" }, "Hvor ofte kan den gjøres", sperre), intervallRad,
+      el("label", { class: "felt" }, "Hvor ofte kan den gjøres", sperre), intervallRad, maksRad,
       el("div", { class: "valg" }, el("label", {}, godkjenning, "En voksen må godkjenne")),
       pengerRad,
       el("label", { class: "felt" }, "Rosen i stemmen: «Bra jobba! Du har …»", ros),
@@ -291,7 +294,7 @@
       avbryt(),
       el("button", { class: "knapp primar", type: "button", onclick: async () => {
         const data = { navn: navn.value, bilde: s.bilde, type: s.type, poeng: s.poeng, nar: s.nar, sperre: sperre.value,
-          intervall_min: +intervall.value || 30, godkjenning: godkjenning.checked, penger: s.type === "rutine" ? false : pengerBoks.checked,
+          intervall_min: +intervall.value || 30, maks_per_dag: +maks.value || 0, godkjenning: godkjenning.checked, penger: s.type === "rutine" ? false : pengerBoks.checked,
           ros: ros.value, aktiv: aktiv.checked, barn: s.barn };
         if (await gjor(() => ny ? api("POST", "api/oppgaver", data) : api("PATCH", `api/oppgaver/${o.id}`, data), "Lagret")) lukk();
       } }, "Lagre"),

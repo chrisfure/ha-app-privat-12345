@@ -257,6 +257,8 @@ class Stjerneboka:
             ut["sperre"] = d["sperre"]
         if "intervall_min" in d:
             ut["intervall_min"] = max(1, min(24 * 60, int(d["intervall_min"] or 30)))
+        if "maks_per_dag" in d:
+            ut["maks_per_dag"] = max(0, min(20, int(d["maks_per_dag"] or 0)))
         if "ros" in d:
             ut["ros"] = str(d["ros"] or "").strip()[:80]
         if "barn" in d:
@@ -306,13 +308,19 @@ class Stjerneboka:
         innenfor = bool(siste and fra and fra_iso(siste["tid"]) >= fra)
         dag = til_iso(self.dag_start(t))
         i_dag = [r for r in self.db.registreringer(fra=dag, barn_id=barn_id)
-                 if r["oppgave_id"] == o["id"] and r["status"] == "godkjent"]
+                 if r["oppgave_id"] == o["id"] and r["status"] != "avvist"]
+        maks = int(o.get("maks_per_dag") or 0)
+        dagsgrense = bool(maks and len(i_dag) >= maks)
+        venter = innenfor and siste["status"] == "venter"
         return {
-            "ferdig": innenfor and siste["status"] == "godkjent",
-            "venter": innenfor and siste["status"] == "venter",
+            "ferdig": (innenfor and siste["status"] == "godkjent") or (dagsgrense and not venter),
+            "venter": venter,
+            "dagsgrense": dagsgrense,
             "siste_id": siste["id"] if siste else None,
             "siste_tid": siste["tid"] if siste else None,
-            "antall_i_dag": len(i_dag),
+            "antall_i_dag": sum(1 for r in i_dag if r["status"] == "godkjent"),
+            "brukt_i_dag": len(i_dag),
+            "maks_per_dag": maks,
         }
 
     def aktuell(self, o: dict, t: datetime | None = None) -> bool:
@@ -338,7 +346,11 @@ class Stjerneboka:
             raise Feil(f"{o['navn']} er ikke en oppgave for {b['navn']}")
         st = self.oppgavestatus(barn_id, o, t)
         if st["ferdig"] or st["venter"]:
-            if o["sperre"] == "intervall":
+            if st["dagsgrense"] and not st["venter"]:
+                ganger = "én gang" if st["maks_per_dag"] == 1 else f"{st['maks_per_dag']} ganger"
+                melding = (f"Du har {self.ros_tekst(o)} {ganger} i dag, {b['navn']}. "
+                           "Det holder for i dag – kjempebra!")
+            elif o["sperre"] == "intervall":
                 melding = f"Du har nettopp {self.ros_tekst(o)}, {b['navn']}. Prøv igjen litt senere!"
             elif st["venter"]:
                 melding = f"{b['navn']}, en voksen skal snart sjekke {o['navn'].lower()}."
@@ -532,7 +544,8 @@ class Stjerneboka:
                 kort = {"id": o["id"], "navn": o["navn"], "bilde": o["bilde"], "type": o["type"],
                         "poeng": o["poeng"], "godkjenning": bool(o["godkjenning"]), "penger": bool(o["penger"]),
                         "ferdig": st["ferdig"], "venter": st["venter"], "antall_i_dag": st["antall_i_dag"],
-                        "fri": o["sperre"] == "fri",
+                        "fri": o["sperre"] == "fri", "maks_per_dag": st["maks_per_dag"],
+                        "brukt_i_dag": st["brukt_i_dag"],
                         "angre_id": st["siste_id"] if kan_angre else None}
                 if o["type"] == "rutine":
                     na.append(kort)

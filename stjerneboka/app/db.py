@@ -31,6 +31,7 @@ CREATE TABLE IF NOT EXISTS oppgaver (
     nar           TEXT NOT NULL DEFAULT 'hele_dagen', -- kommaliste: morgen,dag,kveld eller hele_dagen
     sperre        TEXT NOT NULL DEFAULT 'okt',        -- okt | dag | intervall | fri
     intervall_min INTEGER NOT NULL DEFAULT 30,
+    maks_per_dag  INTEGER NOT NULL DEFAULT 0,         -- 0 = ingen grense
     ros           TEXT NOT NULL DEFAULT '',           -- «Du har …» i stemmen, f.eks. «pusset tenner»
     aktiv         INTEGER NOT NULL DEFAULT 1,
     rekkefolge    INTEGER NOT NULL DEFAULT 0
@@ -92,7 +93,7 @@ CREATE TABLE IF NOT EXISTS innstillinger (
 """
 
 OPPGAVE_FELT = ("navn", "bilde", "type", "poeng", "godkjenning", "penger", "nar", "sperre",
-                "intervall_min", "ros", "aktiv", "rekkefolge")
+                "intervall_min", "maks_per_dag", "ros", "aktiv", "rekkefolge")
 BARN_FELT = ("navn", "farge", "emoji", "aktiv", "rekkefolge")
 
 
@@ -130,6 +131,8 @@ class Database:
         for kol in ("media_id", "media_type", "hoyttaler", "entity", "bryter"):
             if kol not in kolonner("kort"):
                 self.con.execute(f"ALTER TABLE kort ADD COLUMN {kol} TEXT")
+        if "maks_per_dag" not in kolonner("oppgaver"):
+            self.con.execute("ALTER TABLE oppgaver ADD COLUMN maks_per_dag INTEGER NOT NULL DEFAULT 0")
         if "leser_id" not in kolonner("ukjente_kort"):
             self.con.execute("ALTER TABLE ukjente_kort ADD COLUMN leser_id TEXT")
 

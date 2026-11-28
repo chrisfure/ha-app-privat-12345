@@ -63,7 +63,8 @@
       el("div", { class: "navn" }, o.navn));
     if (o.type !== "rutine") knapp.append(el("div", { class: "poeng" }, "⭐".repeat(o.poeng)));
     if (o.penger && status.ukepenger) knapp.append(el("div", { class: "penger" }, "💰"));
-    if (o.fri && o.antall_i_dag) knapp.append(el("div", { class: "antall" }, `×${o.antall_i_dag}`));
+    if (o.maks_per_dag > 1) knapp.append(el("div", { class: "antall" }, `${o.brukt_i_dag}/${o.maks_per_dag}`));
+    else if (o.fri && o.antall_i_dag) knapp.append(el("div", { class: "antall" }, `×${o.antall_i_dag}`));
     if (o.ferdig) knapp.append(stjerne("stor-stjerne"));
     if (o.venter) knapp.append(el("div", { class: "vent" }, "⏳ Venter på voksen"));
     return knapp;

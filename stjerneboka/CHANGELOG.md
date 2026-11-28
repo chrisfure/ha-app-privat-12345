@@ -1,5 +1,9 @@
 # Endringslogg
 
+## 0.2.1
+
+- Ny regel: maks antall ganger per dag. Kan kombineres med pause mellom, én gang per morgen/dag/kveld eller «så ofte de vil». Barnesiden viser f.eks. 1/3.
+
 ## 0.2.0
 
 - NFC-lesere i Home Assistant (ESPHome «tag skannet»): appen vet hvilken leser som skannet kortet.

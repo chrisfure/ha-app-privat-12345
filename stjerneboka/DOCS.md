@@ -40,6 +40,8 @@ Rutinene belønnes med ros og stjerner, ikke penger. Pengene knyttes til at barn
 * med pause mellom (do – f.eks. 30 minutter),
 * så ofte de vil.
 
+I tillegg kan du sette **maks antall ganger per dag** – f.eks. «pause på 30 minutter, maks 3 ganger per dag». Barnesiden viser hvor mange ganger som er brukt (1/3), og når grensen er nådd får oppgaven stjerne resten av dagen.
+
 **Godkjenning**: barnet trykker, og oppgaven står som «⏳ Venter på voksen» til en voksen godkjenner – i appen eller med knappene i varselet på mobilen. «Ikke helt ennå» lar barnet prøve igjen.
 
 ## Ukepenger

@@ -163,3 +163,25 @@ def test_leser_uten_stjerner_og_ha(sb):
     assert sb.skann("55-66-77-88", leser_id="rom")["handling"] == "ha"
     with pytest.raises(Feil):
         sb.lagre_kort("55-66-77-88", {"handling": "ha", "entity": "light.x"})
+
+
+def test_maks_per_dag_med_pause(sb):
+    sb.lagre_oppgave({"sperre": "intervall", "intervall_min": 30, "maks_per_dag": 2}, sb.do)
+    sb.registrer(sb.a, sb.do, t=kl(4, 8))
+    with pytest.raises(Sperret):                       # pausen
+        sb.registrer(sb.a, sb.do, t=kl(4, 8, 10))
+    sb.registrer(sb.a, sb.do, t=kl(4, 9))
+    with pytest.raises(Sperret, match="2 ganger i dag"):  # dagsgrensen, selv etter pausen
+        sb.registrer(sb.a, sb.do, t=kl(4, 12))
+    st = sb.oppgavestatus(sb.a, sb.db.en_oppgave(sb.do), kl(4, 12))
+    assert st["ferdig"] and st["dagsgrense"] and st["brukt_i_dag"] == 2
+    sb.registrer(sb.a, sb.do, t=kl(5, 8))              # ny dag
+
+
+def test_maks_per_dag_fri(sb):
+    o = sb.lagre_oppgave({"navn": "Hjelpe til", "type": "familie", "sperre": "fri", "maks_per_dag": 3,
+                          "barn": [sb.a]})["id"]
+    for m in range(3):
+        sb.registrer(sb.a, o, t=kl(6, 10, m))
+    with pytest.raises(Sperret):
+        sb.registrer(sb.a, o, t=kl(6, 10, 5))
