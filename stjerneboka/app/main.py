@@ -16,8 +16,8 @@ from aiohttp import web
 
 from db import Database, naa
 from ha import HAKobling
-from logikk import (FARGER, INNEBYGDE_BILDER, MALER, OKT_NAVN, SPERRER, TYPE_NAVN, TYPER, Feil, Sperret,
-                    Stjerneboka)
+from logikk import (FARGER, INNEBYGDE_BILDER, MALER, MEDIETYPER, OKT_NAVN, SPERRER, TYPE_NAVN, TYPER, Feil,
+                    Sperret, Stjerneboka)
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 log = logging.getLogger("stjerneboka")
@@ -107,9 +107,10 @@ def lag_admin(sb: Stjerneboka, ha: HAKobling, bildemappe: Path) -> web.Applicati
         return {
             **sb.admin_oversikt(),
             "innstillinger": sb.inn, "oppgaver": sb.db.oppgaver(), "kort": sb.db.kortliste(),
-            "ukjente_kort": sb.db.ukjente_kort(), "maler": MALER,
+            "ukjente_kort": sb.db.ukjente_kort(), "maler": MALER, "lesere": sb.db.lesere(),
             "konstanter": {"typer": [{"id": t, "navn": TYPE_NAVN[t]} for t in TYPER], "farger": FARGER,
-                           "okter": OKT_NAVN, "sperrer": SPERRER, "innebygde": INNEBYGDE_BILDER},
+                           "okter": OKT_NAVN, "sperrer": SPERRER, "innebygde": INNEBYGDE_BILDER,
+                           "medietyper": MEDIETYPER},
             "ha": ha.aktiv, "bruker": _bruker(req) if req else None,
             "sensorer": list(sb.sensorer().keys()),
         }
@@ -222,6 +223,18 @@ def lag_admin(sb: Stjerneboka, ha: HAKobling, bildemappe: Path) -> web.Applicati
     @fanget
     async def glem_ukjente(req):
         sb.db.glem_ukjente_kort()
+        return web.json_response(_alt(req))
+
+    @routes.patch("/api/lesere/{lid}")
+    @fanget
+    async def lagre_leser(req):
+        sb.lagre_leser(req.match_info["lid"], await req.json())
+        return web.json_response(_alt(req))
+
+    @routes.delete("/api/lesere/{lid}")
+    @fanget
+    async def slett_leser(req):
+        sb.db.slett_leser(req.match_info["lid"])
         return web.json_response(_alt(req))
 
     @routes.post("/api/kort/test")

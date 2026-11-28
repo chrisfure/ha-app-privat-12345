@@ -128,3 +128,38 @@ def test_angre_tidsgrense(sb):
 def test_sensorer(sb):
     s = sb.sensorer()
     assert "sensor.stjerneboka_ola" in s and "sensor.stjerneboka_venter_godkjenning" in s
+
+
+def test_lesere_og_musikk(sb):
+    hendelser = []
+    sb.ved_endring(lambda hva, d: hendelser.append((hva, d)))
+    # ukjent kort på en leser registrerer leseren
+    assert sb.skann("aa-bb-cc-dd", leser_id="dev1", leser_navn="NFC stue", leser_rom="Stue")["handling"] == "ukjent"
+    assert sb.db.en_leser("dev1")["navn"] == "NFC stue"
+    assert sb.db.ukjente_kort()[0]["leser_id"] == "dev1"
+    # musikk uten høyttaler gir beskjed
+    sb.lagre_kort("AA-BB-CC-DD", {"handling": "musikk", "media_id": "Dilla på", "media_type": "track"})
+    assert sb.skann("AA-BB-CC-DD", leser_id="dev1")["handling"] == "mangler_hoyttaler"
+    # med høyttaler på leseren spilles det der
+    sb.lagre_leser("dev1", {"hoyttaler": "media_player.stue"})
+    res = sb.skann("AA-BB-CC-DD", leser_id="dev1")
+    assert res["handling"] == "musikk" and res["hoyttaler"] == "media_player.stue"
+    assert hendelser[-1][0] == "musikk"
+    # samme kort på en annen leser spiller i det rommet
+    sb.skann("AA-BB-CC-DD", leser_id="dev2", leser_navn="NFC rom", leser_rom="Barnerom")
+    sb.lagre_leser("dev2", {"hoyttaler": "media_player.barnerom"})
+    assert sb.skann("AA-BB-CC-DD", leser_id="dev2")["hoyttaler"] == "media_player.barnerom"
+    with pytest.raises(Feil):
+        sb.lagre_kort("AA-BB-CC-DD", {"handling": "musikk", "media_id": ""})
+
+
+def test_leser_uten_stjerner_og_ha(sb):
+    sb.skann("11-22-33-44", leser_id="rom", leser_navn="Rom")
+    sb.lagre_leser("rom", {"gir_stjerner": False})
+    sb.lagre_kort("11-22-33-44", {"barn_id": sb.a, "oppgave_id": sb.bord})
+    assert sb.skann("11-22-33-44", leser_id="rom")["handling"] == "ikke_her"
+    assert sb.skann("11-22-33-44")["handling"] == "registrert"   # leser uten id (MQTT) gir stjerner
+    sb.lagre_kort("55-66-77-88", {"handling": "ha", "entity": "automation.lys_rosa"})
+    assert sb.skann("55-66-77-88", leser_id="rom")["handling"] == "ha"
+    with pytest.raises(Feil):
+        sb.lagre_kort("55-66-77-88", {"handling": "ha", "entity": "light.x"})

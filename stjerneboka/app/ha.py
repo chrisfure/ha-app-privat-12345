@@ -3,7 +3,8 @@
 * Publiserer én sensor per barn (sensor.stjerneboka_<navn>) og sensor.stjerneboka_venter_godkjenning.
 * Sender hendelsen «stjerneboka_hendelse» ved hver stjerne, godkjenning og sperre.
 * Lytter på:
-  - «stjerneboka_skann» {uid}           – fra NFC-leseren (videresendt av en automasjon)
+  - «tag_scanned» {tag_id, device_id}   – NFC-lesere i Home Assistant (ESPHome) – vet hvilken leser
+  - «stjerneboka_skann» {uid}           – lesere uten Home Assistant-tagger (f.eks. MQTT via automasjon)
   - «stjerneboka_registrer» {barn, oppgave} – fra knapper, automasjoner eller Assist
   - «mobile_app_notification_action»     – Godkjenn / Ikke helt ennå fra varselet på mobilen
 * Spiller fanfare + stemme på valgt høyttaler og kan åpne barnesiden på veggskjermen (Browser Mod).
@@ -22,7 +23,7 @@ log = logging.getLogger("stjerneboka.ha")
 
 CORE_API = "http://supervisor/core/api"
 CORE_WS = "ws://supervisor/core/websocket"
-LYTT_PA = ("stjerneboka_skann", "stjerneboka_registrer", "mobile_app_notification_action")
+LYTT_PA = ("tag_scanned", "stjerneboka_skann", "stjerneboka_registrer", "mobile_app_notification_action")
 GODKJENN, AVVIS = "STJERNEBOKA_GODKJENN_", "STJERNEBOKA_AVVIS_"
 
 
@@ -175,6 +176,28 @@ class HAKobling:
                 await self._fjern_varsel(r["id"])
         elif hva == "vis_skjerm":
             await self.vis_skjerm()
+        elif hva == "musikk":
+            k = d["kort"]
+            if k.get("bryter") and not await self._er_paa(k["bryter"]):
+                log.info("Musikk-kort %s: %s er av", d["uid"], k["bryter"])
+                return
+            data = {"entity_id": d["hoyttaler"], "media_id": k["media_id"], "enqueue": "replace"}
+            if k.get("media_type") and k["media_type"] != "auto":
+                data["media_type"] = k["media_type"]
+            await self.tjeneste("music_assistant", "play_media", data)
+            await self._fyr("stjerneboka_hendelse", {"handling": "musikk", "uid": d["uid"], "media": k["media_id"],
+                                                     "hoyttaler": d["hoyttaler"],
+                                                     "leser": (d.get("leser") or {}).get("navn")})
+        elif hva == "ha_handling":
+            ent = d["kort"]["entity"]
+            domene = ent.split(".", 1)[0]
+            if domene == "automation":
+                # Automasjonens egne betingelser gjelder fortsatt (skip_condition: false)
+                await self.tjeneste("automation", "trigger", {"entity_id": ent, "skip_condition": False})
+            elif domene == "script":
+                await self.tjeneste("script", "turn_on", {"entity_id": ent})
+            elif domene == "scene":
+                await self.tjeneste("scene", "turn_on", {"entity_id": ent})
         elif hva == "ukjent_kort":
             await self._fyr("stjerneboka_hendelse", {"handling": "ukjent_kort", "uid": d["uid"]})
         elif hva == "angret":
@@ -231,7 +254,33 @@ class HAKobling:
                     ev = data["event"]
                     self._fra_ha(ev.get("event_type"), dict(ev.get("data") or {}))
 
+    async def _mal(self, mal: str) -> str:
+        async with self._session.post(f"{CORE_API}/template", headers=self._hoder, json={"template": mal}) as r:
+            return (await r.text()).strip() if r.status == 200 else ""
+
+    async def _tag(self, ev: dict) -> None:
+        uid, enhet = ev.get("tag_id") or "", ev.get("device_id")
+        navn = rom = None
+        try:
+            if enhet:
+                kjent = self.sb.db.en_leser(enhet)
+                if not kjent or not kjent["navn"]:
+                    svar = await self._mal("{{ device_attr('%s', 'name_by_user') or device_attr('%s', 'name') }}|"
+                                           "{{ area_name('%s') or '' }}" % (enhet, enhet, enhet))
+                    navn, _, rom = svar.partition("|")
+            res = self.sb.skann(uid, enhet, navn, rom)
+            log.info("Kort skannet på %s: %s", navn or enhet or "ukjent leser", res.get("handling"))
+        except (Feil, aiohttp.ClientError) as e:
+            log.info("Ignorerte tag_scanned: %s", e)
+
+    async def _er_paa(self, entity_id: str) -> bool:
+        async with self._session.get(f"{CORE_API}/states/{entity_id}", headers=self._hoder) as r:
+            return r.status == 200 and (await r.json()).get("state") == "on"
+
     def _fra_ha(self, typ: str, ev: dict) -> None:
+        if typ == "tag_scanned":
+            asyncio.create_task(self._tag(ev))
+            return
         try:
             if typ == "stjerneboka_skann":
                 res = self.sb.skann(ev.get("uid") or ev.get("tag_id") or "")

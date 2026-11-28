@@ -339,32 +339,64 @@
     } }, "Lagre")]);
   }
 
-  // ------------------------------------------------------------ NFC-kort
+  // ------------------------------------------------------------ NFC-kort og lesere
+  const MEDIENAVN = { auto: "Finn automatisk", track: "Sang", album: "Album", playlist: "Spilleliste", artist: "Artist",
+    radio: "Radio", audiobook: "Lydbok", podcast: "Podkast" };
+  const leserNavn = (id) => { const l = D.lesere.find((x) => x.id === id); return l ? (l.navn || "Leser") + (l.rom ? ` (${l.rom})` : "") : null; };
+
+  function kortTekst(c) {
+    if (c.handling === "vis_skjerm") return ["📺", "Åpne barnesiden på veggskjermen"];
+    if (c.handling === "musikk") return ["🎵", `Spill ${MEDIENAVN[c.media_type] ? MEDIENAVN[c.media_type].toLowerCase() : ""} «${c.media_id}»`
+      + (c.hoyttaler ? ` på ${c.hoyttaler.replace("media_player.", "")}` : " i rommet der kortet skannes")];
+    if (c.handling === "ha") return ["🏠", `Kjør ${c.entity}`];
+    const o = D.oppgaver.find((x) => x.id === c.oppgave_id);
+    return [o ? thumb(o.bilde) : "⭐", `${barnNavn(c.barn_id)}: ${o ? o.navn : "?"}`];
+  }
+
   function tegnKort() {
     const f = $("f-kort"); f.replaceChildren();
     f.append(el("div", { class: "kort" }, el("p", { class: "hint", style: "margin:0" },
-      "Skann et nytt kort på leseren – det dukker opp under «Nye kort» her. Koble det til et barn og en oppgave. ",
-      "Leseren må sende kort-ID-en til hendelsen ", el("code", {}, "stjerneboka_skann"), " med feltet ", el("code", {}, "uid"), " (se dokumentasjonen).")));
+      "Skann et nytt kort på en leser – det dukker opp under «Nye kort». Koble det til en oppgave (stjerne), musikk eller en automasjon. ",
+      "Musikk spiller på høyttaleren til leseren kortet ble skannet på, så samme kort virker i alle rom.")));
+
+    f.append(el("h2", {}, "Lesere"));
+    const lk = el("div", { class: "kort" });
+    if (!D.lesere.length) lk.append(el("div", { class: "tom" }, "Ingen lesere sett ennå. En leser dukker opp her første gang den skanner et kort (ESPHome-lesere med «tag skannet»)."));
+    for (const l of D.lesere) {
+      const hoy = el("input", { value: l.hoyttaler, placeholder: D.innstillinger.musikk_hoyttaler || "media_player.…", style: "min-width:220px" });
+      const stj = el("input", { type: "checkbox", checked: !!l.gir_stjerner });
+      lk.append(el("div", { class: "liste-rad", style: "flex-wrap:wrap" },
+        el("div", { class: "vokse" }, el("div", { class: "tittel" }, `📡 ${l.navn || "Leser"}`),
+          el("div", { class: "under" }, `${l.rom || "Uten rom"}${l.sist_sett ? ` · sist brukt ${dato(l.sist_sett)} kl. ${kl(l.sist_sett)}` : ""}`)),
+        el("label", { class: "valg" }, el("label", {}, stj, "Gir stjerner")),
+        el("label", { class: "felt", style: "margin:0" }, "Høyttaler for musikk", hoy),
+        el("button", { class: "knapp liten primar", onclick: () => gjor(() => api("PATCH", `api/lesere/${encodeURIComponent(l.id)}`,
+          { gir_stjerner: stj.checked, hoyttaler: hoy.value }), "Lagret") }, "Lagre"),
+        el("button", { class: "knapp liten fare", onclick: () => { if (confirm("Glemme denne leseren? Den kommer tilbake neste gang den skanner.")) gjor(() => api("DELETE", `api/lesere/${encodeURIComponent(l.id)}`)); } }, "Glem")));
+    }
+    f.append(lk);
+
     f.append(el("h2", {}, "Nye kort"));
     const nye = el("div", { class: "kort" });
-    if (!D.ukjente_kort.length) nye.append(el("div", { class: "tom" }, "Ingen nye kort skannet. Skann et kort, så vises det her (oppdater siden)."));
+    if (!D.ukjente_kort.length) nye.append(el("div", { class: "tom" }, "Ingen nye kort. Skann et kort, så vises det her."));
     for (const u of D.ukjente_kort) {
       nye.append(el("div", { class: "liste-rad" }, el("div", { class: "vokse" }, el("div", { class: "tittel" }, u.uid),
-        el("div", { class: "under" }, `Skannet ${dato(u.tid)} kl. ${kl(u.tid)}`)),
+        el("div", { class: "under" }, `Skannet ${dato(u.tid)} kl. ${kl(u.tid)}`, u.leser_id && leserNavn(u.leser_id) ? ` på ${leserNavn(u.leser_id)}` : "")),
         el("button", { class: "knapp primar liten", onclick: () => kortDialog(u.uid) }, "Koble")));
     }
     if (D.ukjente_kort.length) nye.append(el("button", { class: "knapp liten", style: "margin-top:8px", onclick: () => gjor(() => api("DELETE", "api/ukjente_kort")) }, "Tøm listen"));
     f.append(nye);
     f.append(el("div", { class: "rad" }, el("button", { class: "knapp", onclick: () => api("GET", "api/alt") }, "Oppdater"),
       el("button", { class: "knapp", onclick: () => { const uid = prompt("Kort-ID (f.eks. 53-30-5E-B7)"); if (uid) kortDialog(uid.trim().toUpperCase()); } }, "Skriv inn kort-ID")));
+
     f.append(el("h2", {}, "Koblede kort"));
     const k = el("div", { class: "kort" });
     if (!D.kort.length) k.append(el("div", { class: "tom" }, "Ingen kort koblet ennå."));
     for (const c of D.kort) {
-      const o = D.oppgaver.find((x) => x.id === c.oppgave_id);
-      k.append(el("div", { class: "liste-rad" }, o ? thumb(o.bilde) : el("div", { class: "thumb" }, "📺"),
-        el("div", { class: "vokse" }, el("div", { class: "tittel" }, c.handling === "vis_skjerm" ? "Åpne barnesiden på skjermen" : `${barnNavn(c.barn_id)}: ${o ? o.navn : "?"}`),
-          el("div", { class: "under" }, c.uid, c.navn ? ` · ${c.navn}` : "")),
+      const [ikon, tekst] = kortTekst(c);
+      k.append(el("div", { class: "liste-rad" }, typeof ikon === "string" ? el("div", { class: "thumb" }, ikon) : ikon,
+        el("div", { class: "vokse" }, el("div", { class: "tittel" }, c.navn || tekst),
+          el("div", { class: "under" }, c.navn ? `${tekst} · ` : "", c.uid, c.bryter ? ` · bare når ${c.bryter} er på` : "")),
         el("button", { class: "knapp liten", onclick: () => kortDialog(c.uid, c) }, "Endre"),
         el("button", { class: "knapp liten", title: "Late som kortet ble skannet", onclick: () => gjor(async () => {
           const r = await api("POST", "api/kort/test", { uid: c.uid }); toast(r.resultat.melding || "Skannet");
@@ -375,23 +407,38 @@
   }
 
   function kortDialog(uid, c) {
-    const s = c ? { ...c } : { handling: "oppgave", barn_id: (D.barn[0] || {}).id, oppgave_id: null, navn: "" };
-    const handling = el("select", {}, el("option", { value: "oppgave", selected: s.handling === "oppgave" }, "Gi stjerne for en oppgave"),
-      el("option", { value: "vis_skjerm", selected: s.handling === "vis_skjerm" }, "Åpne barnesiden på veggskjermen"));
+    const s = c ? { ...c } : { handling: "oppgave", barn_id: (D.barn[0] || {}).id, oppgave_id: null, navn: "", media_type: "auto" };
+    const handling = el("select", {}, [["oppgave", "⭐ Gi stjerne for en oppgave"], ["musikk", "🎵 Spill musikk"],
+      ["ha", "🏠 Kjør automasjon, skript eller scene"], ["vis_skjerm", "📺 Åpne barnesiden på veggskjermen"]]
+      .map(([v, t]) => el("option", { value: v, selected: s.handling === v }, t)));
     const barnSel = el("select", {}, D.barn.map((b) => el("option", { value: b.id, selected: b.id === s.barn_id }, b.navn)));
     const oppgSel = el("select");
     const fyll = () => oppgSel.replaceChildren(...D.oppgaver.filter((o) => o.barn.includes(+barnSel.value))
       .map((o) => el("option", { value: o.id, selected: o.id === s.oppgave_id }, o.navn)));
     barnSel.onchange = fyll; fyll();
-    const felter = el("div", {}, el("label", { class: "felt" }, "Barn", barnSel), el("label", { class: "felt" }, "Oppgave", oppgSel));
-    handling.onchange = () => { felter.hidden = handling.value !== "oppgave"; };
-    felter.hidden = s.handling !== "oppgave";
+    const media = el("input", { value: s.media_id || "", placeholder: "F.eks. Dilla på, eller en spilleliste" });
+    const mtype = el("select", {}, D.konstanter.medietyper.map((m) => el("option", { value: m, selected: (s.media_type || "auto") === m }, MEDIENAVN[m] || m)));
+    const hoy = el("input", { value: s.hoyttaler || "", placeholder: "Tomt = høyttaleren til leseren" });
+    const bryter = el("input", { value: s.bryter || "", placeholder: "Valgfritt, f.eks. input_boolean.musikk_pa" });
+    const entity = el("input", { value: s.entity || "", placeholder: "automation.… / script.… / scene.…" });
+    const deler = {
+      oppgave: el("div", {}, el("label", { class: "felt" }, "Barn", barnSel), el("label", { class: "felt" }, "Oppgave", oppgSel)),
+      musikk: el("div", {}, el("label", { class: "felt" }, "Hva skal spilles (søk i Music Assistant)", media),
+        el("label", { class: "felt" }, "Type", mtype), el("label", { class: "felt" }, "Fast høyttaler", hoy),
+        el("label", { class: "felt" }, "Spill bare når denne er på", bryter)),
+      ha: el("div", {}, el("label", { class: "felt" }, "Automasjon, skript eller scene", entity),
+        el("p", { class: "hint" }, "En automasjon kjøres med sine egne betingelser, så eventuelle av/på-brytere virker som før.")),
+      vis_skjerm: el("div"),
+    };
+    const vis = () => { for (const [k2, e] of Object.entries(deler)) e.hidden = k2 !== handling.value; };
+    handling.onchange = vis; vis();
     const navn = el("input", { value: s.navn || "", placeholder: "F.eks. rosa kort med tannbørste" });
-    dialog(`Kort ${uid}`, [el("label", { class: "felt" }, "Hva skal kortet gjøre", handling), felter,
-      el("label", { class: "felt" }, "Beskrivelse (valgfritt)", navn)],
+    dialog(`Kort ${uid}`, [el("label", { class: "felt" }, "Hva skal kortet gjøre", handling), ...Object.values(deler),
+      el("label", { class: "felt" }, "Navn på kortet (valgfritt)", navn)],
     [avbryt(), el("button", { class: "knapp primar", type: "button", onclick: async () => {
       if (await gjor(() => api("PUT", `api/kort/${encodeURIComponent(uid)}`, { handling: handling.value, barn_id: +barnSel.value,
-        oppgave_id: +oppgSel.value, navn: navn.value }), "Kortet er koblet")) lukk();
+        oppgave_id: +oppgSel.value, navn: navn.value, media_id: media.value, media_type: mtype.value, hoyttaler: hoy.value,
+        bryter: bryter.value, entity: entity.value }), "Kortet er koblet")) lukk();
     } }, "Lagre")]);
   }
 
@@ -424,6 +471,7 @@
       el("div", { class: "rad" }, el("label", { class: "felt" }, "Volum dag (%)", inn("volum_dag", { type: "number", min: 1, max: 100, style: "width:100px" })),
         el("label", { class: "felt" }, "Volum stille tid (%)", inn("volum_kveld", { type: "number", min: 1, max: 100, style: "width:100px" })),
         el("label", { class: "felt" }, "Stille fra", inn("stille_fra", { type: "time" })), el("label", { class: "felt" }, "Stille til", inn("stille_til", { type: "time" }))),
+      el("label", { class: "felt" }, "Standard høyttaler for musikk-kort (når leseren ikke har en egen)", inn("musikk_hoyttaler", { placeholder: "media_player.stue" })),
       el("label", { class: "felt" }, "Egen fanfare (adresse til lydfil, valgfritt)", inn("fanfare_url", { placeholder: "http://127.0.0.1:8123/local/stjerner/stjerne.mp3" })),
       el("button", { class: "knapp", onclick: () => gjor(async () => { await api("PUT", "api/innstillinger", I); const r = await api("POST", "api/test/lyd"); toast(r.ok ? "Spiller av …" : "Fikk ikke spilt – sjekk høyttaler og talemotor"); }) }, "Lagre og test lyd")));
 

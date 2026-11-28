@@ -51,6 +51,14 @@ CREATE TABLE IF NOT EXISTS ukjente_kort (
     uid  TEXT PRIMARY KEY,
     tid  TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS lesere (
+    id           TEXT PRIMARY KEY,                    -- device_id fra Home Assistant
+    navn         TEXT NOT NULL DEFAULT '',
+    rom          TEXT NOT NULL DEFAULT '',
+    gir_stjerner INTEGER NOT NULL DEFAULT 1,
+    hoyttaler    TEXT NOT NULL DEFAULT '',            -- media_player for musikk-kort på denne leseren
+    sist_sett    TEXT
+);
 CREATE TABLE IF NOT EXISTS registreringer (
     id            INTEGER PRIMARY KEY AUTOINCREMENT,
     barn_id       INTEGER NOT NULL REFERENCES barn(id) ON DELETE CASCADE,
@@ -112,8 +120,18 @@ class Database:
         self.con.execute("PRAGMA journal_mode=WAL")
         self.con.execute("PRAGMA foreign_keys=ON")
         self.con.executescript(SKJEMA)
-        self.con.execute("PRAGMA user_version = 1")
+        self._migrer()
+        self.con.execute("PRAGMA user_version = 2")
         self.con.commit()
+
+    def _migrer(self) -> None:
+        def kolonner(tabell):
+            return {r[1] for r in self.con.execute(f"PRAGMA table_info({tabell})").fetchall()}
+        for kol in ("media_id", "media_type", "hoyttaler", "entity", "bryter"):
+            if kol not in kolonner("kort"):
+                self.con.execute(f"ALTER TABLE kort ADD COLUMN {kol} TEXT")
+        if "leser_id" not in kolonner("ukjente_kort"):
+            self.con.execute("ALTER TABLE ukjente_kort ADD COLUMN leser_id TEXT")
 
     def _alle(self, sql: str, p: tuple = ()) -> list[dict]:
         return [dict(r) for r in self.con.execute(sql, p).fetchall()]
@@ -200,12 +218,16 @@ class Database:
     def ett_kort(self, uid: str) -> dict | None:
         return self._en("SELECT * FROM kort WHERE uid = ?", (uid,))
 
+    KORT_FELT = ("handling", "barn_id", "oppgave_id", "navn", "media_id", "media_type", "hoyttaler", "entity", "bryter")
+
     def lagre_kort(self, uid: str, d: dict) -> dict:
+        felt = self.KORT_FELT
+        verdier = [d.get(k) for k in felt]
+        verdier[0] = verdier[0] or "oppgave"
         self.con.execute(
-            "INSERT INTO kort (uid, handling, barn_id, oppgave_id, navn) VALUES (?, ?, ?, ?, ?) "
-            "ON CONFLICT(uid) DO UPDATE SET handling = excluded.handling, barn_id = excluded.barn_id, "
-            "oppgave_id = excluded.oppgave_id, navn = excluded.navn",
-            (uid, d.get("handling") or "oppgave", d.get("barn_id"), d.get("oppgave_id"), d.get("navn")))
+            f"INSERT INTO kort (uid, {', '.join(felt)}) VALUES (?, {', '.join('?' * len(felt))}) "
+            f"ON CONFLICT(uid) DO UPDATE SET {', '.join(f'{k} = excluded.{k}' for k in felt)}",
+            (uid, *verdier))
         self.con.execute("DELETE FROM ukjente_kort WHERE uid = ?", (uid,))
         self.con.commit()
         return self.ett_kort(uid)
@@ -214,9 +236,10 @@ class Database:
         self.con.execute("DELETE FROM kort WHERE uid = ?", (uid,))
         self.con.commit()
 
-    def ukjent_kort(self, uid: str, tid: str) -> None:
-        self.con.execute("INSERT INTO ukjente_kort (uid, tid) VALUES (?, ?) "
-                         "ON CONFLICT(uid) DO UPDATE SET tid = excluded.tid", (uid, tid))
+    def ukjent_kort(self, uid: str, tid: str, leser_id: str | None = None) -> None:
+        self.con.execute("INSERT INTO ukjente_kort (uid, tid, leser_id) VALUES (?, ?, ?) "
+                         "ON CONFLICT(uid) DO UPDATE SET tid = excluded.tid, leser_id = excluded.leser_id",
+                         (uid, tid, leser_id))
         self.con.execute("DELETE FROM ukjente_kort WHERE uid NOT IN "
                          "(SELECT uid FROM ukjente_kort ORDER BY tid DESC LIMIT 20)")
         self.con.commit()
@@ -226,6 +249,35 @@ class Database:
 
     def glem_ukjente_kort(self) -> None:
         self.con.execute("DELETE FROM ukjente_kort")
+        self.con.commit()
+
+    # ---- lesere ---------------------------------------------------------
+    def lesere(self) -> list[dict]:
+        return self._alle("SELECT * FROM lesere ORDER BY navn, id")
+
+    def en_leser(self, lid: str) -> dict | None:
+        return self._en("SELECT * FROM lesere WHERE id = ?", (lid,))
+
+    def se_leser(self, lid: str, navn: str | None, rom: str | None, tid: str) -> dict:
+        """Registrerer at en leser er sett. Navn og rom fra Home Assistant oppdateres, innstillinger beholdes."""
+        self.con.execute(
+            "INSERT INTO lesere (id, navn, rom, sist_sett) VALUES (?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET "
+            "navn = CASE WHEN excluded.navn != '' THEN excluded.navn ELSE lesere.navn END, "
+            "rom = CASE WHEN excluded.rom != '' THEN excluded.rom ELSE lesere.rom END, sist_sett = excluded.sist_sett",
+            (lid, navn or "", rom or "", tid))
+        self.con.commit()
+        return self.en_leser(lid)
+
+    def lagre_leser(self, lid: str, d: dict) -> dict | None:
+        verdier = {k: d[k] for k in ("gir_stjerner", "hoyttaler") if k in d}
+        if verdier:
+            self.con.execute(f"UPDATE lesere SET {', '.join(f'{k} = ?' for k in verdier)} WHERE id = ?",
+                             (*verdier.values(), lid))
+            self.con.commit()
+        return self.en_leser(lid)
+
+    def slett_leser(self, lid: str) -> None:
+        self.con.execute("DELETE FROM lesere WHERE id = ?", (lid,))
         self.con.commit()
 
     # ---- registreringer -------------------------------------------------

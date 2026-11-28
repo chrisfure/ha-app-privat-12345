@@ -64,25 +64,47 @@ Vis den på veggskjermen på én av disse måtene:
 
 Barnesiden er bare for hjemmenettet. Ikke åpne porten mot internett. Porten (8210 som standard) kan endres under appens Nettverk-innstillinger i Home Assistant – husk da å endre adressen under Innstillinger → Veggskjermen.
 
-## NFC-kort
+## NFC-kort og lesere
 
-Appen lytter på hendelsen `stjerneboka_skann` med feltet `uid`. Send kort-ID-en fra leseren dit, f.eks. med en automasjon:
+Et kort kan
+
+* gi stjerne for en oppgave,
+* spille musikk fra Music Assistant (sang, spilleliste, album, radio, lydbok),
+* kjøre en automasjon, et skript eller en scene,
+* åpne barnesiden på veggskjermen.
+
+**Lesere.** Appen lytter på Home Assistants egen hendelse `tag_scanned`, som NFC-lesere med ESPHome sender. Da vet appen hvilken leser som leste kortet. Hver leser dukker opp under **NFC-kort → Lesere** første gang den skanner. Der velger du
+
+* om leseren gir stjerner (f.eks. ja i gangen, nei på soverommet),
+* hvilken høyttaler musikk-kort skal spille på.
+
+Samme musikk-kort spiller dermed i rommet det skannes i. Et kort kan også ha en fast høyttaler, og en av/på-bryter (`input_boolean`) som må være på.
+
+ESPHome-oppsett for en RC522-leser:
 
 ```yaml
-triggers:
-  - trigger: mqtt
-    topic: stue/tag          # emnet leseren din bruker
-actions:
-  - action: event.fire        # eller «Fire event» i automasjonsredigereren
-    data:
-      event_type: stjerneboka_skann
-      event_data:
-        uid: "{{ trigger.payload }}"
+api:
+  encryption:
+    key: !secret api_nokkel
+
+spi:
+  clk_pin: D5
+  miso_pin: D6
+  mosi_pin: D7
+
+rc522_spi:
+  cs_pin: D8
+  update_interval: 1s
+  on_tag:
+    then:
+      - homeassistant.tag_scanned: !lambda 'return x;'
 ```
 
-Bruker leseren Home Assistants egne tagger, kan du i stedet sende `{{ trigger.event.data.tag_id }}` fra hendelsen `tag_scanned`.
+Bytt pinnene til slik leseren er koblet. Legg leseren i riktig rom i Home Assistant.
 
-Skann et nytt kort – det dukker opp under **NFC-kort → Nye kort**. Trykk «Koble» og velg barn og oppgave, eller «Åpne barnesiden på veggskjermen».
+**Lesere uten Home Assistant-tagger** (f.eks. MQTT) kan sende kort-ID-en til hendelsen `stjerneboka_skann` med feltet `uid`. De regnes som én leser som gir stjerner.
+
+Skann et nytt kort – det dukker opp under **NFC-kort → Nye kort**. Trykk «Koble» og velg hva kortet skal gjøre.
 
 ## Til Home Assistant
 

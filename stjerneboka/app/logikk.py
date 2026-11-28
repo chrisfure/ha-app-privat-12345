@@ -33,8 +33,10 @@ STANDARD = {
     "lyd_aktiv": "1", "lydmetode": "music_assistant", "hoyttaler": "", "tts": "",
     "volum_dag": "45", "volum_kveld": "30", "stille_fra": "19:00", "stille_til": "07:00", "fanfare_url": "",
     "skjerm_browser": "", "barneside_url": "", "vis_ved_kort": "1",
-    "varsle_tjeneste": "", "angre_sekunder": "120",
+    "varsle_tjeneste": "", "angre_sekunder": "120", "musikk_hoyttaler": "",
 }
+HANDLINGER = ("oppgave", "vis_skjerm", "musikk", "ha")
+MEDIETYPER = ("auto", "track", "album", "playlist", "artist", "radio", "audiobook", "podcast")
 
 # Forslag som kan legges til med ett trykk. Generiske – ingen navn eller personlige data.
 MALER = [
@@ -122,7 +124,7 @@ class Stjerneboka:
 
     def lagre_innstillinger(self, d: dict) -> dict:
         ok = {k: ("" if v is None else str(v)).strip() for k, v in d.items() if k in STANDARD}
-        for k in ("hoyttaler",):
+        for k in ("hoyttaler", "musikk_hoyttaler"):
             if ok.get(k) and not ok[k].startswith("media_player."):
                 raise Feil("Høyttaleren må være en media_player")
         if ok.get("tts") and not ok["tts"].startswith("tts."):
@@ -407,19 +409,36 @@ class Stjerneboka:
     def slett_registrering(self, rid: int) -> None:
         self.angre(rid, fra_skjerm=False)
 
-    # ------------------------------------------------------------ kort
-    def skann(self, uid: str) -> dict:
+    # ------------------------------------------------------------ kort og lesere
+    def skann(self, uid: str, leser_id: str | None = None, leser_navn: str | None = None,
+              leser_rom: str | None = None) -> dict:
+        """Et kort er skannet. leser_id er Home Assistant-enheten som leste det (None for MQTT/gammel leser)."""
         uid = str(uid or "").strip().upper()
         if not uid:
             raise Feil("Tomt kort")
+        leser = self.db.se_leser(leser_id, leser_navn, leser_rom, til_iso(naa())) if leser_id else None
         k = self.db.ett_kort(uid)
         if not k:
-            self.db.ukjent_kort(uid, til_iso(naa()))
-            self._endret("ukjent_kort", {"uid": uid})
+            self.db.ukjent_kort(uid, til_iso(naa()), leser_id)
+            self._endret("ukjent_kort", {"uid": uid, "leser": leser})
             return {"handling": "ukjent", "uid": uid}
         if k["handling"] == "vis_skjerm":
             self._endret("vis_skjerm", {"uid": uid})
             return {"handling": "vis_skjerm"}
+        if k["handling"] == "musikk":
+            hoyttaler = k.get("hoyttaler") or (leser or {}).get("hoyttaler") or self.inn.get("musikk_hoyttaler")
+            if not hoyttaler:
+                return {"handling": "mangler_hoyttaler",
+                        "melding": "Velg en høyttaler for leseren (eller en standard) under NFC-kort."}
+            data = {"uid": uid, "kort": k, "hoyttaler": hoyttaler, "leser": leser}
+            self._endret("musikk", data)
+            return {"handling": "musikk", "hoyttaler": hoyttaler, "melding": f"Spiller {k.get('navn') or k['media_id']}"}
+        if k["handling"] == "ha":
+            self._endret("ha_handling", {"uid": uid, "kort": k, "leser": leser})
+            return {"handling": "ha", "melding": f"Kjører {k['entity']}"}
+        # oppgave
+        if leser and not leser["gir_stjerner"]:
+            return {"handling": "ikke_her", "melding": "Denne leseren gir ikke stjerner"}
         try:
             res = self.registrer(k["barn_id"], k["oppgave_id"], kilde="kort")
             return {"handling": "registrert", **res}
@@ -431,6 +450,9 @@ class Stjerneboka:
         if not re.match(r"^[A-Z0-9:\-]{4,40}$", uid):
             raise Feil("Ugyldig kort-ID")
         handling = d.get("handling") or "oppgave"
+        if handling not in HANDLINGER:
+            raise Feil("Ukjent handling")
+        ut = {"handling": handling, "navn": (str(d.get("navn") or "").strip()[:60]) or None}
         if handling == "oppgave":
             bid, oid = int(d.get("barn_id") or 0), int(d.get("oppgave_id") or 0)
             o = self.db.en_oppgave(oid)
@@ -438,11 +460,40 @@ class Stjerneboka:
                 raise Feil("Velg barn og oppgave")
             if bid not in o["barn"]:
                 raise Feil("Oppgaven er ikke valgt for dette barnet")
-            return self.db.lagre_kort(uid, {"handling": "oppgave", "barn_id": bid, "oppgave_id": oid,
-                                            "navn": d.get("navn")})
-        if handling == "vis_skjerm":
-            return self.db.lagre_kort(uid, {"handling": "vis_skjerm", "navn": d.get("navn")})
-        raise Feil("Ukjent handling")
+            ut.update(barn_id=bid, oppgave_id=oid)
+        elif handling == "musikk":
+            media = str(d.get("media_id") or "").strip()
+            if not media:
+                raise Feil("Skriv hva som skal spilles (navn på sang, spilleliste, album eller radio)")
+            typ = d.get("media_type") or "auto"
+            if typ not in MEDIETYPER:
+                raise Feil("Ukjent medietype")
+            hoyttaler = str(d.get("hoyttaler") or "").strip()
+            if hoyttaler and not hoyttaler.startswith("media_player."):
+                raise Feil("Høyttaleren må være en media_player")
+            bryter = str(d.get("bryter") or "").strip()
+            if bryter and not re.match(r"^(input_boolean|switch)\.", bryter):
+                raise Feil("Bryteren må være en input_boolean eller switch")
+            ut.update(media_id=media[:200], media_type=typ, hoyttaler=hoyttaler or None, bryter=bryter or None)
+        elif handling == "ha":
+            ent = str(d.get("entity") or "").strip()
+            if not re.match(r"^(automation|script|scene)\.[a-z0-9_]+$", ent):
+                raise Feil("Velg en automasjon, et skript eller en scene")
+            ut["entity"] = ent
+        return self.db.lagre_kort(uid, ut)
+
+    def lagre_leser(self, lid: str, d: dict) -> dict:
+        if not self.db.en_leser(lid):
+            raise Feil("Ukjent leser")
+        ut = {}
+        if "gir_stjerner" in d:
+            ut["gir_stjerner"] = _bool(d["gir_stjerner"])
+        if "hoyttaler" in d:
+            h = str(d["hoyttaler"] or "").strip()
+            if h and not h.startswith("media_player."):
+                raise Feil("Høyttaleren må være en media_player")
+            ut["hoyttaler"] = h
+        return self.db.lagre_leser(lid, ut)
 
     # ------------------------------------------------------------ tall
     def _godkjente(self, barn_id: int, fra: datetime, til: datetime | None = None) -> list[dict]:

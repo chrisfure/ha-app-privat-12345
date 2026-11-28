@@ -1,5 +1,12 @@
 # Endringslogg
 
+## 0.2.0
+
+- NFC-lesere i Home Assistant (ESPHome «tag skannet»): appen vet hvilken leser som skannet kortet.
+- Ny liste over lesere: velg om leseren gir stjerner og hvilken høyttaler den spiller musikk på.
+- Musikk-kort: spill en sang, spilleliste, album, radio eller lydbok fra Music Assistant på høyttaleren i rommet der kortet skannes – eventuelt bare når en av/på-bryter er på.
+- Kort kan kjøre en automasjon, et skript eller en scene.
+
 ## 0.1.2
 
 - Barnesiden åpnes i fullskjerm på veggskjermen når et kort skannes.
